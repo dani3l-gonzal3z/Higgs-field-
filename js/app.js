@@ -1,5 +1,5 @@
 // Carcasa de la app: navegación, enlace con el plató, PWA.
-import { $, el, toast, db, uid, getSettings, hasAnyKey, spentThisMonth, bus } from './core.js';
+import { $, el, toast, db, uid, getSettings, hasAnyKey, spentThisMonth, bus, host } from './core.js';
 import { renderStudio, loadTake } from './studio.js';
 import { renderGallery } from './gallery.js';
 import { renderEditor } from './editor.js';
@@ -32,6 +32,8 @@ addEventListener('message', async e => {
 addEventListener('studio:settings', () => { buildNav(); route(); updSpend(); });
 bus.addEventListener('ledger', updSpend);
 $('#spend').addEventListener('click', () => location.hash = '#settings');
+window.__studioHost = host;
+(async () => { let n = 0; while (!(window.claude && window.claude.use) && n++ < 25) await new Promise(r => setTimeout(r, 200)); if (window.claude && window.claude.use) { host.claude = true; const [sm, dl] = await Promise.all([window.claude.use('sample').catch(() => null), window.claude.use('downloads').catch(() => null)]); host.sample = sm || null; host.save = dl && dl.save ? (o => dl.save(o)) : null; } host.ready = true; try { frame.contentWindow.postMessage({ type: 'host:ready' }, location.origin); } catch (e) {} if (host.claude) route(); })();
 buildNav(); route(); updSpend();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 let deferred = null; addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; const b = $('#install'); b.hidden = false; b.onclick = async () => { b.hidden = true; deferred.prompt(); }; });

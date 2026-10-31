@@ -1,8 +1,10 @@
 // Asistente de IA con tu propia clave (Anthropic o cualquier API compatible con OpenAI, p. ej. OpenRouter).
-import { getSettings } from './core.js';
-export function llmReady(s = getSettings()) { return !!s.llm.key; }
+import { getSettings, host } from './core.js';
+export function llmReady(s = getSettings()) { return !!s.llm.key || !!host.sample; }
 export async function llmText(prompt, { maxTokens = 3000 } = {}) {
-  const s = getSettings().llm; if (!s.key) throw new Error('Configura una clave de IA en Ajustes para usar el asistente.');
+  const s = getSettings().llm;
+  if (!s.key && host.sample) { const r = await host.sample(prompt, { modelTier: 'default' }); return r.text || ''; }
+  if (!s.key) throw new Error('Configura una clave de IA en Ajustes para usar el asistente.');
   if (s.provider === 'anthropic') {
     const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': s.key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({ model: s.model || 'claude-sonnet-5-5', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }) });

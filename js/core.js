@@ -53,7 +53,9 @@ export function seg(opts, get, set) {
 export function toggle(label, get, set) { const b = btn(label, () => { set(!get()); b.classList.toggle('on', !!get()); }); b.classList.toggle('on', !!get()); return b; }
 export const fmtTime = s => { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 export const fmtDate = t => new Date(t).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-export function download(blob, name) { const a = el('a', { href: URL.createObjectURL(blob), download: name }); document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); }
+// Entorno anfitrión: dentro de Claude (artifact) usamos su IA y sus descargas.
+export const host = { claude: false, ready: false, sample: null, save: null };
+export function download(blob, name) { if (host.save) { host.save({ filename: name, data: blob }).catch(e => { if (e && e.code !== 'declined') toast('No se pudo descargar'); }); return; } const a = el('a', { href: URL.createObjectURL(blob), download: name }); document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); }
 export async function copyText(t) { try { await navigator.clipboard.writeText(t); toast('📋 Copiado'); } catch (e) { toast('No se pudo copiar: mantén pulsado el texto'); } }
 
 /* ---------- Ajustes (localStorage) ---------- */

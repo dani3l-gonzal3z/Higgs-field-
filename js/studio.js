@@ -1,5 +1,5 @@
 // ✨ Estudio: generación con tus claves, varios modelos en paralelo, control de gasto.
-import { $, el, btn, toast, modal, confirmBox, seg, toggle, uid, db, emit, bus, getSettings, money, spentThisMonth, mediaKind, videoMeta, thumbFromVideo, blobURL, fmtTime, vib, hasAnyKey, download } from './core.js';
+import { $, el, btn, toast, modal, confirmBox, seg, toggle, uid, db, emit, bus, getSettings, host, money, spentThisMonth, mediaKind, videoMeta, thumbFromVideo, blobURL, fmtTime, vib, hasAnyKey, download } from './core.js';
 import { MODES, STYLES } from './catalog.js';
 import { PROVIDERS, catalog, buildInput, estimate, readiness, uploadFor, findMedia, fetchBlob, ProviderError } from './providers.js';
 import { pickFromGallery } from './gallery.js';
@@ -34,7 +34,8 @@ function totalEst() { return selected().reduce((a, m) => a + (estimate(m, ST, vi
 
 export function renderStudio(r) {
   root = r; r.innerHTML = ''; const s = getSettings();
-  if (!hasAnyKey(s)) r.append(onboarding());
+  if (host.claude) r.append(el('section', { class: 'card hero' }, el('div', { class: 'badge prem' }, 'VISTA PREVIA EN CLAUDE'), el('h2', {}, 'Para generar, abre la app instalada'), el('p', { class: 'note' }, 'Dentro de Claude las páginas no pueden conectarse a fal.ai ni a otros proveedores. Aquí puedes preparar todo (entradas, prompt con la IA de Claude, modelos y coste), rodar en el plató, montar y gestionar personajes. La generación funciona en la versión de GitHub Pages.'), el('a', { class: 'b on', href: 'https://dani3l-gonzal3z.github.io/Higgs-field-/', target: '_blank' }, 'Abrir la app ↗')));
+  else if (!hasAnyKey(s)) r.append(onboarding());
   const wrap = el('div', { class: 'studio' }); r.append(wrap);
   const colA = el('div', { class: 'col' }), colB = el('div', { class: 'col' }); wrap.append(colA, colB);
   // Modo

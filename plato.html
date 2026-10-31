@@ -1593,7 +1593,10 @@ function studioLLM(){ try{ const st=JSON.parse(localStorage.getItem('studio_sett
   const f=async p=>({text:await call(typeof p==='string'?p:p.map(m=>m.content).join('\n'))}); f.json=async p=>{ const t=await call(p); const a=t.indexOf('{'),b=t.lastIndexOf('}'); return JSON.parse(t.slice(a,b+1)); }; return f; }catch(e){ return null; } }
 AI.sample=studioLLM(); updAiBtn();
 DL.save=o=>new Promise(res=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(o.data instanceof Blob?o.data:new Blob([o.data])); a.download=o.filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },4000); res({status:'saved'}); });
-addEventListener('storage',e=>{ if(e.key==='studio_settings'&&!AI.fromClaude){ AI.sample=studioLLM(); updAiBtn(); refreshPanel(); } });
+function hostOf(){ try{ return IN_APP&&window.parent.__studioHost&&window.parent.__studioHost.ready?window.parent.__studioHost:null; }catch(e){ return null; } }
+function applyHost(){ const h=hostOf(); if(!h) return; if(!AI.fromClaude&&!studioLLM()&&h.sample) AI.sample=h.sample; if(h.save) DL.save=o=>h.save(o); updAiBtn(); refreshPanel(); }
+addEventListener('message',e=>{ if(e.origin===location.origin&&e.data&&e.data.type==='host:ready') applyHost(); }); applyHost();
+addEventListener('storage',e=>{ if(e.key==='studio_settings'&&!AI.fromClaude){ AI.sample=studioLLM()||(hostOf()&&hostOf().sample)||null; updAiBtn(); refreshPanel(); } });
 (async()=>{ try{ let tries=0; while(!(window.claude&&window.claude.use)&&tries++<15) await new Promise(r=>setTimeout(r,200)); if(!(window.claude&&window.claude.use)) return;
   const [sm,dl]=await Promise.all([window.claude.use('sample').catch(()=>null),window.claude.use('downloads').catch(()=>null)]); if(sm){ AI.sample=sm; AI.fromClaude=true; } if(dl&&dl.save) DL.save=(o=>dl.save(o)); updAiBtn(); refreshPanel(); }catch(e){} })();
 addEventListener('error',e=>console.warn(e.message));

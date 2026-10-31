@@ -1,5 +1,5 @@
 // Conectores con proveedores de generación (todos asíncronos: enviar → consultar estado → resultado).
-import { getSettings, sleep, uid } from './core.js';
+import { getSettings, sleep, uid, host } from './core.js';
 import { DEFAULT_CATALOG } from './catalog.js';
 
 export class ProviderError extends Error { constructor(msg, status, retry = false) { super(msg); this.status = status; this.retry = retry; } }
@@ -9,6 +9,7 @@ export function catalog(s = getSettings()) { return (s.catalog && Array.isArray(
 const viaProxy = (url, s) => s.proxy.url ? s.proxy.url.replace(/\/+$/, '') + '/' + url : url;
 
 async function http(url, opts = {}, { proxy = false, raw = false } = {}) {
+  if (host.claude) throw new ProviderError('Dentro de Claude no se puede conectar con proveedores externos. Abre la app desde GitHub Pages para generar.', 0);
   const s = getSettings();
   if (proxy && !s.proxy.url) throw new ProviderError('Este proveedor necesita el mini-proxy. Configúralo en Ajustes → Proxy.', 0);
   const h = new Headers(opts.headers || {}); if (proxy && s.proxy.token) h.set('x-proxy-token', s.proxy.token);
