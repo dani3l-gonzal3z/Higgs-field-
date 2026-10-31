@@ -1193,7 +1193,9 @@ async function startReplay(o={}){ if(!TAKE.snap){ toast('Aún no hay toma',3500,
  if(TAKE.replaying) stopReplay(); if(REC.active) stopRec(); closeSheet(); hideCtx();
  if(o.rec&&!DL.save){ toast('Aquí no puedo descargar vídeo',4000,{sub:'Usa «Ocultar interfaz» + la grabación de pantalla del móvil.'}); o.rec=false; }
  if(o.count) await countdown();
- S.paused=false; prepReplay(o); TAKE.mode=o; if(o.clean) setClean(true,true); if(o.rec) startRec(true); updTL(); updStatus(); }
+ S.paused=false; prepReplay(o); TAKE.mode=o;
+ if(o.from>0){ S.silent=true; const tgt=TAKE.base+Math.round(o.from/DT); let g=0; while(S.step<tgt&&TAKE.replaying&&g++<40000) stepSim(); S.silent=false; CAM.snap=true; }
+ if(o.clean) setClean(true,true); if(o.rec) startRec(true); updTL(); updStatus(); }
 function endReplay(){ TAKE.replaying=false; TAKE.startStep=TAKE.base; const o=TAKE.mode||{}; TAKE.mode=null;
  if(TAKE.trackRec){ TAKE.track=TAKE.trackRec; TAKE.trackRec=null; TAKE.camSrc='track'; TAKE.ver++; if(!S.silent) toast('🎥 Movimiento de cámara grabado',4000,{sub:'Las próximas repeticiones y grabaciones usarán tu cámara.'}); }
  if(REC.auto) stopRec();
@@ -1219,7 +1221,7 @@ function stopRec(){ if(!REC.active) return; REC.active=false; REC.auto=false; tr
 const IN_APP=(()=>{ try{ return window.parent!==window&&window.parent.location.origin===location.origin; }catch(e){ return false; } })();
 function sendToStudio(list){ const sn=TAKE.snap||snapshot(); const meta={prompt:PR.text||localPrompt(shotFacts()),aspect:S.aspect,duration:+(takeLen()*DT).toFixed(1),title:S.takeTitle||('Toma '+new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})),place:sn.env.preset,time:sn.env.time,weather:sn.env.weather,cast:sn.ents.filter(d=>PERSON_K.includes(d.kind)||VEH_K.includes(d.kind)).map(d=>({name:d.name,kind:d.kind,color:colorWord(d.color)}))};
  window.parent.postMessage({type:'plato:pack',files:list.map(f=>({name:f.name,label:f.label,blob:f.blob})),meta},location.origin); toast('✨ Enviado al Estudio'); }
-function collectFile(f){ if(TAKE.collect){ TAKE.collect.push(f); if(TAKE.collect.length>=TAKE.expect){ const l=TAKE.collect; TAKE.collect=null; if(S.sendStudio&&IN_APP){ S.sendStudio=false; sendToStudio(l); } else offerFiles(l); } } else offerFiles([f]); }
+function collectFile(f){ if(TAKE.collect){ TAKE.collect.push(f); if(TAKE.collect.length>=TAKE.expect){ const l=TAKE.collect; TAKE.collect=null; if(S.shootId&&IN_APP){ const id=S.shootId; S.shootId=null; window.parent.postMessage({type:'plato:shot-done',id,files:l.map(f=>({name:f.name,label:f.label,blob:f.blob}))},location.origin); return; } if(S.sendStudio&&IN_APP){ S.sendStudio=false; sendToStudio(l); } else offerFiles(l); } } else offerFiles([f]); }
 const stamp=()=>{const d=new Date();const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;};
 function exportPack(){ if(!TAKE.snap){ toast('Primero rueda una toma'); return; } if(!DL.save){ toast('Aquí no puedo descargar archivos',4000,{sub:'Puedes grabar la pantalla con 👁 activado.'}); return; }
  TAKE.collect=[]; TAKE.expect=3+(PR.text?1:0); if(PR.text) TAKE.collect.push({name:`prompt-${stamp()}.txt`,blob:new Blob([PR.text],{type:'text/plain'}),label:'📝 Prompt',preview:PR.text.slice(0,220)});
@@ -1593,6 +1595,22 @@ function studioLLM(){ try{ const st=JSON.parse(localStorage.getItem('studio_sett
   const f=async p=>({text:await call(typeof p==='string'?p:p.map(m=>m.content).join('\n'))}); f.json=async p=>{ const t=await call(p); const a=t.indexOf('{'),b=t.lastIndexOf('}'); return JSON.parse(t.slice(a,b+1)); }; return f; }catch(e){ return null; } }
 AI.sample=studioLLM(); updAiBtn();
 DL.save=o=>new Promise(res=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(o.data instanceof Blob?o.data:new Blob([o.data])); a.download=o.filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },4000); res({status:'saved'}); });
+async function shootShot(d){
+ stopReplay(); closeModal(); closeSheet(); hideCtx(); S.silent=true; clearEnts(); clearFx(); SCHED=[]; TAKE.snap=null; TAKE.log=[]; TAKE.track=null; TAKE.camSrc='orders'; TAKE.ver++; S.timeScale=1; S.paused=false; S.renderMode='normal'; applyRenderMode();
+ if(d.aspect&&ASPECTS[d.aspect]!==undefined) S.aspect=d.aspect;
+ const env=d.env||{}; applyEnv({preset:env.place||env.preset||'studio',time:env.time??14,weather:env.weather||'clear',fog:env.fog??0.1});
+ for(const c of d.setup||[]){ try{ dispatch(JSON.parse(JSON.stringify(c)),{touched:new Set()}); }catch(e){} }
+ CAM.fly=null; CAM.mode='free'; controls.enabled=true; CAM.fovOverride=null; CAM.dutch=0; CAM.target=null; CAM.shake=0; camera.position.set(8,2,10); controls.target.set(0,1,0); controls.update();
+ const sh=d.shot||{}; const subj=findEnt(sh.subject)||S.ents.find(e=>e.type==='person')||S.ents.find(e=>e.type==='vehicle')||S.ents[0];
+ layout(); if(subj){ frameEnt(subj,SHOT_SIZES[sh.size]?sh.size:'medio',SHOT_ANG[sh.angle]?sh.angle:null); if(CAM.fly){ camera.position.copy(CAM.fly.p1); controls.target.copy(CAM.fly.t1); CAM.look.copy(CAM.fly.t1); CAM.fly=null; controls.update(); } }
+ const cam=sh.camera||{}; if(cam.lens){ CAM.lens=clamp(+cam.lens,10,200); applyLens(); }
+ S.silent=false; select(null);
+ const act=JSON.parse(JSON.stringify(d.action||[])); const cc={op:'camera',cut:true}; if(cam.mode&&cam.mode!=='free'){ cc.mode=cam.mode; cc.target=subj?subj.name:undefined; } if(cam.shake!=null) cc.shake=+cam.shake; if(cam.lens) cc.lens=+cam.lens; act.unshift(cc);
+ runBatch(act); TAKE.target=(+sh.from||0)+(+sh.duration||5); TAKE.ver++;
+ S.shootId=d.id; TAKE.collect=[]; TAKE.expect=d.depth===false?2:3; S.firstFrame=true;
+ await new Promise(r=>setTimeout(r,120));
+ startReplay({count:false,rec:true,clean:true,from:+sh.from||0,passes:d.depth===false?[]:['depth'],restoreMode:'normal'}); }
+addEventListener('message',e=>{ if(e.origin!==location.origin||!e.data||e.data.type!=='plato:shoot') return; shootShot(e.data).catch(err=>window.parent.postMessage({type:'plato:shot-done',id:e.data.id,error:String(err&&err.message||err)},location.origin)); });
 function hostOf(){ try{ return IN_APP&&window.parent.__studioHost&&window.parent.__studioHost.ready?window.parent.__studioHost:null; }catch(e){ return null; } }
 function applyHost(){ const h=hostOf(); if(!h) return; if(!AI.fromClaude&&!studioLLM()&&h.sample) AI.sample=h.sample; if(h.save) DL.save=o=>h.save(o); updAiBtn(); refreshPanel(); }
 addEventListener('message',e=>{ if(e.origin===location.origin&&e.data&&e.data.type==='host:ready') applyHost(); }); applyHost();

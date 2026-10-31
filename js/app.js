@@ -5,9 +5,11 @@ import { renderGallery } from './gallery.js';
 import { renderEditor } from './editor.js';
 import { renderChars } from './chars.js';
 import { renderSettings } from './settings.js';
+import { renderDirector } from './director.js';
+import { renderLab } from './lab.js';
 
-const VIEWS = { plato: ['🎬', 'Plató'], studio: ['✨', 'Estudio', 1], gallery: ['🖼', 'Galería'], edit: ['🎞', 'Montaje', 1], chars: ['👤', 'Personajes', 1], settings: ['⚙️', 'Ajustes'] };
-const RENDER = { studio: renderStudio, gallery: renderGallery, edit: renderEditor, chars: renderChars, settings: renderSettings };
+const VIEWS = { plato: ['🎬', 'Plató'], director: ['🧠', 'Director'], studio: ['✨', 'Estudio', 1], lab: ['🧪', 'Lab', 1], gallery: ['🖼', 'Galería'], edit: ['🎞', 'Montaje', 1], chars: ['👤', 'Personajes', 1], settings: ['⚙️', 'Ajustes'] };
+const RENDER = { director: renderDirector, lab: renderLab, studio: renderStudio, gallery: renderGallery, edit: renderEditor, chars: renderChars, settings: renderSettings };
 const view = $('#view'), frame = $('#plato');
 
 function buildNav() { const t = $('#tabs'); t.innerHTML = ''; const prem = hasAnyKey();

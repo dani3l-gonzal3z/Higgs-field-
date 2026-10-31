@@ -1,7 +1,7 @@
 // ✨ Estudio: generación con tus claves, varios modelos en paralelo, control de gasto.
 import { $, el, btn, toast, modal, confirmBox, seg, toggle, uid, db, emit, bus, getSettings, host, money, spentThisMonth, mediaKind, videoMeta, thumbFromVideo, blobURL, fmtTime, vib, hasAnyKey, download } from './core.js';
 import { MODES, STYLES } from './catalog.js';
-import { PROVIDERS, catalog, buildInput, estimate, readiness, uploadFor, findMedia, fetchBlob, ProviderError } from './providers.js';
+import { PROVIDERS, catalog, loadExtraCatalog, buildInput, estimate, readiness, uploadFor, findMedia, fetchBlob, ProviderError } from './providers.js';
 import { pickFromGallery } from './gallery.js';
 import { loadChars } from './chars.js';
 import { llmJSON, llmReady } from './llm.js';
@@ -34,6 +34,7 @@ function totalEst() { return selected().reduce((a, m) => a + (estimate(m, ST, vi
 
 export function renderStudio(r) {
   root = r; r.innerHTML = ''; const s = getSettings();
+  if (s.keys.muapi && !ST.extraLoaded) { ST.extraLoaded = true; loadExtraCatalog().then(x => { if (x.length && root === r && location.hash === '#studio') rerender(); }).catch(() => {}); }
   if (host.claude) r.append(el('section', { class: 'card hero' }, el('div', { class: 'badge prem' }, 'VISTA PREVIA EN CLAUDE'), el('h2', {}, 'Para generar, abre la app instalada'), el('p', { class: 'note' }, 'Dentro de Claude las páginas no pueden conectarse a fal.ai ni a otros proveedores. Aquí puedes preparar todo (entradas, prompt con la IA de Claude, modelos y coste), rodar en el plató, montar y gestionar personajes. La generación funciona en la versión de GitHub Pages.'), el('a', { class: 'b on', href: 'https://dani3l-gonzal3z.github.io/Higgs-field-/', target: '_blank' }, 'Abrir la app ↗')));
   else if (!hasAnyKey(s)) r.append(onboarding());
   const wrap = el('div', { class: 'studio' }); r.append(wrap);
@@ -56,11 +57,15 @@ export function renderStudio(r) {
     el('div', { class: 'row2' }, kind === 'video' ? toggle('🔊 Audio', () => ST.audio, v => { ST.audio = v; persist(); }) : null, el('label', { class: 'mini' }, 'Semilla', el('input', { class: 'txt sm', inputmode: 'numeric', placeholder: 'aleatoria', value: ST.seed, on: { input: e => ST.seed = e.target.value } }))),
     lbl('Variantes por modelo'), seg([[1, '1'], [2, '2'], [3, '3'], [4, '4']], () => ST.variants, v => { ST.variants = v; updFoot(); })));
   // Modelos
-  const list = el('div', { class: 'models' }); const ms = models();
+  const list = el('div', { class: 'models' }); const all = models(); const q = (ST.mq || '').toLowerCase().trim();
+  const extra = all.filter(m => m.id.startsWith('oga-')); let ms = all.filter(m => !m.id.startsWith('oga-') || ST.models.has(m.id));
+  if (extra.length) { const found = q ? extra.filter(m => !ST.models.has(m.id) && (m.name + ' ' + m.endpoint).toLowerCase().includes(q)).slice(0, 12) : [];
+    const si = el('input', { class: 'txt', type: 'search', placeholder: `🔎 Buscar entre ${extra.length} modelos más (Muapi): kling, veo, seedance, wan…`, value: ST.mq || '', on: { input: e => { ST.mq = e.target.value; clearTimeout(ST.mqT); ST.mqT = setTimeout(() => { rerender(); const n = root.querySelector('.models input[type=search]'); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }, 250); } } });
+    list.append(si); ms = ms.concat(found); }
   if (!ms.length) list.append(el('div', { class: 'empty' }, 'No hay modelos para este modo en tu catálogo. Añádelos en Ajustes → Catálogo.'));
   for (const m of ms) { const rd = readiness(m, s); const on = ST.models.has(m.id); const est = estimate(m, ST, videoSecs());
     list.append(el('button', { type: 'button', class: 'model' + (on ? ' on' : '') + (rd.ok ? '' : ' off'), on: { click: () => { if (!rd.ok) { toast(rd.why, 3000, { action: { label: 'Ir a Ajustes', fn: () => location.hash = '#settings' } }); return; } on ? ST.models.delete(m.id) : ST.models.add(m.id); persist(); rerender(); vib(5); } } },
-      el('span', { class: 'ck' }, on ? '✓' : ''), el('div', { class: 'mi' }, el('b', {}, m.name, m.verified ? '' : el('span', { class: 'warn', title: 'Parámetros sin verificar' }, ' ⚠')), el('small', {}, `${PROVIDERS[m.provider].name} · ${m.price ? `$${m.price.usd}/${m.price.per === 's' ? 's' : m.price.per === 'img' ? 'img' : 'gen'}` : 'precio ?'}${rd.ok ? '' : ' · ' + rd.why}`), m.note ? el('small', { class: 'mnote' }, m.note) : null),
+      el('span', { class: 'ck' }, on ? '✓' : ''), el('div', { class: 'mi' }, el('b', {}, m.name, m.verified ? '' : el('span', { class: 'warn', title: 'Parámetros sin verificar' }, ' ⚠')), el('small', {}, `${PROVIDERS[m.provider].name} · ${m.price ? `$${m.price.usd}/${m.price.per === 's' ? 's' : m.price.per === 'img' ? 'img' : 'gen'}` : m.provider === 'muapi' ? 'precio en Muapi' : 'precio ?'}${rd.ok ? '' : ' · ' + rd.why}`), m.note ? el('small', { class: 'mnote' }, m.note) : null),
       el('span', { class: 'est' }, est != null ? '≈' + money(est * ST.variants).split(' ')[0] : '')));
   }
   colB.append(card('Modelos (elige uno o varios para comparar)', list));

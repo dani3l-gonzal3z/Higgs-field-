@@ -9,9 +9,11 @@ Es una app web instalable en el móvil (PWA). Todo funciona en tu navegador: tus
 | | |
 |---|---|
 | 🎬 **Plató** (PRO, gratis) | Escena 3D con maniquíes, coches y objetos, órdenes en lenguaje natural, 8 plantillas listas, tomas repetibles al fotograma, línea de tiempo, cámara grabada a mano o con joystick, encuadres de un toque, pases de color, profundidad y normales, y exportación del paquete para cualquier IA de vídeo. |
+| 🧠 **Director IA** | Le das una idea, un capítulo o un libro (EPUB, PDF o TXT) y escribe el guion técnico: escenas, planos con cobertura (general, medios, primeros planos, contraplanos), cámara, diálogos, efectos y música. Después **rueda solo** la previz de cada plano en el plató desde distintos ángulos, genera el vídeo final plano a plano, las voces de cada personaje, los efectos de sonido y la música, y monta el capítulo con subtítulos. Botón «Todo automático». |
+| 🧪 **Lab** (PREMIUM, clave de Muapi) | Clon de Higgsfield basado en el registro de modelos de [Open Generative AI](https://github.com/Anil-matcha/Open-Generative-AI) (MIT): 545 modelos de imagen, vídeo, vídeo→vídeo, lip sync, movimiento y audio (ElevenLabs, MMAudio, Lyria, Suno…) con formularios generados a partir de su esquema y una pestaña 🎥 Cine (cámara, lente, focal, diafragma, movimiento). |
 | ✨ **Estudio** (PREMIUM, con tus claves) | Vídeo→vídeo (restyle de tu toma), imagen→vídeo, texto→vídeo, texto→imagen e imagen→imagen. Puedes lanzar varios modelos a la vez para comparar, ves el coste estimado antes de generar, tienes tope de presupuesto mensual y un asistente de IA que mejora los prompts. |
 | 🖼 **Galería** | Todo lo generado, con favoritos, comparación A/B sincronizada y la opción de «usar como entrada» para encadenar generaciones. |
-| 🎞 **Montaje** | Ordena planos, recórtalos, pon fundidos, un rótulo y música, y exporta el corto final. |
+| 🎞 **Montaje** | Ordena planos, recórtalos, pon fundidos, un rótulo, música y pistas de audio colocadas en el tiempo (voces, efectos), subtítulos incrustados o en .srt, y exporta el corto final. |
 | 👤 **Personajes** | Fichas con descripción e imágenes de referencia para que cada personaje mantenga su identidad entre planos. |
 | ⚙️ **Ajustes** | Claves, mini-proxy, asistente de IA, presupuesto, historial de gasto (CSV) y catálogo de modelos editable. |
 
@@ -68,8 +70,19 @@ js/editor.js        montaje y exportación
 js/chars.js         personajes
 js/settings.js      ajustes
 js/llm.js           asistente de IA con tu clave
+js/director.js      Director IA (idea/capítulo/libro → guion → rodaje → generación → montaje)
+js/book.js          lectura de EPUB/PDF/TXT y troceado en capítulos
+js/lab.js           Lab (clon de Higgsfield)
+js/registry.js      registro de modelos y prompts de cámara
+js/runner.js        cola de generación compartida
+js/vendor/          registro de modelos de Open Generative AI (MIT, ver OGA-LICENSE.txt)
+scripts/            script para actualizar ese registro
 proxy/worker.js     mini-proxy para Cloudflare
 sw.js               uso sin conexión
 ```
 
 No necesita compilación: son archivos estáticos.
+
+## Créditos
+
+El registro de modelos del Lab procede de [Open Generative AI](https://github.com/Anil-matcha/Open-Generative-AI) (licencia MIT, `js/vendor/OGA-LICENSE.txt`). Para actualizarlo: `node scripts/import-oga-models.mjs`.
