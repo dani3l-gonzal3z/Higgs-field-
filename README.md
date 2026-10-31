@@ -1,0 +1,75 @@
+# 🎬 Plató Studio
+
+**Previsualiza tu escena en 3D, dirige la acción y la cámara, y genera el vídeo final con IA usando tus propias claves.** Pagas al proveedor solo lo que generas: sin suscripciones ni créditos que caducan.
+
+Es una app web instalable en el móvil (PWA). Todo funciona en tu navegador: tus claves, tu galería y tus proyectos se guardan solo en tu dispositivo.
+
+## Qué incluye
+
+| | |
+|---|---|
+| 🎬 **Plató** (PRO, gratis) | Escena 3D con maniquíes, coches y objetos, órdenes en lenguaje natural, 8 plantillas listas, tomas repetibles al fotograma, línea de tiempo, cámara grabada a mano o con joystick, encuadres de un toque, pases de color, profundidad y normales, y exportación del paquete para cualquier IA de vídeo. |
+| ✨ **Estudio** (PREMIUM, con tus claves) | Vídeo→vídeo (restyle de tu toma), imagen→vídeo, texto→vídeo, texto→imagen e imagen→imagen. Puedes lanzar varios modelos a la vez para comparar, ves el coste estimado antes de generar, tienes tope de presupuesto mensual y un asistente de IA que mejora los prompts. |
+| 🖼 **Galería** | Todo lo generado, con favoritos, comparación A/B sincronizada y la opción de «usar como entrada» para encadenar generaciones. |
+| 🎞 **Montaje** | Ordena planos, recórtalos, pon fundidos, un rótulo y música, y exporta el corto final. |
+| 👤 **Personajes** | Fichas con descripción e imágenes de referencia para que cada personaje mantenga su identidad entre planos. |
+| ⚙️ **Ajustes** | Claves, mini-proxy, asistente de IA, presupuesto, historial de gasto (CSV) y catálogo de modelos editable. |
+
+## Publicarla gratis (GitHub Pages)
+
+1. En este repositorio: **Settings → Pages**.
+2. *Source*: **Deploy from a branch**. *Branch*: `main` y carpeta `/ (root)`. Pulsa **Save**.
+3. En un minuto estará en `https://dani3l-gonzal3z.github.io/Higgs-field-/`.
+4. En el móvil, ábrela y elige **Añadir a pantalla de inicio**. Quedará como una app.
+
+## Proveedores
+
+| Proveedor | Cómo se conecta | Clave |
+|---|---|---|
+| **fal.ai** (recomendado) | Directo desde el navegador. También aloja tus archivos de entrada. | [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys) |
+| **Higgsfield API** (pago por uso) | A través del mini-proxy. Credenciales en formato `KEY_ID:KEY_SECRET`. | [console.higgsfield.ai](https://console.higgsfield.ai) |
+| **Muapi** | A través del mini-proxy. | [muapi.ai](https://muapi.ai) |
+| **Replicate** | A través del mini-proxy. | [replicate.com/account/api-tokens](https://replicate.com/account/api-tokens) |
+
+Higgsfield, Muapi y Replicate no aceptan llamadas directas desde una web. Para ellos está el **mini-proxy** (`proxy/worker.js`), un Cloudflare Worker gratuito:
+
+1. [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages → Create → Worker**. Ponle nombre y pulsa Deploy.
+2. **Edit code** → pega `proxy/worker.js` → **Deploy**.
+3. **Settings → Variables and Secrets** → añade el secreto `PROXY_TOKEN` (una contraseña larga). Opcional: `ALLOW_ORIGIN` = `https://dani3l-gonzal3z.github.io`.
+4. En la app, **Ajustes → Mini-proxy**: pega la URL del Worker y la contraseña, y pulsa «Probar proxy».
+
+> ⚠️ Higgsfield no da una forma de subir archivos desde su API pública. Para mandarle imágenes o vídeos de entrada, la app los aloja en fal.ai, así que conviene tener también una clave de fal.
+
+## Catálogo de modelos
+
+Los modelos están en `js/catalog.js` y puedes editarlos desde **Ajustes → Catálogo** sin tocar código. Los que llevan ⚠ no tienen los parámetros verificados en la documentación: pruébalos primero con algo corto. Para añadir un modelo nuevo de cualquier proveedor, copia la plantilla, pon el `endpoint` y traduce los campos (`prompt`, `image`, `video`, `duration`…) a los nombres que use ese modelo.
+
+## Asistente de IA (opcional)
+
+Con una clave de **Anthropic** o de cualquier API **compatible con OpenAI** (por ejemplo OpenRouter), el plató entiende órdenes complejas («dos tipos se pelean y uno sale despedido por la explosión») y el Estudio mejora tus prompts. Sin clave, el plató funciona en modo básico.
+
+## Privacidad y seguridad
+
+- Las claves se guardan en `localStorage` de tu navegador y solo se envían al proveedor o a tu proxy.
+- No uses la app con tus claves en un dispositivo compartido.
+- El proxy solo reenvía a los dominios de la lista y exige tu contraseña.
+
+## Estructura
+
+```
+index.html          carcasa de la app (navegación, PWA)
+plato.html          el plató 3D (three.js)
+js/core.js          utilidades, ajustes, base de datos local, gasto
+js/providers.js     conectores fal / Higgsfield / Muapi / Replicate
+js/catalog.js       modelos y estilos por defecto
+js/studio.js        generación
+js/gallery.js       galería y comparación
+js/editor.js        montaje y exportación
+js/chars.js         personajes
+js/settings.js      ajustes
+js/llm.js           asistente de IA con tu clave
+proxy/worker.js     mini-proxy para Cloudflare
+sw.js               uso sin conexión
+```
+
+No necesita compilación: son archivos estáticos.
