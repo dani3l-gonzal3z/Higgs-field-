@@ -7,6 +7,7 @@ import { runJob } from './runner.js';
 import { llmJSON, llmText, llmReady } from './llm.js';
 import { readBook } from './book.js';
 import { host } from './core.js';
+import { guideEvent } from './guide.js';
 
 const COLORS = ['rojo', 'azul', 'verde', 'amarillo', 'naranja', 'morado', 'rosa', 'blanco', 'negro', 'gris', 'marron', 'granate', 'beige'];
 const LAYOUT = 'studio: plató vacío. city: calles de 12 m a lo largo de z en x=0,±48,±96 y a lo largo de x en z=0,±48,±96; cruce en (0,0) con pasos de cebra en z=±8; carriles a x=±3; aceras a ±7; edificios a partir de 6.5 m del eje; parque en (24,-24). highway: autopista a lo largo de z entre x=-11 y 11, mediana en x=0, carriles x=±3 y ±8. desert: abierto, rocas a partir de 14 m del centro. forest: camino de tierra en x=0 a lo largo de z, árboles desde |x|>4.5. grid: espacio abstracto vacío.';
@@ -97,7 +98,7 @@ MATERIAL:
 ${src}`, { maxTokens: 16000 });
     if (!plan || !Array.isArray(plan.scenes) || !plan.scenes.length) throw new Error('La IA no devolvió escenas');
     for (const sc of plan.scenes) { sc.shots = (sc.shots || []).map((sh, i) => ({ id: sh.id || `${sc.id}-${i + 1}`, ...sh, st: {} })); }
-    pr.plan = plan; await save(); toast(`🎬 ${plan.title}: ${plan.scenes.length} escenas · ${shots().length} planos`, 4000);
+    pr.plan = plan; await save(); guideEvent('director-plan'); toast(`🎬 ${plan.title}: ${plan.scenes.length} escenas · ${shots().length} planos`, 4000);
   }
 }
 async function bookCast(pr) {

@@ -21,7 +21,7 @@ function connect(url) {
   if (host.claude) { MCP.state = 'claude'; changed(); return; }
   clearTimeout(MCP.timer); MCP.url = url; let ws; try { ws = new WebSocket(url); } catch (e) { MCP.state = 'error'; changed(); return; }
   MCP.ws = ws; MCP.state = 'connecting'; changed();
-  ws.onopen = () => { MCP.state = 'on'; ws.send(JSON.stringify({ type: 'hello', app: 'plato-studio', version: VERSION })); changed(); toast('🔌 IA externa conectada (MCP)', 3000, { sub: 'Una IA puede manejar el plató y generar con tus claves. Lo que cueste por encima de tu límite te lo preguntaré.' }); };
+  ws.onopen = () => { MCP.state = 'on'; ws.send(JSON.stringify({ type: 'hello', app: 'plato-studio', version: VERSION })); changed(); if (!/[?&]base=1/.test(location.search)) toast('🔌 IA externa conectada (MCP)', 3000, { sub: 'Una IA puede manejar el plató y generar con tus claves. Lo que cueste por encima de tu límite te lo preguntaré.' }); };
   ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (err) { return; } if (m.type === 'call') onCall(ws, m); if (m.type === 'replaced') { MCP.url = ''; toast('🔌 Otra pestaña ha tomado el control del MCP'); } };
   ws.onclose = () => { if (MCP.ws !== ws) return; const was = MCP.state; MCP.ws = null; MCP.state = 'off'; changed(); if (was === 'on') toast('🔌 IA externa desconectada'); if (MCP.url === url) MCP.timer = setTimeout(() => connect(url), 3000); };
   ws.onerror = () => {};
@@ -142,6 +142,11 @@ const H = {
     if (action === 'run') return await D.dirRun({ project_id, steps }, approve);
     throw new Error('Acción desconocida: ' + action); },
   async book_load({ file }) { const r = await resolveRef(file); const D = await import('./director.js'); location.hash = '#director'; return await D.dirFromBook(r.blob); },
+  async games({ action, id, code, note }) { const G = await import('./games.js');
+    if (action === 'list') return { games: await G.gamesList() }; if (action === 'get') return await G.gamesGet(id); if (action === 'api') return { text: G.GAME_API };
+    if (action === 'save') { const r = await G.gamesSave({ id, code, note }); return r.ok ? { text: `Juego «${r.title}» guardado y probado.`, ...r } : { text: 'La prueba automática ha encontrado fallos; corrígelos y vuelve a guardar.', ...r }; }
+    if (action === 'play') { const r = await G.gamesPlay(id); return { text: 'Partida abierta en la tele.' + (r.phones ? ' Los móviles entran en ' + r.phones : ''), ...r }; }
+    throw new Error('Acción desconocida: ' + action); },
   async montage({ action }) { const E = await import('./editor.js'); if (action === 'get') return await E.montageInfo();
     const r = await E.exportMontage(); return { text: `Montaje exportado (${r.dur.toFixed(1)} s) y guardado en la galería como gallery:${r.id}.`, gallery_id: r.id, files: [{ name: `montaje.${extOf(r.blob)}`, blob: r.blob }] }; },
 };

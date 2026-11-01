@@ -1,8 +1,41 @@
-# 🎬 Plató Studio
+# 🎬 Plató
 
-**Previsualiza tu escena en 3D, dirige la acción y la cámara, y genera el vídeo final con IA usando tus propias claves.** Pagas al proveedor solo lo que generas: sin suscripciones ni créditos que caducan.
+**Un estudio-consola para casa: aprende, cuenta historias, juega y crea escenas en 3D, con la IA de tu elección y tus propias claves.** Pagas al proveedor solo lo que generas: sin suscripciones ni créditos que caducan.
 
-Es una app web instalable en el móvil (PWA). Todo funciona en tu navegador: tus claves, tu galería y tus proyectos se guardan solo en tu dispositivo.
+Funciona como aplicación propia en tu ordenador o en un aparato conectado a la tele, y también como web instalable (PWA). Tus claves, tu galería, tus juegos y tus proyectos se guardan solo en tu dispositivo.
+
+## Abrirla como aplicación
+
+Necesitas [Node.js 18+](https://nodejs.org) y Chrome, Edge, Chromium o Brave instalados.
+
+| Sistema | Cómo |
+|---|---|
+| Windows | doble clic en `Plato.cmd` |
+| macOS | doble clic en `Plato.command` |
+| Linux | `./plato.sh` |
+
+Se abre en su propia ventana (sin barra del navegador), con su propio perfil. Al cerrar la ventana se apaga todo. Añade `--kiosk` para pantalla completa sin bordes (modo tele).
+
+**En un aparato (Jetson, Raspberry Pi o mini-PC con Linux):** `sudo device/install-kiosk.sh` instala lo necesario y hace que Plató arranque solo a pantalla completa al encender.
+
+Con la app abierta así, los móviles de la misma wifi pueden unirse a las partidas escaneando un QR (y solo a eso: el servidor no expone tus claves, ni el MCP, ni el puente a la red).
+
+## Inicio y guía
+
+La pantalla de inicio tiene cuatro modos grandes —🎓 Aprender (pronto), 🎬 Contar historias, 🎮 Jugar y 🎨 Crear escenas— y debajo el Estudio Pro (Estudio IA, Lab, Galería, Montaje, Personajes). Se maneja con ratón, táctil, flechas del teclado o un mando de consola.
+
+La primera vez que entras en cada parte, una guía te señala lo importante paso a paso; mientras usas el plató van saliendo trucos cuando descubres cosas nuevas, y hay 10 misiones para aprender jugando. El botón **?** repite la guía de la pantalla en la que estés; en Ajustes puedes apagarla o reiniciarla.
+
+## 🎮 Jugar: crea el juego que quieras
+
+Describe cualquier juego —un Monopoly de tu pueblo, carreras en la Luna, un trivial por equipos o algo que no exista— y la IA lo programa en 3D low-poly, **lo prueba sola jugando unas rondas** y, si encuentra fallos, se corrige antes de dártelo. Después puedes mejorarlo hablando («más rápido», «añade trampas»); cada cambio queda como versión y puedes volver atrás.
+
+- Por turnos o en tiempo real, de 1 a 16 jugadores.
+- **Móviles como mando**: cada jugador escanea el QR de la tele y en su móvil aparece su mando (botones, cartas, elecciones, joystick). En los juegos con vista propia, el móvil enseña **su cámara en primera persona**.
+- Sin móviles también se juega: mandos en la tele, teclado (WASD/flechas) o mando de consola.
+- Incluye dos ejemplos: **Ciudad** (tipo Monopoly) y **Pintabolas** (arena de pintura en tiempo real con vista en el móvil).
+- El código de los juegos se ejecuta en un entorno aislado (iframe *sandbox* sin acceso a la app ni a tus claves).
+- Una IA conectada por MCP también puede crearlos (`games` → `api`, `save`, `play`).
 
 ## Qué incluye
 
@@ -17,6 +50,7 @@ Es una app web instalable en el móvil (PWA). Todo funciona en tu navegador: tus
 | 🖼 **Galería** | Todo lo generado, con favoritos, comparación A/B sincronizada y la opción de «usar como entrada» para encadenar generaciones. |
 | 🎞 **Montaje** | Ordena planos, recórtalos, pon fundidos, un rótulo, música y pistas de audio colocadas en el tiempo (voces, efectos), subtítulos incrustados o en .srt, y exporta el corto final. |
 | 👤 **Personajes** | Fichas con descripción e imágenes de referencia para que cada personaje mantenga su identidad entre planos. |
+| 🎮 **Jugar** | Crea cualquier juego describiéndolo y juégalo en la tele con los móviles como mando (ver arriba). |
 | ⚙️ **Ajustes** | Claves, mini-proxy, asistente de IA, presupuesto, historial de gasto (CSV) y catálogo de modelos editable. |
 
 ## Usarla desde cualquier IA (MCP)
@@ -81,8 +115,20 @@ Con una clave de **Anthropic** o de cualquier API **compatible con OpenAI** (por
 ## Estructura
 
 ```
-index.html          carcasa de la app (navegación, PWA)
+index.html          carcasa de la app (inicio, navegación, PWA)
 plato.html          el plató 3D (three.js)
+play.html           mando para el móvil (se une a una partida)
+plato.sh · Plato.cmd · Plato.command   abrir como aplicación
+device/             arranque automático en un aparato (kiosco)
+js/home.js          inicio tipo consola y navegación con mando
+js/guide.js         guía, trucos y misiones
+js/games.js         Jugar: crear, mejorar y lanzar partidas
+js/qr.js            generador de códigos QR
+games/kit.js        kit 3D para los juegos (piezas, tableros, cámaras, sonido)
+games/runtime.html  entorno aislado donde corre cada juego
+games/pad.js        mando universal (tele y móvil)
+games/examples/     Ciudad y Pintabolas
+vendor/three/       three.js r160 (MIT)
 js/core.js          utilidades, ajustes, base de datos local, gasto
 js/providers.js     conectores fal / Higgsfield / Muapi / Replicate
 js/catalog.js       modelos y estilos por defecto
@@ -98,7 +144,7 @@ js/lab.js           Lab (clon de Higgsfield)
 js/registry.js      registro de modelos y prompts de cámara
 js/runner.js        cola de generación compartida
 js/mcp.js           puente con el servidor MCP
-mcp/server.mjs      servidor MCP (stdio y HTTP) + puente WebSocket + app en local
+mcp/server.mjs      servidor MCP (stdio y HTTP) + puente WebSocket + app en local + sala de juegos para móviles
 js/vendor/          registro de modelos de Open Generative AI (MIT, ver OGA-LICENSE.txt)
 scripts/            script para actualizar ese registro
 proxy/worker.js     mini-proxy para Cloudflare
@@ -108,5 +154,8 @@ sw.js               uso sin conexión
 No necesita compilación: son archivos estáticos.
 
 ## Créditos
+
+[three.js](https://threejs.org) r160 (licencia MIT, `vendor/three/LICENSE`).
+
 
 El registro de modelos del Lab procede de [Open Generative AI](https://github.com/Anil-matcha/Open-Generative-AI) (licencia MIT, `js/vendor/OGA-LICENSE.txt`). Para actualizarlo: `node scripts/import-oga-models.mjs <ruta a Open-Generative-AI>/packages/studio/src/models.js`.

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Plató Studio — previz + generación IA</title>
+<title>Plató</title>
 <meta name="description" content="Monta tu escena en 3D, dirige la acción y la cámara, y genera el vídeo final con tus propias claves de IA. Pagas solo lo que usas.">
 <meta name="theme-color" content="#0d0e10">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -15,12 +15,14 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="css/app.css">
 </head>
-<body data-view="plato">
+<body data-view="home">
 <header id="appnav">
-  <div class="brand"><i></i><b>PLATÓ</b><span>STUDIO</span></div>
+  <button id="homeBtn" class="brand" type="button" title="Inicio"><i></i><b>PLATÓ</b></button>
   <nav id="tabs"></nav>
+  <button id="missChip" class="spend" type="button" title="Misiones"></button>
   <button id="install" class="spend" type="button" hidden>⬇ Instalar</button>
   <button id="spend" class="spend" type="button" hidden title="Gasto este mes / presupuesto"></button>
+  <button id="helpBtn" class="helpbtn" type="button" title="Explícame esta pantalla">?</button>
 </header>
 <main id="main">
   <iframe id="plato" src="plato.html" title="Plató 3D" allow="fullscreen; clipboard-write"></iframe>

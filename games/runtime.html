@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Plató · juego</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#0b0c0e;color:#fff;font:14px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#stage{position:fixed;inset:0}
+#stage canvas{display:block}
+.k-hud{position:fixed;inset:0;pointer-events:none;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.k-title{font-size:clamp(16px,2.4vw,26px);font-weight:800;text-shadow:0 2px 10px rgba(0,0,0,.6)}
+.k-line{font-size:clamp(12px,1.5vw,16px);opacity:.92;text-shadow:0 1px 6px rgba(0,0,0,.7)}
+.k-scores{position:fixed;top:12px;right:12px;display:flex;flex-direction:column;gap:5px;background:rgba(10,11,14,.55);backdrop-filter:blur(8px);border-radius:14px;padding:10px 12px;min-width:150px}
+.k-scores div{display:flex;align-items:center;gap:8px;font-size:clamp(12px,1.4vw,15px)}
+.k-scores i{width:11px;height:11px;border-radius:50%;background:var(--c);box-shadow:0 0 8px var(--c)}
+.k-scores span{flex:1}.k-scores b{font-variant-numeric:tabular-nums}
+.k-msg{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(10,11,14,.7);backdrop-filter:blur(8px);border-radius:14px;padding:9px 16px;font-size:clamp(13px,1.6vw,18px);max-width:80vw;text-align:center}
+.k-saybox{position:fixed;left:50%;top:22%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+.k-say{background:linear-gradient(135deg,#ff5434,#ffb43c);color:#1b0a00;font-weight:800;font-size:clamp(16px,2.6vw,30px);padding:10px 22px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.4);animation:pop .3s ease-out}
+@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+#err{position:fixed;left:10px;bottom:10px;right:10px;background:#5a1a12;color:#ffd8cf;padding:10px 12px;border-radius:12px;font:12px/1.4 ui-monospace,monospace;white-space:pre-wrap;display:none;max-height:40vh;overflow:auto}
+</style>
+</head>
+<body>
+<div id="stage"></div><div id="err"></div>
+<script>
+// Entorno aislado: este documento no tiene acceso a la app (sin mismo origen). Todo llega por mensajes.
+(() => {
+  const post = m => parent.postMessage(m, '*');
+  const S = { kit: null, game: null, ctx: null, state: null, mode: 'host', players: [], inputs: {}, over: false, ui: {}, lastUi: 0, lastSync: 0, createKit: null, errShown: false };
+  const err = (e, where) => { const msg = (e && e.message) || String(e); const stack = (e && e.stack) || ''; post({ type: 'error', where, message: msg, stack: String(stack).slice(0, 1500) }); const box = document.getElementById('err'); if (S.mode !== 'test') { box.style.display = 'block'; box.textContent = `⚠️ ${where}: ${msg}`; } };
+  const blobURL = (txt, type = 'text/javascript') => URL.createObjectURL(new Blob([txt], { type }));
+  function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function makeCtx(kit, players, opts) {
+    const R = mulberry(opts.seed || 12345);
+    const ctx = { kit, players, mode: S.mode, viewer: opts.viewer || null, local: {}, time: 0, random: R,
+      int: (a, b) => a + Math.floor(R() * (b - a + 1)), pick: arr => arr[Math.floor(R() * arr.length)], shuffle: arr => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; },
+      player: id => players.find(p => p.id === id) || null, say: (t, s) => kit && kit.say(t, s), sfx: n => kit && kit.sfx(n), music: n => kit && kit.music(n),
+      end: result => { if (S.over) return; S.over = true; const txt = typeof result === 'string' ? result : (players.find(p => p.id === result) || {}).name ? `🏆 Gana ${players.find(p => p.id === result).name}` : '🏁 Fin de la partida'; if (kit) { kit.say(txt, 6); kit.sfx('win'); } post({ type: 'over', result: txt }); } };
+    return ctx;
+  }
+  async function loadGame(code) { const mod = await import(blobURL(code)); const g = mod.default; if (!g || typeof g !== 'object') throw new Error('El juego debe exportar por defecto un objeto (export default { … })'); if (typeof g.setup !== 'function') throw new Error('Falta setup(ctx)'); if (typeof g.controller !== 'function') throw new Error('Falta controller(ctx, state, player)'); g.meta = g.meta || {}; return g; }
+  function specFor(p) { try { return S.game.controller(S.ctx, S.state, p) || {}; } catch (e) { err(e, 'controller'); return { title: 'Error', text: e.message }; } }
+  function pushUis(force) { for (const p of S.players) { const spec = specFor(p); const j = JSON.stringify(spec); if (force || S.ui[p.id] !== j) { S.ui[p.id] = j; post({ type: 'ui', player: p.id, spec }); } } }
+  function hud() { if (S.game.hud && S.kit) try { S.kit.hud(S.game.hud(S.ctx, S.state) || {}); } catch (e) { err(e, 'hud'); } }
+  function act(player, name, args) { if (S.over) return; const p = S.players.find(x => x.id === player); if (!p) return; const fn = S.game.actions && S.game.actions[name];
+    if (!fn) { err(new Error(`El mando pide la acción «${name}», que no existe en actions`), 'acción'); return; }
+    try { fn(S.ctx, S.state, p, args || {}); } catch (e) { err(e, 'acción ' + name); } pushUis(); hud(); syncState(true); }
+  function syncState(force) { const now = performance.now(); if (!force && now - S.lastSync < 66) return; S.lastSync = now; try { post({ type: 'state', state: S.state }); } catch (e) { err(new Error('El estado no se puede enviar: usa solo datos simples (números, textos, listas, objetos)'), 'estado'); } }
+  async function start(m) {
+    S.mode = m.mode || 'host'; S.players = m.players || []; S.over = false; S.game = await loadGame(m.code);
+    S.kit = S.createKit(document.getElementById('stage'), { mode: S.mode }); S.ctx = makeCtx(S.kit, S.players, m);
+    if (S.mode === 'view') { S.state = m.state || null; if (S.game.scene) try { S.game.scene(S.ctx, S.state); } catch (e) { err(e, 'scene'); }
+      S.kit.onFrame(dt => { S.ctx.time += dt; if (S.state && S.game.render) try { S.game.render(S.ctx, S.state, dt); } catch (e) { err(e, 'render'); } }); post({ type: 'ready', meta: S.game.meta }); return; }
+    S.state = S.game.setup(S.ctx); if (S.game.scene) S.game.scene(S.ctx, S.state);
+    S.kit.onFrame(dt => { S.ctx.time += dt;
+      if (S.game.meta.realtime && S.game.update && !S.over) try { S.game.update(S.ctx, S.state, dt, S.inputs); } catch (e) { err(e, 'update'); S.over = true; }
+      if (S.game.render) try { S.game.render(S.ctx, S.state, dt); } catch (e) { err(e, 'render'); }
+      const now = performance.now(); if (now - S.lastUi > 120) { S.lastUi = now; pushUis(); hud(); } if (S.game.meta.realtime) syncState(); });
+    post({ type: 'ready', meta: S.game.meta }); pushUis(true); hud(); syncState(true);
+  }
+  function collectActions(spec) { const out = []; for (const b of spec.buttons || []) if (b && b.action && !b.disabled) out.push(b); if (spec.choices) for (const o of spec.choices.options || []) if (o && o.action) out.push(o); for (const c of spec.cards || []) if (c && c.action) out.push(c); if (spec.number && spec.number.action) out.push({ action: spec.number.action, args: { value: spec.number.min ?? 0 } }); return out; }
+  async function test(m) { // Prueba automática: arranca el juego y juega solo unas rondas para encontrar errores.
+    const errors = []; S.mode = 'test'; const e0 = (e, w) => errors.push(`${w}: ${(e && e.message) || e}${e && e.stack ? '\n' + String(e.stack).split('\n').slice(0, 3).join('\n') : ''}`);
+    try { S.game = await loadGame(m.code); } catch (e) { post({ type: 'test-result', ok: false, errors: ['Cargar: ' + e.message] }); return; }
+    const players = (m.players && m.players.length ? m.players : [{ id: 'p1', name: 'Ana', color: '#e5483b', index: 0 }, { id: 'p2', name: 'Leo', color: '#3b7be5', index: 1 }, { id: 'p3', name: 'Sara', color: '#3fae5a', index: 2 }]).slice(0, Math.max(S.game.meta.minPlayers || 1, Math.min(3, S.game.meta.maxPlayers || 3)));
+    S.players = players; S.over = false; S.kit = S.createKit(document.getElementById('stage'), { mode: 'test' }); S.ctx = makeCtx(S.kit, players, { seed: 7 });
+    try { S.state = S.game.setup(S.ctx); } catch (e) { e0(e, 'setup'); post({ type: 'test-result', ok: false, errors }); return; }
+    try { JSON.stringify(S.state); } catch (e) { errors.push('El estado no es JSON: guarda los objetos 3D en ctx.local, no en el estado'); }
+    try { S.game.scene && S.game.scene(S.ctx, S.state); } catch (e) { e0(e, 'scene'); }
+    const R = mulberry(3); let acted = 0;
+    for (let i = 0; i < 160 && !S.over && errors.length < 4; i++) {
+      if (S.game.meta.realtime) { const inp = {}; for (const p of players) inp[p.id] = { x: R() * 2 - 1, y: R() * 2 - 1, a: R() < 0.3, b: R() < 0.1 }; try { S.game.update && S.game.update(S.ctx, S.state, 1 / 20, inp); } catch (e) { e0(e, 'update'); break; } acted++; }
+      else { for (const p of players) { let spec; try { spec = S.game.controller(S.ctx, S.state, p) || {}; } catch (e) { e0(e, 'controller'); break; } if (typeof spec !== 'object') { errors.push('controller debe devolver un objeto'); break; }
+          const opts = collectActions(spec); if (!opts.length) continue; const o = opts[Math.floor(R() * opts.length)]; const fn = S.game.actions && S.game.actions[o.action]; if (!fn) { errors.push(`El mando usa la acción «${o.action}», que no existe en actions`); break; }
+          try { fn(S.ctx, S.state, p, o.args || {}); acted++; } catch (e) { e0(e, 'acción ' + o.action); break; } } }
+      try { S.game.render && S.game.render(S.ctx, S.state, 1 / 20); } catch (e) { e0(e, 'render'); break; }
+      try { S.game.hud && S.game.hud(S.ctx, S.state); } catch (e) { e0(e, 'hud'); break; }
+      try { JSON.stringify(S.state); } catch (e) { errors.push('El estado dejó de ser JSON en el turno ' + i); break; } }
+    if (!acted && !errors.length) errors.push('Nadie pudo hacer nada: el mando no ofrece ninguna acción a ningún jugador al empezar');
+    post({ type: 'test-result', ok: !errors.length, errors, acted, over: S.over });
+  }
+  addEventListener('message', async e => { const m = e.data; if (!m || typeof m !== 'object' || e.source !== parent) return;
+    try {
+      if (m.type === 'boot') { const three = blobURL(m.three); const kitSrc = m.kit.replace(/from\s+['"]three['"]/g, `from '${three}'`); S.createKit = (await import(blobURL(kitSrc))).createKit; post({ type: 'booted' }); }
+      else if (m.type === 'load') await start(m);
+      else if (m.type === 'test') await test(m);
+      else if (m.type === 'action') act(m.player, m.name, m.args);
+      else if (m.type === 'input') { S.inputs[m.player] = m.input || {}; }
+      else if (m.type === 'state' && S.mode === 'view') S.state = m.state;
+      else if (m.type === 'ui') pushUis(true);
+      else if (m.type === 'shot') { requestAnimationFrame(() => { try { post({ type: 'shot', data: S.kit.renderer.domElement.toDataURL('image/jpeg', 0.8) }); } catch (er) { post({ type: 'shot', data: null }); } }); }
+    } catch (er) { err(er, m.type); if (m.type === 'test') post({ type: 'test-result', ok: false, errors: [er.message] }); }
+  });
+  post({ type: 'hello' });
+})();
+</script>
+</body>
+</html>

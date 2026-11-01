@@ -20,8 +20,11 @@ const opt = (n, d) => { const i = argv.indexOf('--' + n); return i >= 0 && argv[
 const PORT = +opt('port', process.env.PLATO_MCP_PORT || 7821);
 const OUT = path.resolve(opt('out', process.env.PLATO_OUT || path.join(os.homedir(), 'PlatoStudio')));
 const CONF = path.join(os.homedir(), '.plato-studio');
-const HTTP_ONLY = flag('http-only');
-const APP_URL = opt('app-url', `http://localhost:${PORT}/index.html?mcp=${PORT}`);
+const BASE = flag('base');
+const HTTP_ONLY = flag('http-only') || BASE;
+const LAN = flag('lan') || BASE;
+const KIOSK = flag('kiosk');
+const APP_URL = opt('app-url', `http://localhost:${PORT}/index.html?mcp=${PORT}${BASE ? '&base=1' : ''}`);
 const ORIGINS = new Set([`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`, 'https://dani3l-gonzal3z.github.io', ...String(opt('origin', process.env.PLATO_ORIGINS || '')).split(',').map(s => s.trim()).filter(Boolean)]);
 const log = (...a) => process.stderr.write('[plato-mcp] ' + a.join(' ') + '\n');
 
@@ -70,6 +73,7 @@ const TOOLS = [
   { name: 'gallery_get', description: 'Export one gallery item to a file on this computer and preview it.', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
   { name: 'director', description: 'AI Director projects (idea/chapter/book → shot list → automatic previz shooting → final video, voices, SFX, music → montage). action=create: pass your own "plan" JSON (same format as get returns: {title, logline, style, characters:[{name,kind,color,desc,voice}], scenes:[{id,heading,summary,place,time,weather,music,setup:[DSL add/set commands],action:[DSL with delay],shots:[{id,from,duration,subject,size,angle,camera:{mode,lens,shake},description,dialogue:[{who,line}],sfx}]}]}). action=plan: let the app\'s own LLM plan from "idea" (text). action=run: steps among previz, animatic, final, sound, assemble. action=get/list.', inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['create', 'plan', 'get', 'list', 'run'] }, project_id: { type: 'string' }, plan: { type: 'object' }, idea: { type: 'string' }, options: { type: 'object', description: '{dur, coverage:"basic|cine", style, aspect, lang:"es|en", videoModel, sfx, music}' }, steps: { type: 'array', items: { type: 'string', enum: ['previz', 'animatic', 'final', 'sound', 'assemble'] } } }, required: ['action'] } },
   { name: 'book_load', description: 'Load an e-book (EPUB, PDF, TXT) from this computer into a new Director project. Returns the chapters; then use director action=plan with project_id and options.chapter, or write your own plan.', inputSchema: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } },
+  { name: 'games', description: 'Plató games: any game (board, cards, racing, shooter, trivia, invented…) as a JS module on the Plató Game Kit, played on the TV with phones as controllers. action=api returns the full kit reference to write one; list; get (code); save (pass full module code: the app runs an automatic play-test and returns errors to fix); play (opens the lobby with a QR for phones).', inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['api', 'list', 'get', 'save', 'play'] }, id: { type: 'string' }, code: { type: 'string' }, note: { type: 'string' } }, required: ['action'] } },
   { name: 'montage', description: 'The app\'s editor timeline: get (clips, audio tracks, subtitles) or export (renders the final video in real time; returns the file).', inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['get', 'export'] } }, required: ['action'] } },
   { name: 'task_result', description: 'Get the result of a long operation that returned a task_id. Waits up to wait_seconds (default 40).', inputSchema: { type: 'object', properties: { task_id: { type: 'string' }, wait_seconds: { type: 'number' } }, required: ['task_id'] } },
 ];
@@ -82,28 +86,54 @@ let app = null; const pending = new Map(); let seq = 0;
 function wsSend(sock, obj) { const data = Buffer.from(JSON.stringify(obj)); const n = data.length; let h;
   if (n < 126) h = Buffer.from([0x81, n]); else if (n < 65536) { h = Buffer.alloc(4); h[0] = 0x81; h[1] = 126; h.writeUInt16BE(n, 2); } else { h = Buffer.alloc(10); h[0] = 0x81; h[1] = 127; h.writeBigUInt64BE(BigInt(n), 2); }
   sock.write(Buffer.concat([h, data])); }
-function wsAccept(req, sock) {
-  const origin = req.headers.origin; if (origin && !ORIGINS.has(origin)) { log('origen rechazado:', origin); sock.end('HTTP/1.1 403 Forbidden\r\n\r\n'); return; }
-  const key = req.headers['sec-websocket-key']; if (!key) { sock.end('HTTP/1.1 400 Bad Request\r\n\r\n'); return; }
+function wsUpgrade(req, sock, onText, onClose) {
+  const key = req.headers['sec-websocket-key']; if (!key) { sock.end('HTTP/1.1 400 Bad Request\r\n\r\n'); return null; }
   const acc = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
   sock.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${acc}\r\n\r\n`); sock.setNoDelay(true);
-  let buf = Buffer.alloc(0), frags = [];
-  const conn = { sock, send: o => wsSend(sock, o), origin, hello: null };
+  let buf = Buffer.alloc(0), frags = [], closed = false;
+  const conn = { sock, send: o => { if (!closed) try { wsSend(sock, o); } catch (e) {} }, origin: req.headers.origin, hello: null, close: () => { try { sock.end(Buffer.from([0x88, 0])); } catch (e) {} } };
   sock.on('data', chunk => { buf = Buffer.concat([buf, chunk]);
     for (;;) { if (buf.length < 2) return; const fin = buf[0] & 0x80, op = buf[0] & 0x0f, masked = buf[1] & 0x80; let len = buf[1] & 0x7f, off = 2;
       if (len === 126) { if (buf.length < 4) return; len = buf.readUInt16BE(2); off = 4; } else if (len === 127) { if (buf.length < 10) return; len = Number(buf.readBigUInt64BE(2)); off = 10; }
       const mOff = off; if (masked) off += 4; if (buf.length < off + len) return;
       let pl = buf.subarray(off, off + len); if (masked) { const m = buf.subarray(mOff, mOff + 4); pl = Buffer.from(pl); for (let i = 0; i < pl.length; i++) pl[i] ^= m[i & 3]; }
       buf = buf.subarray(off + len);
-      if (op === 8) { try { sock.end(Buffer.from([0x88, 0])); } catch (e) {} return; }
+      if (op === 8) { conn.close(); return; }
       if (op === 9) { const h = Buffer.from([0x8a, pl.length]); sock.write(Buffer.concat([h, pl])); continue; }
       if (op === 10) continue;
-      if (op === 1 || op === 2 || op === 0) { frags.push(pl); if (!fin) continue; const text = Buffer.concat(frags).toString('utf8'); frags = []; onAppMessage(conn, text); } } });
-  const bye = () => { if (app === conn) { app = null; log('app desconectada'); for (const [id, p] of pending) { p.reject(new Error('La app se ha desconectado')); pending.delete(id); } } };
-  sock.on('close', bye); sock.on('error', bye);
+      if (op === 1 || op === 2 || op === 0) { frags.push(pl); if (!fin) continue; const text = Buffer.concat(frags).toString('utf8'); frags = []; try { onText(conn, text); } catch (e) { log('ws:', e.message); } } } });
+  const bye = () => { if (closed) return; closed = true; onClose && onClose(conn); };
+  sock.on('close', bye); sock.on('error', bye); return conn;
 }
+const isLocal = req => /^(::1|127\.|::ffff:127\.)/.test(req.socket.remoteAddress || '');
+function wsAccept(req, sock) {
+  const origin = req.headers.origin; if ((origin && !ORIGINS.has(origin)) || !isLocal(req)) { log('puente rechazado:', origin || req.socket.remoteAddress); sock.end('HTTP/1.1 403 Forbidden\r\n\r\n'); return; }
+  wsUpgrade(req, sock, onAppMessage, conn => { if (app === conn) { app = null; log('app desconectada'); for (const [id, p] of pending) { p.reject(new Error('La app se ha desconectado')); pending.delete(id); } } });
+}
+
+/* ---------- Relé de partidas: el aparato (anfitrión) y los móviles de los jugadores ---------- */
+const rooms = new Map();
+function gameAccept(req, sock) {
+  const q = new URL(req.url, 'http://x').searchParams; const code = String(q.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8); const role = q.get('role');
+  if (!code) { sock.end('HTTP/1.1 400 Bad Request\r\n\r\n'); return; }
+  if (role === 'host') { if (!isLocal(req)) { sock.end('HTTP/1.1 403 Forbidden\r\n\r\n'); return; }
+    let room = rooms.get(code); if (!room) rooms.set(code, room = { host: null, players: new Map() });
+    const c = wsUpgrade(req, sock, (conn, text) => { let m; try { m = JSON.parse(text); } catch (e) { return; } const msg = { type: 'host', data: m.data };
+        if (m.to === 'all' || !m.to) for (const p of room.players.values()) p.send(msg); else { const p = room.players.get(m.to); if (p) p.send(msg); if (m.kick && p) p.close(); } },
+      conn => { if (room.host === conn) { room.host = null; for (const p of room.players.values()) p.send({ type: 'host-gone' }); setTimeout(() => { if (!room.host && !room.players.size) rooms.delete(code); }, 60000); } });
+    if (!c) return; if (room.host) room.host.close(); room.host = c; c.send({ type: 'room', room: code, players: [...room.players.entries()].map(([id, p]) => ({ id, name: p.name })) }); log('partida abierta:', code); return; }
+  const room = rooms.get(code); if (!room || !room.host) { sock.end('HTTP/1.1 404 Not Found\r\n\r\n'); return; }
+  if (room.players.size >= 16) { sock.end('HTTP/1.1 409 Conflict\r\n\r\n'); return; }
+  let id = String(q.get('id') || '').replace(/[^\w-]/g, '').slice(0, 24) || crypto.randomBytes(4).toString('hex'); const name = String(q.get('name') || 'Jugador').slice(0, 24);
+  const old = room.players.get(id); if (old) old.close();
+  const c = wsUpgrade(req, sock, (conn, text) => { let m; try { m = JSON.parse(text); } catch (e) { return; } if (room.host) room.host.send({ type: 'msg', from: id, data: m }); },
+    conn => { if (room.players.get(id) === conn) { room.players.delete(id); if (room.host) room.host.send({ type: 'leave', id }); } });
+  if (!c) return; c.name = name; room.players.set(id, c); c.send({ type: 'welcome', id, room: code }); if (room.host) room.host.send({ type: 'join', id, name });
+}
+function lanIPs() { const out = []; for (const list of Object.values(os.networkInterfaces())) for (const a of list || []) if (a.family === 'IPv4' && !a.internal) out.push(a.address); return out; }
+
 function onAppMessage(conn, text) { let m; try { m = JSON.parse(text); } catch (e) { return; }
-  if (m.type === 'hello') { conn.hello = m; if (app && app !== conn) { try { app.send({ type: 'replaced' }); app.sock.end(); } catch (e) {} } app = conn; log('app conectada desde', conn.origin || 'origen desconocido'); conn.send({ type: 'welcome', version: VERSION, out: OUT }); return; }
+  if (m.type === 'hello') { conn.hello = m; if (app && app !== conn) { try { app.send({ type: 'replaced' }); app.sock.end(); } catch (e) {} } app = conn; everConnected = true; log('app conectada desde', conn.origin || 'origen desconocido'); conn.send({ type: 'welcome', version: VERSION, out: OUT }); return; }
   if (m.type === 'result' && pending.has(m.id)) { const p = pending.get(m.id); pending.delete(m.id); m.error ? p.reject(new Error(m.error)) : p.resolve(m.result); return; }
   if (m.type === 'progress' && pending.has(m.id)) { const p = pending.get(m.id); p.onProgress && p.onProgress(m); }
 }
@@ -113,15 +143,37 @@ async function waitForApp(ms) { const t0 = Date.now(); while (!app && Date.now()
 
 /* ---------- Abrir la app ---------- */
 let headless = null;
+function findBrowser() {
+  const env = process.env, c = [];
+  if (process.platform === 'win32') for (const base of [env['PROGRAMFILES'], env['PROGRAMFILES(X86)'], env.LOCALAPPDATA].filter(Boolean)) c.push(path.join(base, 'Google/Chrome/Application/chrome.exe'), path.join(base, 'Microsoft/Edge/Application/msedge.exe'), path.join(base, 'Chromium/Application/chrome.exe'));
+  else if (process.platform === 'darwin') c.push('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Chromium.app/Contents/MacOS/Chromium', '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser');
+  else for (const d of (env.PATH || '').split(':')) for (const n of ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'microsoft-edge', 'brave-browser']) c.push(path.join(d, n));
+  return c.find(p => { try { return fs.statSync(p).isFile(); } catch (e) { return false; } }) || null;
+}
+let appWin = null;
+const defaultOpen = () => process.platform === 'darwin' ? ['open', [APP_URL]] : process.platform === 'win32' ? ['cmd', ['/c', 'start', '', APP_URL]] : ['xdg-open', [APP_URL]];
+// Modo base sin ventana propia controlable: se apaga solo cuando la app lleva 20 s desconectada (pestaña o ventana cerrada).
+let watchClose = false, goneSince = 0, everConnected = false;
+setInterval(() => { if (!watchClose) return; if (app) { goneSince = 0; return; } if (!everConnected) return; goneSince = goneSince || Date.now(); if (Date.now() - goneSince > 20000) { log('La app se ha cerrado: apago Plató.'); shutdown(); } }, 2000).unref();
 async function openApp(useHeadless) {
   if (useHeadless) { if (headless) return 'Ya hay un navegador oculto abierto.';
     let pw = null; for (const m of ['playwright', 'playwright-core']) { try { pw = await import(m); break; } catch (e) {} }
     if (!pw) throw new Error('Para el modo oculto instala Playwright: npm i -g playwright && npx playwright install chromium');
     const chromium = pw.chromium || (pw.default && pw.default.chromium); const b = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required', '--ignore-gpu-blocklist'] });
     const page = await b.newPage({ viewport: { width: 1280, height: 800 } }); await page.goto(APP_URL); headless = { b, page }; return 'Abierto en un Chromium oculto.'; }
-  const cmd = process.platform === 'darwin' ? ['open', [APP_URL]] : process.platform === 'win32' ? ['cmd', ['/c', 'start', '', APP_URL]] : ['xdg-open', [APP_URL]];
-  try { spawn(cmd[0], cmd[1], { detached: true, stdio: 'ignore' }).unref(); } catch (e) { throw new Error('No he podido abrir el navegador. Abre tú: ' + APP_URL); }
-  return 'Abriendo ' + APP_URL + ' en tu navegador.';
+  const exe = findBrowser();
+  if (exe) { // Ventana propia, sin barra de navegador, con su propio perfil (como una app instalada).
+    const args = [`--app=${APP_URL}`, `--user-data-dir=${path.join(CONF, 'app-profile')}`, '--no-first-run', '--no-default-browser-check', '--autoplay-policy=no-user-gesture-required', '--disable-features=Translate', '--window-size=1366,860', '--class=PlatoStudio'];
+    if (KIOSK) args.push('--kiosk', '--start-fullscreen', '--noerrdialogs', '--disable-session-crashed-bubble', '--overscroll-history-navigation=0');
+    const t0 = Date.now(); appWin = spawn(exe, args, { stdio: 'ignore' });
+    appWin.on('exit', code => { appWin = null; if (!BASE || KIOSK) return;
+      // Si el navegador «delega» en otra ventana y sale enseguida, no apagamos: vigilamos la conexión de la app.
+      if (Date.now() - t0 < 6000) { log('La ventana se abrió aparte; apagaré Plató cuando la cierres.'); watchClose = true; if (code) { try { spawn(...defaultOpen(), { detached: true, stdio: 'ignore' }).unref(); } catch (e) {} } return; }
+      log('Ventana cerrada: apago Plató.'); shutdown(); });
+    return 'Abriendo Plató en su propia ventana.'; }
+  if (BASE && !KIOSK) watchClose = true;
+  try { spawn(...defaultOpen(), { detached: true, stdio: 'ignore' }).unref(); } catch (e) { throw new Error('No he podido abrir el navegador. Abre tú: ' + APP_URL); }
+  return 'Abriendo ' + APP_URL + ' en tu navegador (instala Chrome o Edge para tener ventana propia).';
 }
 
 /* ---------- Archivos ---------- */
@@ -205,7 +257,9 @@ function readBody(req) { return new Promise((res, rej) => { const c = []; let n 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/health') { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ app: 'plato-studio-mcp', version: VERSION, connected: !!app })); return; }
+  if (url.pathname === '/lan') { res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify({ lan: LAN, ips: LAN ? lanIPs() : [], port: PORT })); return; }
   if (url.pathname === '/mcp') {
+    if (!isLocal(req)) { res.writeHead(403); res.end('Solo desde este ordenador'); return; }
     if (req.method !== 'POST') { res.writeHead(405, { allow: 'POST' }); res.end(); return; }
     const o = req.headers.origin; if (o && !ORIGINS.has(o)) { res.writeHead(403); res.end('Origen no permitido'); return; }
     if ((req.headers.authorization || '') !== 'Bearer ' + TOKEN) { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'Falta el token (Authorization: Bearer …). Lo tienes en ' + path.join(CONF, 'token') })); return; }
@@ -218,7 +272,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET') return serveStatic(req, res);
   res.writeHead(405); res.end();
 });
-server.on('upgrade', (req, sock) => { if (new URL(req.url, 'http://x').pathname === '/bridge') wsAccept(req, sock); else sock.destroy(); });
+server.on('upgrade', (req, sock) => { const p = new URL(req.url, 'http://x').pathname; if (p === '/bridge') wsAccept(req, sock); else if (p === '/game') gameAccept(req, sock); else sock.destroy(); });
 
 /* ---------- stdio ---------- */
 function startStdio(relay) {
@@ -230,18 +284,20 @@ function startStdio(relay) {
   process.stdin.on('end', () => { ended = true; if (!inflight) shutdown(); });
 }
 async function relayTo(msg) { const r = await fetch(`http://127.0.0.1:${PORT}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + TOKEN }, body: JSON.stringify(msg) }); return await r.json(); }
-function shutdown() { try { headless && headless.b.close(); } catch (e) {} process.exit(0); }
+function shutdown() { try { headless && headless.b.close(); } catch (e) {} try { appWin && appWin.kill(); } catch (e) {} process.exit(0); }
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);
 
 server.on('error', async e => {
   if (e.code !== 'EADDRINUSE') { log('error del servidor:', e.message); process.exit(1); }
   let ours = false; try { const h = await (await fetch(`http://127.0.0.1:${PORT}/health`)).json(); ours = h.app === 'plato-studio-mcp'; } catch (err) {}
+  if (ours && BASE) { log(`Plató ya está en marcha en el puerto ${PORT}: abro su ventana.`); try { log(await openApp(false)); } catch (er) { log(er.message); } return; }
   if (!ours || HTTP_ONLY) { log(`El puerto ${PORT} está ocupado por otro programa. Usa --port.`); process.exit(1); }
   log(`Ya hay otro servidor de Plató Studio en el puerto ${PORT}: reenvío mis peticiones a él.`); startStdio(relayTo);
 });
-server.listen(PORT, '127.0.0.1', async () => {
+server.listen(PORT, LAN ? '0.0.0.0' : '127.0.0.1', async () => {
   fs.mkdirSync(OUT, { recursive: true });
   log(`v${VERSION} · app: ${APP_URL} · puente: ws://localhost:${PORT}/bridge · MCP HTTP: http://localhost:${PORT}/mcp · archivos: ${OUT}`);
   if (HTTP_ONLY) log('Token HTTP: ' + TOKEN); else startStdio(null);
-  if (flag('open') || flag('headless')) { try { log(await openApp(flag('headless'))); } catch (e) { log(e.message); } }
+  if (LAN) log('Móviles en la misma wifi: ' + (lanIPs().map(ip => `http://${ip}:${PORT}/play.html`).join('  ') || 'sin red local'));
+  if (flag('open') || flag('headless') || BASE || flag('app')) { try { log(await openApp(flag('headless'))); } catch (e) { log(e.message); } }
 });

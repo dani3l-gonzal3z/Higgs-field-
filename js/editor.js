@@ -102,7 +102,7 @@ async function run(p, gens, canvas, record, o = {}) {
   if (record) { await new Promise(r => { rec.onstop = r; rec.stop(); }); const blob = new Blob(chunks, { type: rec.mimeType || 'video/webm' }); const ext = /mp4/.test(blob.type) ? 'mp4' : 'webm';
     const thumb = await thumbFromVideo(blob); const id = uid(); const dur = p.clips.reduce((a, c) => a + c.out - c.in, 0) + (p.title ? 2 : 0);
     await db.put('gens', { id, t: Date.now(), mode: 'edit', kind: 'video', modelName: 'Montaje' + (p.title ? ': ' + p.title : ''), provider: 'edit', prompt: '', cost: 0, blob, thumb, dur, fav: true });
-    if (!o.silent) download(blob, `montaje-${new Date().toISOString().slice(0, 10)}.${ext}`); toast('🎞 Montaje exportado', 4000, { sub: o.silent ? 'Guardado en la galería (⭐).' : 'Descargado y guardado en la galería (⭐).' }); ac.close().catch(() => {}); return { blob, id, dur }; }
+    if (!o.silent) download(blob, `montaje-${new Date().toISOString().slice(0, 10)}.${ext}`); import('./guide.js').then(m => m.guideEvent('montage')).catch(() => {}); toast('🎞 Montaje exportado', 4000, { sub: o.silent ? 'Guardado en la galería (⭐).' : 'Descargado y guardado en la galería (⭐).' }); ac.close().catch(() => {}); return { blob, id, dur }; }
   ac.close().catch(() => {});
 }
 

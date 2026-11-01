@@ -33,10 +33,11 @@ export function toast(msg, ms = 2600, o = {}) {
 }
 export function modal(title, body, { wide = false, onClose } = {}) {
   const wrap = el('div', { class: 'modal' }); const card = el('div', { class: 'mcard' + (wide ? ' wide' : '') });
-  const close = () => { wrap.remove(); onClose && onClose(); };
+  const esc = e => { if (e.key === 'Escape' && wrap.isConnected && wrap === [...document.querySelectorAll('.modal')].pop()) { e.stopPropagation(); close(); } };
+  const close = () => { if (!wrap.isConnected) return; wrap.remove(); removeEventListener('keydown', esc, true); onClose && onClose(); };
   card.append(el('div', { class: 'mh' }, el('b', {}, title), btn('✕', close, 'x')), body);
-  wrap.append(card); wrap.addEventListener('click', e => { if (e.target === wrap) close(); });
-  document.body.append(wrap); return close;
+  wrap.append(card); wrap.addEventListener('click', e => { if (e.target === wrap) close(); }); addEventListener('keydown', esc, true);
+  document.body.append(wrap); const first = card.querySelector('.b.hot, button:not(.x), input, textarea'); if (first && matchMedia('(pointer:fine)').matches) setTimeout(() => first.focus({ preventScroll: true }), 30); return close;
 }
 export function confirmBox(title, text, okLabel = 'Aceptar') {
   return new Promise(res => {

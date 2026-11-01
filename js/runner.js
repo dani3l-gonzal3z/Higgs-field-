@@ -29,7 +29,7 @@ export function runJob(spec) {
       const cost = (res && res.cost && (res.cost.amount_usd || res.cost.usd)) || job.est || 0;
       const gen = { id: job.id, t: Date.now(), mode: job.mode || '', kind: job.kind, modelId: job.endpoint, modelName: job.name, provider: job.provider, prompt: job.input.prompt || job.label || '', input: job.input, cost, blob, url, thumb, dur: meta.duration || null, w: meta.w, h: meta.h, fav: false, meta: job.meta || {} };
       await db.put('gens', gen); await db.put('ledger', { id: job.id, t: Date.now(), model: job.name, provider: job.provider, cost, status: 'ok' });
-      job.phase = 'listo'; job.gen = gen; emit('gens'); return gen;
+      job.phase = 'listo'; job.gen = gen; emit('gens'); import('./guide.js').then(m => m.guideEvent('generate')).catch(() => {}); return gen;
     } catch (e) {
       const cancelled = e.name === 'AbortError'; job.phase = cancelled ? 'cancelado' : 'error'; job.error = cancelled ? 'Cancelado' : (e.message || String(e));
       await db.put('ledger', { id: job.id, t: Date.now(), model: job.name, provider: job.provider, cost: 0, status: 'fail', error: job.error });

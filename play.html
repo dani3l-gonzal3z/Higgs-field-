@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0b0c0e">
+<title>Plató · mando</title>
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<style>
+html,body{margin:0;height:100%;background:#0b0c0e;color:#efeee9;font:15px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overscroll-behavior:none}
+body{display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top) + 10px) 14px 10px;border-bottom:1px solid rgba(255,255,255,.08)}
+header .dot{width:12px;height:12px;border-radius:50%;background:var(--pc,#ffb43c);box-shadow:0 0 10px var(--pc,#ffb43c)}
+header b{flex:1;font-size:15px}header small{color:#9d9b96}
+header button{border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:inherit;border-radius:12px;padding:6px 10px;font:inherit}
+#pov{flex:1;min-height:0;position:relative;display:none;background:#000}#pov iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+#padbox{padding:14px 14px calc(env(safe-area-inset-bottom) + 14px);overflow:auto}
+body.pov #pov{display:block}body:not(.pov) #padbox{flex:1}
+.join{padding:24px 18px;display:flex;flex-direction:column;gap:12px}.join h1{margin:0;font-size:26px}.join p{color:#9d9b96;margin:0}
+.join input{background:#141518;border:1px solid rgba(255,255,255,.14);color:inherit;border-radius:14px;padding:14px;font:inherit;font-size:18px}
+.join button{border:0;background:linear-gradient(135deg,#ff5434,#ffb43c);color:#1b0a00;border-radius:16px;padding:16px;font:inherit;font-size:18px;font-weight:800}
+.msg{padding:30px 20px;text-align:center;color:#9d9b96}
+</style>
+</head>
+<body>
+<header><i class="dot"></i><b id="who">Plató</b><small id="room"></small><button id="full" type="button">⛶</button></header>
+<div id="pov"></div>
+<div id="padbox"></div>
+<script type="module">
+import { renderPad, PAD_CSS } from './games/pad.js';
+import { makeRuntime } from './games/host.js';
+const st = document.createElement('style'); st.textContent = PAD_CSS; document.head.append(st);
+const $ = s => document.querySelector(s), box = $('#padbox');
+const q = new URLSearchParams(location.search); let room = (q.get('room') || '').toUpperCase();
+const ls = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } };
+let id = ls('plato_pid'); if (!id) { id = Math.random().toString(36).slice(2, 10); ls('plato_pid', id); }
+let ws = null, rt = null, rtCode = null, lastSpec = null, retry = 0;
+$('#full').onclick = () => { const d = document.documentElement; (document.fullscreenElement ? document.exitFullscreen() : d.requestFullscreen && d.requestFullscreen()).catch(() => {}); };
+function joinForm() {
+  box.innerHTML = `<div class="join"><h1>🎮 Únete a la partida</h1><p>Escribe tu nombre${room ? '' : ' y el código que sale en la tele'}.</p>
+    <input id="nm" placeholder="Tu nombre" maxlength="18" value="${(ls('plato_name') || '').replace(/"/g, '')}">${room ? '' : '<input id="rc" placeholder="Código (ej. QZRT)" maxlength="8" autocapitalize="characters">'}<button id="go" type="button">Entrar</button></div>`;
+  $('#go').onclick = () => { const n = $('#nm').value.trim() || 'Jugador'; ls('plato_name', n); if (!room) room = ($('#rc').value || '').toUpperCase().trim(); if (!room) return; connect(n); };
+}
+function connect(name) {
+  $('#who').textContent = name; $('#room').textContent = room; box.innerHTML = '<div class="msg">Conectando…</div>';
+  try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => {}); } catch (e) {}
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/game?room=${encodeURIComponent(room)}&role=player&id=${id}&name=${encodeURIComponent(name)}`);
+  ws.onopen = () => { retry = 0; };
+  ws.onmessage = async e => { const m = JSON.parse(e.data);
+    if (m.type === 'welcome') box.innerHTML = '<div class="msg">✅ Dentro. Espera a que empiece la partida…</div>';
+    if (m.type === 'host-gone') box.innerHTML = '<div class="msg">La partida se ha cerrado en la tele.</div>';
+    if (m.type !== 'host') return; const d = m.data || {};
+    if (d.type === 'ui') { lastSpec = d.spec; if (d.spec && d.spec.color) document.documentElement.style.setProperty('--pc', d.spec.color); document.body.classList.toggle('pov', !!(d.spec && d.spec.pov && rt)); renderPad(box, d.spec, send); }
+    if (d.type === 'code' && d.code !== rtCode) { rtCode = d.code; if (rt) rt.destroy(); rt = await makeRuntime($('#pov')); rt.send({ type: 'load', code: d.code, players: d.players, mode: 'view', viewer: id, state: d.state, seed: d.seed }); document.body.classList.toggle('pov', !!(lastSpec && lastSpec.pov)); }
+    if (d.type === 'state' && rt) rt.send({ type: 'state', state: d.state });
+    if (d.type === 'over') { if (navigator.vibrate) navigator.vibrate([60, 40, 120]); box.innerHTML = `<div class="msg" style="font-size:22px;color:#efeee9">${String(d.result || 'Fin').replace(/</g, '&lt;')}</div>`; }
+    if (d.type === 'kick') { box.innerHTML = '<div class="msg">La partida ha terminado.</div>'; }
+  };
+  ws.onclose = () => { if (retry++ < 20) setTimeout(() => connect(name), 1500); else box.innerHTML = '<div class="msg">Sin conexión con la tele. ¿Estás en la misma wifi?</div>'; };
+}
+function send(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
+joinForm();
+</script>
+</body>
+</html>

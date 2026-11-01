@@ -1,7 +1,7 @@
 // Service worker: la app funciona sin conexión (el plató y la galería); las generaciones necesitan red.
-const V = 'plato-studio-v3';
-const SHELL = ['./', 'index.html', 'plato.html', 'css/app.css', 'js/app.js', 'js/core.js', 'js/catalog.js', 'js/providers.js', 'js/llm.js', 'js/studio.js', 'js/gallery.js', 'js/editor.js', 'js/chars.js', 'js/settings.js', 'js/director.js', 'js/mcp.js', 'js/lab.js', 'js/runner.js', 'js/registry.js', 'js/book.js', 'js/vendor/oga-models.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'proxy/worker.js'];
-const CDN = ['https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js', 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js'];
+const V = 'plato-studio-v4';
+const SHELL = ['./', 'index.html', 'plato.html', 'css/app.css', 'js/app.js', 'js/core.js', 'js/catalog.js', 'js/providers.js', 'js/llm.js', 'js/studio.js', 'js/gallery.js', 'js/editor.js', 'js/chars.js', 'js/settings.js', 'js/director.js', 'js/mcp.js', 'js/lab.js', 'js/runner.js', 'js/registry.js', 'js/book.js', 'js/vendor/oga-models.js', 'js/qr.js', 'js/games.js', 'js/guide.js', 'js/home.js', 'play.html', 'games/kit.js', 'games/pad.js', 'games/host.js', 'games/runtime.html', 'games/examples/ciudad.js', 'games/examples/pintabolas.js', 'vendor/three/three.module.min.js', 'vendor/three/addons/controls/OrbitControls.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'proxy/worker.js'];
+const CDN = []; // three.js va incluido en vendor/: ya no depende de un CDN
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL).then(() => Promise.all(CDN.map(u => c.add(u).catch(() => {})))))); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
