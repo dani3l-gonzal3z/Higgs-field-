@@ -1,5 +1,5 @@
 // 🧠 Director IA: de una idea, un capítulo o un libro → guion técnico → previz rodada sola → vídeo final + voces + sonido + música → montaje.
-import { $, el, btn, toast, modal, confirmBox, seg, toggle, uid, db, emit, bus, getSettings, money, blobURL, vib, mediaKind, videoMeta, fmtTime } from './core.js';
+import { $, el, btn, toast, modal, confirmBox, seg, toggle, uid, db, emit, bus, getSettings, money, blobURL, vib, mediaKind, videoMeta, fmtTime, download } from './core.js';
 import { STYLES } from './catalog.js';
 import { catalog, loadExtraCatalog, readiness, buildInput, estimate, PROVIDERS } from './providers.js';
 import { registry } from './registry.js';
@@ -11,7 +11,9 @@ import { host } from './core.js';
 const COLORS = ['rojo', 'azul', 'verde', 'amarillo', 'naranja', 'morado', 'rosa', 'blanco', 'negro', 'gris', 'marron', 'granate', 'beige'];
 const LAYOUT = 'studio: plató vacío. city: calles de 12 m a lo largo de z en x=0,±48,±96 y a lo largo de x en z=0,±48,±96; cruce en (0,0) con pasos de cebra en z=±8; carriles a x=±3; aceras a ±7; edificios a partir de 6.5 m del eje; parque en (24,-24). highway: autopista a lo largo de z entre x=-11 y 11, mediana en x=0, carriles x=±3 y ±8. desert: abierto, rocas a partir de 14 m del centro. forest: camino de tierra en x=0 a lo largo de z, árboles desde |x|>4.5. grid: espacio abstracto vacío.';
 const DSL = `Comandos del plató (JSON). Posiciones en metros (x,z), heading en grados (0 = mira a +z, 90 = +x):
-{"op":"add","kind":K,"name":"...","color":"rojo|azul|…","x":0,"z":0,"heading":0}  K: person, child, car, sport, police, van, truck, bus, box, barrel, cone, ball, wall, ramp, platform, building, house, tree, lamp, column, bench, container
+{"op":"add","kind":K,"name":"...","color":"rojo|azul|…","x":0,"z":0,"heading":0,"outfit":O}  K: person, child, car, sport, police, van, truck, bus, box, barrel, cone, ball, wall, ramp, platform, building, house, tree, lamp, column, bench, container, table, chair, stool, sofa, shelf, workbench, bed, tv, desk, door, window, fridge, counter, plant, rug, shutter, console, tires, toolcart, hanglamp, floorlamp, screen, board, crate, machine, pod
+O (vestuario de personas): scientist, teen, detective, hero, astronaut, knight, king, robot, alien, cowboy, ninja, pirate, wizard, chef, doctor, cop, soldier, zombie, executive, grandma, grandpa, girl, boy, athlete
+{"op":"set","name":"garage|living|kitchen|office|bar|classroom|bedroom|bridge|alley|warehouse|western|interview"} monta un decorado completo de stock centrado en (0,0) (usa place "studio" para interiores; western va en desert). Coloca a los personajes dentro: garage 10x8 m, living 9x7, kitchen 8x7, office 12x9, bar 10x8, classroom 10x9, bedroom 7x6, bridge 12x10, warehouse 24x18; el lado abierto de los interiores es +z.
 {"op":"act","target":N,"action":A,"duration":s} A: idle, wave, point, jump, punch, kick, push, throw, fall, stumble, getup, sit, sitground, crouch, kneel, lie, dance, cheer, clap, talk, phone, lookaround, guard, handsup, bow
 {"op":"goto","target":N,"to":N|{"x":0,"z":0},"mode":"walk|run|sneak|crawl"}  (vehículos: "speed":kmh, "ram":true para embestir)
 {"op":"follow","target":N,"who":N,"mode":"run"} {"op":"flee","target":N,"from":N} {"op":"look","target":N,"at":N} {"op":"headlook","target":N,"at":N|"camera"}
@@ -68,11 +70,11 @@ async function chapterSource(pr) {
     text = sums.join('\n\n'); }
   return `Libro: «${pr.book.title}». ${ch.title}.\n\n${text}`;
 }
-async function plan() {
-  const pr = P.proj; if (P.busy) return; if (!llmReady()) { toast('Configura la IA en Ajustes'); return; }
-  let src = pr.src === 'book' ? (pr.book ? null : '') : pr.idea.trim(); if (pr.src === 'book' && !pr.book) { toast('Sube un libro primero'); return; } if (pr.src === 'idea' && !src) { toast('Escribe la idea o el capítulo'); return; }
-  P.busy = true; renderDirector(root);
-  try {
+async function plan() { if (P.busy) return; P.busy = true; renderDirector(root); try { await planCore(P.proj); } catch (e) { toast('No se pudo planificar: ' + e.message, 6000); } P.busy = false; renderDirector(root); }
+async function planCore(pr) {
+  P.proj = pr; if (!llmReady()) throw new Error('Configura la IA en Ajustes (o escribe tú el plan)');
+  let src = pr.src === 'book' ? (pr.book ? null : '') : (pr.idea || '').trim(); if (pr.src === 'book' && !pr.book) throw new Error('Sube un libro primero'); if (pr.src === 'idea' && !src) throw new Error('Escribe la idea o el capítulo');
+  {
     if (pr.src === 'book') src = await chapterSource(pr);
     const chars = (await db.all('chars')).map(c => ({ name: c.name, desc: c.desc })); const o = pr.opts; const st = STYLES.find(s => s[0] === o.style);
     toast('🧠 Escribiendo el guion técnico…', 90000);
@@ -96,8 +98,7 @@ ${src}`, { maxTokens: 16000 });
     if (!plan || !Array.isArray(plan.scenes) || !plan.scenes.length) throw new Error('La IA no devolvió escenas');
     for (const sc of plan.scenes) { sc.shots = (sc.shots || []).map((sh, i) => ({ id: sh.id || `${sc.id}-${i + 1}`, ...sh, st: {} })); }
     pr.plan = plan; await save(); toast(`🎬 ${plan.title}: ${plan.scenes.length} escenas · ${shots().length} planos`, 4000);
-  } catch (e) { toast('No se pudo planificar: ' + e.message, 6000); }
-  P.busy = false; renderDirector(root);
+  }
 }
 async function bookCast(pr) {
   if (!llmReady()) { toast('Configura la IA en Ajustes'); return; }
@@ -110,7 +111,7 @@ async function bookCast(pr) {
 function planHeader(pr) { const p = pr.plan; const n = shots().length; const secs = shots().reduce((a, x) => a + (+x.sh.duration || 5), 0);
   const m = catalog().find(x => x.id === pr.opts.videoModel); const est = m && m.price ? shots().reduce((a, x) => a + (estimate(m, { duration: +x.sh.duration || 5 }, +x.sh.duration || 5) || 0), 0) : null;
   return el('section', { class: 'card' }, el('h2', {}, p.title || 'Sin título'), el('p', { class: 'note' }, p.logline || ''), el('div', { class: 'note' }, `${p.scenes.length} escenas · ${n} planos · ${fmtTime(secs)} · vídeo final ${m ? `con ${m.name}${est != null ? ` ≈ ${money(est)}` : ''}` : 'sin modelo elegido'}`),
-    el('div', { class: 'chips' }, (p.characters || []).map(c => el('span', { class: 'chip', title: c.desc }, `👤 ${c.name}`))), el('div', { class: 'row-btns' }, btn('👤 Guardar personajes', () => saveCast(pr), 'mini-b'))); }
+    el('div', { class: 'chips' }, (p.characters || []).map(c => el('span', { class: 'chip', title: c.desc }, `👤 ${c.name}`))), el('div', { class: 'row-btns' }, btn('👤 Guardar personajes', () => saveCast(pr), 'mini-b'), btn('🖨 Storyboard', () => storyboard(pr), 'mini-b'))); }
 async function saveCast(pr) { const have = await db.all('chars'); let n = 0; for (const c of pr.plan.characters || []) { if (have.some(h => h.name.toLowerCase() === c.name.toLowerCase())) continue; await db.put('chars', { id: uid(), name: c.name, desc: c.desc, images: [] }); n++; } toast(`👤 ${n} personajes guardados`); }
 function prodBar(pr) { const all = shots(); const done = k => all.filter(x => x.sh.st[k] === 'ok').length;
   return el('section', { class: 'card prod' }, el('h3', {}, 'Producción'),
@@ -164,9 +165,9 @@ async function genShot(pr, sc, sh) {
   await save(); refresh(); return sh.final;
 }
 async function pool(items, n, fn) { const q = [...items]; await Promise.all(Array.from({ length: Math.min(n, q.length) }, async () => { while (q.length) await fn(q.shift()); })); }
-async function genAll(pr) { const list = shots().filter(x => x.sh.previz && x.sh.st.gen !== 'ok'); if (!list.length) { toast('No hay planos con previz pendientes de generar'); return; }
+async function genAll(pr, o = {}) { const list = shots().filter(x => x.sh.previz && x.sh.st.gen !== 'ok'); if (!list.length) { toast('No hay planos con previz pendientes de generar'); return; }
   const m = catalog().find(x => x.id === pr.opts.videoModel); const est = m && m.price ? list.reduce((a, x) => a + (estimate(m, { duration: +x.sh.duration || 5 }, +x.sh.duration || 5) || 0), 0) : 0;
-  if (!await confirmBox('Generar vídeo final', `${list.length} planos con ${m ? m.name : '?'}${est ? ` · coste estimado ${money(est)}` : ''}. Se generan de 3 en 3.`, 'Generar')) return;
+  if (!o.silent && !await confirmBox('Generar vídeo final', `${list.length} planos con ${m ? m.name : '?'}${est ? ` · coste estimado ${money(est)}` : ''}. Se generan de 3 en 3.`, 'Generar')) return;
   await pool(list, 3, x => genShot(pr, x.sc, x.sh)); toast('✨ Vídeo final generado', 3500); }
 
 /* ---------- Voces, efectos y música (Muapi) ---------- */
@@ -194,7 +195,7 @@ async function voiceMap(pr, tts) {
 async function soundAll(pr) { const list = shots().filter(x => x.sh.st.sound !== 'ok' && (x.sh.final || (x.sh.dialogue || []).length)); if (!list.length) { toast('Nada pendiente de sonido'); return; } await pool(list, 2, x => soundShot(pr, x.sc, x.sh)); toast('🔊 Voces y sonido listos'); }
 
 /* ---------- Montaje ---------- */
-async function assemble(pr, animatic) {
+async function assemble(pr, animatic, o = {}) {
   const list = shots(); const clips = [], tracks = [], subs = []; let t = 0;
   for (const { sc, sh } of list) { const v = animatic ? sh.previz && sh.previz.color : (sh.final && sh.final.blob) || (sh.previz && sh.previz.color); if (!v) continue;
     const gid = 'dirclip-' + pr.id + '-' + sh.id + (animatic ? '-a' : ''); const meta = await videoMeta(v); const dur = Math.min(meta.duration || +sh.duration || 5, +sh.duration || meta.duration || 5);
@@ -204,7 +205,7 @@ async function assemble(pr, animatic) {
     let lt = 0.3; (sh.dialogue || []).forEach((d, i) => { const a = !animatic && sh.audio && sh.audio[i]; const len = Math.max(1.2, d.line.length / 14); if (a) tracks.push({ id: uid(), blob: a.blob, clipId: cid, at: lt, vol: 1, label: `${d.who}` }); subs.push({ id: uid(), clipId: cid, at: lt, len, text: `${d.who}: ${d.line}` }); lt += len + 0.2; });
     clips.push({ id: cid, genId: gid, in: 0, out: dur, trans: clips.length ? 'cut' : 'fade' }); t += dur; }
   if (!clips.length) { toast(animatic ? 'Rueda primero la previz' : 'No hay planos todavía'); return; }
-  const cur = await db.get('projects', 'current'); if (cur && cur.clips && cur.clips.length && !cur.fromDirector) { if (!await confirmBox('Sustituir el montaje', 'El montaje actual se sustituirá por este capítulo.', 'Sustituir')) return; }
+  const cur = await db.get('projects', 'current'); if (!o.silent && cur && cur.clips && cur.clips.length && !cur.fromDirector) { if (!await confirmBox('Sustituir el montaje', 'El montaje actual se sustituirá por este capítulo.', 'Sustituir')) return; }
   await db.put('projects', { id: 'current', title: pr.plan.title + (animatic ? ' (animatic)' : ''), clips, music: null, musicVol: 0.6, clipVol: 1, aspect: ['16:9', '9:16', '1:1', '4:3'].includes(pr.opts.aspect) ? pr.opts.aspect : '16:9', tracks, subs, burnSubs: true, fromDirector: pr.id });
   emit('gens'); toast(animatic ? '🎞 Animatic montado' : '🎞 Capítulo montado', 3500, { action: { label: 'Ir al montaje', fn: () => location.hash = '#edit' } });
 }
@@ -214,3 +215,50 @@ async function autopilot(pr) {
   if (catalog().find(x => x.id === pr.opts.videoModel)) await genAll(pr); if (getSettings().keys.muapi) await soundAll(pr); await assemble(pr, false);
 }
 function refresh() { if (root && location.hash === '#director' && !P.shooting) renderDirector(root); }
+
+/* ---------- API para el MCP (sin interfaz) ---------- */
+const KEEP = ['previz', 'final', 'audio', 'musicGen'];
+function strip(o) { return JSON.parse(JSON.stringify(o, (k, v) => KEEP.includes(k) ? (v ? (Array.isArray(v) ? v.filter(Boolean).length + ' clips' : 'ok') : undefined) : v)); }
+function normPlan(plan) {
+  if (!plan || !Array.isArray(plan.scenes) || !plan.scenes.length) throw new Error('El plan necesita "scenes" con al menos una escena');
+  plan.characters = plan.characters || []; plan.scenes.forEach((sc, i) => { sc.id = sc.id || 'S' + (i + 1); sc.setup = sc.setup || []; sc.action = sc.action || []; sc.place = sc.place || 'studio';
+    sc.shots = (sc.shots || []).map((sh, j) => ({ from: 0, duration: 5, size: 'medio', angle: 'tq', ...sh, id: sh.id || `${sc.id}-${j + 1}`, st: {} })); if (!sc.shots.length) throw new Error(`La escena ${sc.id} no tiene planos`); });
+  return plan;
+}
+function summary(pr) { const all = pr.plan ? pr.plan.scenes.flatMap(sc => sc.shots) : []; const n = k => all.filter(sh => sh.st && sh.st[k] === 'ok').length;
+  return { project_id: pr.id, title: (pr.plan && pr.plan.title) || (pr.book && pr.book.title) || 'Proyecto nuevo', scenes: pr.plan ? pr.plan.scenes.length : 0, shots: all.length, done: { previz: n('previz'), final: n('gen'), sound: n('sound') } }; }
+async function getPr(id) { const pr = id ? await db.get('projects', id) : P.proj; if (!pr || pr.kind !== 'director') throw new Error('No existe el proyecto ' + (id || '')); return pr; }
+export async function dirList() { await loadProjects(); return { projects: P.list.map(summary) }; }
+export async function dirGet(id) { const pr = await getPr(id); return { ...summary(pr), options: pr.opts, book: pr.book ? { title: pr.book.title, chapter: pr.chapter, chapters: pr.book.chapters.map(c => ({ n: c.n, title: c.title, words: c.words })) } : undefined, plan: pr.plan ? strip(pr.plan) : null }; }
+export async function dirCreate({ plan, options, idea }) { const pr = blank(); Object.assign(pr.opts, options || {}); if (idea) pr.idea = idea; pr.plan = normPlan(plan); await db.put('projects', pr); P.proj = pr; refresh(); return dirGet(pr.id); }
+export async function dirPlan({ project_id, idea, options }) { const pr = project_id ? await getPr(project_id) : blank(); if (idea) { pr.src = 'idea'; pr.idea = idea; }
+  if (options) { const { chapter, ...rest } = options; Object.assign(pr.opts, rest); if (chapter != null && pr.book) { pr.src = 'book'; pr.chapter = Math.max(0, Math.min(pr.book.chapters.length - 1, (+chapter || 1) - 1)); } }
+  await planCore(pr); refresh(); return dirGet(pr.id); }
+export async function dirFromBook(file) { const b = await readBook(file); const pr = blank(); pr.src = 'book'; pr.book = b; pr.chapter = 0; await db.put('projects', pr); P.proj = pr; refresh();
+  return { project_id: pr.id, title: b.title, chapters: b.chapters.map(c => ({ n: c.n, title: c.title, words: c.words, start: c.text.slice(0, 160) })) }; }
+export async function dirRun({ project_id, steps }, approve) { const pr = await getPr(project_id); P.proj = pr; const done = [];
+  for (const st of steps && steps.length ? steps : ['previz', 'animatic']) {
+    if (st === 'previz') { await shootList(shots().filter(x => x.sh.st.previz !== 'ok')); }
+    else if (st === 'animatic') await assemble(pr, true, { silent: true });
+    else if (st === 'final') { const m = catalog().find(x => x.id === pr.opts.videoModel); if (!m) throw new Error('Elige options.videoModel (un modelo v2v o i2v listo) con director action=create/plan');
+      const list = shots().filter(x => x.sh.previz && x.sh.st.gen !== 'ok'); const est = m.price ? list.reduce((a, x) => a + (estimate(m, { duration: +x.sh.duration || 5 }, +x.sh.duration || 5) || 0), 0) : null;
+      await approve(est, `Vídeo final de ${list.length} planos con ${m.name}`); await genAll(pr, { silent: true }); }
+    else if (st === 'sound') { await approve(null, 'Voces, efectos y música (Muapi)'); await soundAll(pr); }
+    else if (st === 'assemble') await assemble(pr, false, { silent: true });
+    done.push(st); await save(); }
+  return { ...summary(pr), steps_done: done, text: done.includes('assemble') || done.includes('animatic') ? 'Montaje listo en 🎞 Montaje (usa montage action=export para el vídeo).' : undefined };
+}
+
+/* ---------- Storyboard imprimible (HTML → PDF desde el navegador) ---------- */
+const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const dataURL = b => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = () => r(''); fr.readAsDataURL(b); });
+const SIZE_ES = { general: 'Plano general', conjunto: 'Plano de conjunto', medio: 'Plano medio', primer: 'Primer plano', detalle: 'Plano detalle' };
+const ANG_ES = { front: 'frontal', tq: '3/4', side: 'perfil', back: 'espalda', high: 'picado', low: 'contrapicado' };
+async function storyboard(pr) { const p = pr.plan; const out = []; let n = 0;
+  for (const sc of p.scenes) { out.push(`<section><h2>${esc(sc.id)} · ${esc(sc.heading || '')}</h2><p class="s">${esc(sc.summary || '')}${sc.music ? ` · 🎵 ${esc(sc.music)}` : ''}</p><div class="g">`);
+    for (const sh of sc.shots) { n++; const img = sh.previz && sh.previz.frame ? await dataURL(sh.previz.frame) : '';
+      out.push(`<div class="c">${img ? `<img src="${img}" alt="">` : '<div class="ph">Sin previz todavía</div>'}<div class="m"><b>${n}. ${esc(sh.id)}</b> · ${esc(SIZE_ES[sh.size] || sh.size || '')}${sh.angle ? ' ' + esc(ANG_ES[sh.angle] || sh.angle) : ''} · cámara ${esc((sh.camera && sh.camera.mode) || 'fija')}${sh.camera && sh.camera.lens ? ' ' + sh.camera.lens + ' mm' : ''} · ${sh.duration || 5} s</div><p>${esc(sh.description || '')}</p>${(sh.dialogue || []).map(d => `<p class="d"><b>${esc(d.who)}:</b> «${esc(d.line)}»</p>`).join('')}${sh.sfx ? `<p class="x">🔊 ${esc(sh.sfx)}</p>` : ''}</div>`); }
+    out.push('</div></section>'); }
+  const cast = (p.characters || []).map(c => `<li><b>${esc(c.name)}</b> — ${esc(c.desc || '')}</li>`).join('');
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>${esc(p.title)} · storyboard</title><style>body{font:13px/1.45 system-ui,sans-serif;margin:28px;color:#111}h1{margin:0 0 4px}h2{font-size:15px;margin:22px 0 4px;border-bottom:2px solid #111;padding-bottom:3px}.s{color:#555;margin:0 0 10px}.g{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.c{border:1px solid #ccc;border-radius:6px;overflow:hidden;break-inside:avoid}.c img,.ph{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:#eee}.ph{display:grid;place-items:center;color:#999}.m{padding:6px 8px;background:#f4f4f4;font-size:11.5px}.c p{margin:5px 8px}.d{color:#7a3b00}.x{color:#555;font-size:11.5px}ul{padding-left:18px}@media print{body{margin:10mm}.g{grid-template-columns:repeat(3,1fr)}}</style></head><body><h1>${esc(p.title)}</h1><p>${esc(p.logline || '')}</p>${cast ? `<h2>Personajes</h2><ul>${cast}</ul>` : ''}${out.join('')}<p class="s" style="margin-top:20px">Plató Studio · ${n} planos · ${new Date().toLocaleDateString('es-ES')}</p></body></html>`;
+  download(new Blob([html], { type: 'text/html' }), `storyboard-${(p.title || 'proyecto').replace(/[^\w-]+/g, '_')}.html`); toast('🖨 Storyboard descargado', 3500, { sub: 'Ábrelo y usa Imprimir → Guardar como PDF para compartirlo.' }); }

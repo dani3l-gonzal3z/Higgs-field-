@@ -1,6 +1,6 @@
 // Service worker: la app funciona sin conexión (el plató y la galería); las generaciones necesitan red.
-const V = 'plato-studio-v2';
-const SHELL = ['./', 'index.html', 'plato.html', 'css/app.css', 'js/app.js', 'js/core.js', 'js/catalog.js', 'js/providers.js', 'js/llm.js', 'js/studio.js', 'js/gallery.js', 'js/editor.js', 'js/chars.js', 'js/settings.js', 'js/director.js', 'js/lab.js', 'js/runner.js', 'js/registry.js', 'js/book.js', 'js/vendor/oga-models.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'proxy/worker.js'];
+const V = 'plato-studio-v3';
+const SHELL = ['./', 'index.html', 'plato.html', 'css/app.css', 'js/app.js', 'js/core.js', 'js/catalog.js', 'js/providers.js', 'js/llm.js', 'js/studio.js', 'js/gallery.js', 'js/editor.js', 'js/chars.js', 'js/settings.js', 'js/director.js', 'js/mcp.js', 'js/lab.js', 'js/runner.js', 'js/registry.js', 'js/book.js', 'js/vendor/oga-models.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'proxy/worker.js'];
 const CDN = ['https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js', 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL).then(() => Promise.all(CDN.map(u => c.add(u).catch(() => {})))))); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

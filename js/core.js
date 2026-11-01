@@ -65,6 +65,7 @@ export const DEFAULT_SETTINGS = {
   proxy: { url: '', token: '', falViaProxy: false },
   llm: { provider: 'anthropic', key: '', model: 'claude-sonnet-5-5', base: '' },
   budget: { monthly: 20, eurRate: 0.92, showEur: true, confirmAbove: 2 },
+  mcp: { enabled: false, url: 'ws://localhost:7821/bridge', autoApprove: 0.5 },
   catalog: null,
 };
 function merge(a, b) { const o = Array.isArray(a) ? [...a] : { ...a }; for (const k in b) { if (b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && a && typeof a[k] === 'object' && a[k] && !Array.isArray(a[k])) o[k] = merge(a[k], b[k]); else o[k] = b[k]; } return o; }

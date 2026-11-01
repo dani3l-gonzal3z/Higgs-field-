@@ -7,6 +7,7 @@ import { renderChars } from './chars.js';
 import { renderSettings } from './settings.js';
 import { renderDirector } from './director.js';
 import { renderLab } from './lab.js';
+import { mcpStart } from './mcp.js';
 
 const VIEWS = { plato: ['🎬', 'Plató'], director: ['🧠', 'Director'], studio: ['✨', 'Estudio', 1], lab: ['🧪', 'Lab', 1], gallery: ['🖼', 'Galería'], edit: ['🎞', 'Montaje', 1], chars: ['👤', 'Personajes', 1], settings: ['⚙️', 'Ajustes'] };
 const RENDER = { director: renderDirector, lab: renderLab, studio: renderStudio, gallery: renderGallery, edit: renderEditor, chars: renderChars, settings: renderSettings };
@@ -35,7 +36,7 @@ addEventListener('studio:settings', () => { buildNav(); route(); updSpend(); });
 bus.addEventListener('ledger', updSpend);
 $('#spend').addEventListener('click', () => location.hash = '#settings');
 window.__studioHost = host;
-(async () => { let n = 0; while (!(window.claude && window.claude.use) && n++ < 25) await new Promise(r => setTimeout(r, 200)); if (window.claude && window.claude.use) { host.claude = true; const [sm, dl] = await Promise.all([window.claude.use('sample').catch(() => null), window.claude.use('downloads').catch(() => null)]); host.sample = sm || null; host.save = dl && dl.save ? (o => dl.save(o)) : null; } host.ready = true; try { frame.contentWindow.postMessage({ type: 'host:ready' }, location.origin); } catch (e) {} if (host.claude) route(); })();
+(async () => { let n = 0; while (!(window.claude && window.claude.use) && n++ < 25) await new Promise(r => setTimeout(r, 200)); if (window.claude && window.claude.use) { host.claude = true; const [sm, dl] = await Promise.all([window.claude.use('sample').catch(() => null), window.claude.use('downloads').catch(() => null)]); host.sample = sm || null; host.save = dl && dl.save ? (o => dl.save(o)) : null; } host.ready = true; try { frame.contentWindow.postMessage({ type: 'host:ready' }, location.origin); } catch (e) {} if (host.claude) route(); mcpStart(); })();
 buildNav(); route(); updSpend();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 let deferred = null; addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; const b = $('#install'); b.hidden = false; b.onclick = async () => { b.hidden = true; deferred.prompt(); }; });

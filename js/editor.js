@@ -72,7 +72,7 @@ function blank(canvas, p) { const c = canvas.getContext('2d'); c.fillStyle = '#0
 function drawTitle(c, cv, t, a) { c.save(); c.globalAlpha = a; c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `700 ${Math.round(cv.height / 12)}px system-ui, sans-serif`; c.fillText(t, cv.width / 2, cv.height / 2); c.restore(); }
 function drawCover(c, v, W, H) { const vw = v.videoWidth || W, vh = v.videoHeight || H; const s = Math.max(W / vw, H / vh); const w = vw * s, h = vh * s; c.drawImage(v, (W - w) / 2, (H - h) / 2, w, h); }
 function pickMime() { for (const m of ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm']) { try { if (MediaRecorder.isTypeSupported(m)) return m; } catch (e) {} } return ''; }
-async function run(p, gens, canvas, record) {
+async function run(p, gens, canvas, record, o = {}) {
   if (playing) { playing.stop = true; await new Promise(r => setTimeout(r, 150)); }
   if (!p.clips.length) { toast('Añade algún plano primero'); return; }
   if (record && !(window.MediaRecorder && canvas.captureStream)) { toast('Este navegador no puede exportar vídeo'); return; }
@@ -102,6 +102,14 @@ async function run(p, gens, canvas, record) {
   if (record) { await new Promise(r => { rec.onstop = r; rec.stop(); }); const blob = new Blob(chunks, { type: rec.mimeType || 'video/webm' }); const ext = /mp4/.test(blob.type) ? 'mp4' : 'webm';
     const thumb = await thumbFromVideo(blob); const id = uid(); const dur = p.clips.reduce((a, c) => a + c.out - c.in, 0) + (p.title ? 2 : 0);
     await db.put('gens', { id, t: Date.now(), mode: 'edit', kind: 'video', modelName: 'Montaje' + (p.title ? ': ' + p.title : ''), provider: 'edit', prompt: '', cost: 0, blob, thumb, dur, fav: true });
-    download(blob, `montaje-${new Date().toISOString().slice(0, 10)}.${ext}`); toast('🎞 Montaje exportado', 4000, { sub: 'Descargado y guardado en la galería (⭐).' }); }
+    if (!o.silent) download(blob, `montaje-${new Date().toISOString().slice(0, 10)}.${ext}`); toast('🎞 Montaje exportado', 4000, { sub: o.silent ? 'Guardado en la galería (⭐).' : 'Descargado y guardado en la galería (⭐).' }); ac.close().catch(() => {}); return { blob, id, dur }; }
   ac.close().catch(() => {});
 }
+
+// Para el MCP: exporta el montaje actual sin descargar (se guarda en la galería).
+export async function montageInfo() { const p = await getProj(); const gens = Object.fromEntries((await loadGens()).map(g => [g.id, g])); const clips = p.clips.filter(c => gens[c.genId] && gens[c.genId].blob);
+  return { title: p.title, aspect: p.aspect, duration: +(clips.reduce((a, c) => a + c.out - c.in, 0) + (p.title ? 2 : 0)).toFixed(1), clips: clips.map(c => ({ name: gens[c.genId].modelName, in: c.in, out: c.out, transition: c.trans })), audio_tracks: (p.tracks || []).length, subtitles: (p.subs || []).length, music: !!p.music }; }
+export async function exportMontage() { if (location.hash !== '#edit') { location.hash = '#edit'; await new Promise(r => setTimeout(r, 700)); }
+  const p = await getProj(); const gens = Object.fromEntries((await loadGens()).map(g => [g.id, g])); p.clips = p.clips.filter(c => gens[c.genId] && gens[c.genId].blob); p.tracks = p.tracks || []; p.subs = p.subs || [];
+  if (!p.clips.length) throw new Error('El montaje está vacío'); const canvas = document.querySelector('.edcanvas'); if (!canvas) throw new Error('No encuentro el lienzo del montaje');
+  const r = await run(p, gens, canvas, true, { silent: true }); if (!r) throw new Error('No se pudo exportar'); return r; }

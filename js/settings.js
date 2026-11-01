@@ -2,6 +2,7 @@
 import { el, btn, toast, modal, seg, toggle, getSettings, saveSettings, hasAnyKey, db, money, spentThisMonth, fmtDate, download, copyText, confirmBox, emit } from './core.js';
 import { PROVIDERS, catalog } from './providers.js';
 import { DEFAULT_CATALOG, MODES } from './catalog.js';
+import { mcpSettingsCard } from './mcp.js';
 
 let root = null;
 export async function renderSettings(r) {
@@ -29,6 +30,7 @@ export async function renderSettings(r) {
   const lb = el('input', { class: 'txt', placeholder: 'URL base (OpenRouter por defecto)', value: s.llm.base }); lb.addEventListener('change', () => { s.llm.base = lb.value.trim(); save(); });
   r.append(el('section', { class: 'card' }, el('h3', {}, 'Asistente de IA (director y prompts)'), el('p', { class: 'note' }, 'Lo usa el plató para entender órdenes complejas y el Estudio para mejorar prompts. Sin clave, el plató funciona en modo básico.'),
     seg([['anthropic', 'Anthropic (Claude)'], ['openai', 'Compatible OpenAI / OpenRouter']], () => s.llm.provider, v => { s.llm.provider = v; if (v === 'anthropic' && !s.llm.model) s.llm.model = 'claude-sonnet-5-5'; save(); renderSettings(r); }), el('div', { class: 'gap' }), lk, el('div', { class: 'gap' }), lm, s.llm.provider !== 'anthropic' ? el('div', {}, el('div', { class: 'gap' }), lb) : null));
+  r.append(mcpSettingsCard());
   // Presupuesto
   const spent = await spentThisMonth();
   const bud = el('input', { class: 'txt sm', type: 'number', min: 0, step: 1, value: s.budget.monthly }); bud.addEventListener('change', () => { s.budget.monthly = +bud.value || 0; save(); emit('ledger'); });
