@@ -40,6 +40,7 @@ function joinForm() {
   box.innerHTML = `<div class="join"><h1>🎮 Únete a la partida</h1><p>Escribe tu nombre${room ? '' : ' y el código que sale en la tele'}.</p>
     <input id="nm" placeholder="Tu nombre" maxlength="18" value="${(ls('plato_name') || '').replace(/"/g, '')}">${room ? '' : '<input id="rc" placeholder="Código (ej. QZRT)" maxlength="8" autocapitalize="characters">'}<button id="go" type="button">Entrar</button></div>`;
   $('#go').onclick = () => { const n = $('#nm').value.trim() || 'Jugador'; ls('plato_name', n); if (!room) room = ($('#rc').value || '').toUpperCase().trim(); if (!room) return; connect(n); };
+  box.querySelectorAll('input').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') $('#go').click(); })); $('#nm').focus();
 }
 function connect(name) {
   $('#who').textContent = name; $('#room').textContent = room; box.innerHTML = '<div class="msg">Conectando…</div>';
