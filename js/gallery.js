@@ -12,7 +12,7 @@ export async function renderGallery(r) {
   const list = all.filter(g => G.filter === 'all' || (G.filter === 'fav' ? g.fav : G.filter === g.kind));
   const total = all.reduce((a, g) => a + (g.cost || 0), 0);
   r.append(el('div', { class: 'ghead' }, seg([['all', `Todo (${all.length})`], ['video', '🎬 Vídeos'], ['image', '🖼 Imágenes'], ['audio', '🔊 Audio'], ['fav', '⭐ Favoritos']], () => G.filter, v => { G.filter = v; renderGallery(r); }),
-    el('div', { class: 'row-btns' }, btn(G.compare ? `Comparar (${G.sel.size}/2) ✕` : '⚖️ Comparar', () => { G.compare = !G.compare; G.sel.clear(); renderGallery(r); }, 'mini-b' + (G.compare ? ' on' : '')), el('small', { class: 'note' }, `Gastado en total ≈ ${money(total).split(' ')[0]}`))));
+    el('div', { class: 'row-btns' }, btn('🎞 Stock', async () => { const { pickStock } = await import('./stock.js'); if (await pickStock()) renderGallery(r); }, 'mini-b'), btn(G.compare ? `Comparar (${G.sel.size}/2) ✕` : '⚖️ Comparar', () => { G.compare = !G.compare; G.sel.clear(); renderGallery(r); }, 'mini-b' + (G.compare ? ' on' : '')), el('small', { class: 'note' }, `Gastado en total ≈ ${money(total).split(' ')[0]}`))));
   if (!list.length) { r.append(el('div', { class: 'empty big' }, all.length ? 'Nada con este filtro.' : 'Aquí aparecerá todo lo que generes en el Estudio y los montajes que exportes.')); return; }
   const grid = el('div', { class: 'ggrid' });
   for (const g of list) {
@@ -28,7 +28,7 @@ export async function renderGallery(r) {
 export function openGen(g) {
   const body = el('div', { class: 'gdetail' });
   body.append(g.kind === 'video' ? el('video', { src: src(g), controls: true, playsInline: true, loop: true, autoplay: true }) : g.kind === 'audio' ? el('audio', { src: src(g), controls: true, autoplay: true, style: 'width:100%' }) : el('img', { src: src(g), alt: '' }),
-    el('div', { class: 'meta' }, el('div', {}, el('b', {}, g.modelName), ' · ', g.provider === 'edit' ? 'Montaje' : (PROVIDERS[g.provider] || {}).name || g.provider, ' · ', fmtDate(g.t), g.cost ? ' · ≈' + money(g.cost).split(' ')[0] : ''),
+    el('div', { class: 'meta' }, el('div', {}, el('b', {}, g.modelName), ' · ', g.provider === 'edit' ? 'Montaje' : g.provider === 'stock' ? 'Stock' : (PROVIDERS[g.provider] || {}).name || g.provider, g.credit ? el('a', { href: g.creditUrl || '#', target: '_blank', rel: 'noopener', class: 'credit' }, ' · © ' + g.credit) : '', ' · ', fmtDate(g.t), g.cost ? ' · ≈' + money(g.cost).split(' ')[0] : ''),
       g.prompt ? el('p', { class: 'prompt' }, g.prompt) : null),
     el('div', { class: 'row-btns' },
       btn(g.fav ? '⭐ Quitar favorito' : '☆ Favorito', async () => { g.fav = !g.fav; await db.put('gens', g); close(); openGen(g); refresh(); }, 'mini-b'),

@@ -8,6 +8,7 @@ import { renderSettings } from './settings.js';
 import { renderDirector } from './director.js';
 import { renderLab } from './lab.js';
 import { mcpStart } from './mcp.js';
+import { detectLocal } from './local.js';
 
 import { renderGames } from './games.js';
 import { renderHome, renderLearn, PRO, setupSpatialNav } from './home.js';
@@ -47,6 +48,8 @@ bus.addEventListener('ledger', updSpend);
 $('#spend').addEventListener('click', () => location.hash = '#settings');
 window.__studioHost = host;
 (async () => { let n = 0; while (!(window.claude && window.claude.use) && n++ < 25) await new Promise(r => setTimeout(r, 200)); if (window.claude && window.claude.use) { host.claude = true; const [sm, dl] = await Promise.all([window.claude.use('sample').catch(() => null), window.claude.use('downloads').catch(() => null)]); host.sample = sm || null; host.save = dl && dl.save ? (o => dl.save(o)) : null; } host.ready = true; try { frame.contentWindow.postMessage({ type: 'host:ready' }, location.origin); } catch (e) {} if (host.claude) route(); mcpStart(); })();
+// Servicios del aparato (FFmpeg, voces gratis, proxy): se detectan antes de pintar, con un límite de 1,5 s.
+await Promise.race([detectLocal(), new Promise(r => setTimeout(r, 1500))]);
 route(); updSpend(); updMiss(); setupSpatialNav();
 // Arranque: pantalla de bienvenida breve (una vez por sesión)
 if (!sessionStorage.getItem('plato_boot')) { sessionStorage.setItem('plato_boot', '1'); const sp = el('div', { id: 'splash' }, el('div', { class: 'sp-logo' }, el('i', {}), el('b', {}, 'PLATÓ')), el('small', {}, 'Aprende · Cuenta · Juega · Crea')); document.body.append(sp); const off = () => { sp.classList.add('out'); setTimeout(() => sp.remove(), 500); }; sp.addEventListener('click', off); setTimeout(off, 1400); }

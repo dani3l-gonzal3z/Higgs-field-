@@ -4,6 +4,7 @@ import { PROVIDERS, catalog } from './providers.js';
 import { DEFAULT_CATALOG, MODES } from './catalog.js';
 import { mcpSettingsCard } from './mcp.js';
 import { guideSettingsCard } from './guide.js';
+import { deviceCard } from './device.js';
 
 let root = null;
 export async function renderSettings(r) {
@@ -17,7 +18,7 @@ export async function renderSettings(r) {
   for (const [id, p] of Object.entries(PROVIDERS)) { const inp = el('input', { class: 'txt', type: 'password', autocomplete: 'off', placeholder: p.keyLabel, value: s.keys[id] || '' }); inp.addEventListener('change', () => { s.keys[id] = inp.value.trim(); save(); renderSettings(r); toast('Guardado'); });
     keys.append(el('div', { class: 'keyrow' }, el('div', { class: 'kh' }, el('b', {}, p.name), p.needsProxy ? el('span', { class: 'tag' }, 'necesita proxy') : el('span', { class: 'tag ok' }, 'directo'), s.keys[id] ? el('span', { class: 'tag ok' }, '✓') : null, el('a', { href: p.keyUrl, target: '_blank', class: 'lnk' }, p.keyHelp)),
       el('div', { class: 'inrow' }, inp, btn('👁', () => { inp.type = inp.type === 'password' ? 'text' : 'password'; }, 'mini-b')))); }
-  r.append(keys);
+  r.append(keys, deviceCard());
   // Proxy
   const purl = el('input', { class: 'txt', placeholder: 'https://plato-proxy.TU-USUARIO.workers.dev', value: s.proxy.url }); purl.addEventListener('change', () => { s.proxy.url = purl.value.trim().replace(/\/+$/, ''); save(); });
   const ptok = el('input', { class: 'txt', type: 'password', placeholder: 'Contraseña del proxy (PROXY_TOKEN)', value: s.proxy.token }); ptok.addEventListener('change', () => { s.proxy.token = ptok.value.trim(); save(); });
@@ -48,7 +49,7 @@ export async function renderSettings(r) {
   const cl = el('div', { class: 'catlist' }); for (const m of cat) cl.append(el('div', { class: 'catrow' + (m.disabled ? ' dis' : '') }, el('span', { class: 'tag' }, MODES[m.mode] ? MODES[m.mode].icon : '?'), el('div', {}, el('b', {}, m.name, m.verified ? '' : ' ⚠'), el('small', {}, `${PROVIDERS[m.provider] ? PROVIDERS[m.provider].name : m.provider} · ${m.endpoint} · $${m.price ? m.price.usd : '?'}/${m.price ? m.price.per : '?'}`)),
     btn(m.disabled ? 'Activar' : 'Desactivar', () => { const c = JSON.parse(JSON.stringify(cat)); const x = c.find(y => y.id === m.id); x.disabled = !x.disabled; s.catalog = c; save(); renderSettings(r); }, 'mini-b')));
   r.append(el('section', { class: 'card' }, el('h3', {}, `Catálogo de modelos (${cat.length})`), el('p', { class: 'note' }, '⚠ = parámetros sin verificar en la documentación: prueba primero con un vídeo corto. Puedes añadir cualquier modelo de tus proveedores editando el JSON.'), cl,
-    el('div', { class: 'row-btns' }, btn('✏️ Editar JSON', catalogEditor, 'mini-b on'), btn('↺ Restaurar original', async () => { if (await confirmBox('Restaurar catálogo', 'Se perderán tus cambios en el catálogo.', 'Restaurar')) { s.catalog = null; save(); renderSettings(r); } }, 'mini-b'))));
+    el('div', { class: 'row-btns' }, btn('✏️ Editar JSON', catalogEditor, 'mini-b on'), btn('↺ Restaurar original', async () => { if (await confirmBox('Restaurar catálogo', 'Se perderán tus cambios en el catálogo.', 'Restaurar')) { s.catalog = null; s.catalogRemoved = null; save(); renderSettings(r); } }, 'mini-b'))));
   // Datos
   let est = ''; try { const e = await navigator.storage.estimate(); est = `${(e.usage / 1048576).toFixed(0)} MB usados de ~${(e.quota / 1073741824).toFixed(1)} GB`; } catch (e) {}
   r.append(el('section', { class: 'card' }, el('h3', {}, 'Datos y app'), el('p', { class: 'note' }, 'Todo (galería, tomas, personajes) se guarda en este dispositivo. ' + est),
@@ -76,7 +77,7 @@ function catalogEditor() { const s = getSettings(); const ta = el('textarea', { 
   const tpl = { id: 'mi-modelo', provider: 'fal', mode: 'i2v', name: 'Mi modelo', endpoint: 'propietario/modelo/ruta', fields: { prompt: 'prompt', image: 'image_url', duration: 'duration' }, fmt: { duration: 'str' }, price: { usd: 0.1, per: 's' }, verified: false };
   let close; const body = el('div', {}, el('p', { class: 'note' }, 'provider: fal | higgsfield | muapi | replicate · mode: v2v | i2v | t2v | t2i | i2i · fields traduce los conceptos de la app (prompt, negative, image, end_image, video, control, refs, duration, aspect, resolution, audio, seed) al nombre del parámetro de cada modelo · fmt.duration: "s" → "5s", "str" → "5" · fmt.aspect: "falsize" · fixed: parámetros fijos extra.'),
     el('div', { class: 'row-btns' }, btn('📋 Copiar plantilla de modelo', () => copyText(JSON.stringify(tpl, null, 1)), 'mini-b')), ta,
-    el('div', { class: 'acts' }, btn('Cancelar', () => close()), btn('Guardar', () => { try { const c = JSON.parse(ta.value); if (!Array.isArray(c)) throw new Error('Debe ser una lista [ … ]'); for (const m of c) { if (!m.id || !m.provider || !m.mode || !m.endpoint) throw new Error('Cada modelo necesita id, provider, mode y endpoint'); if (!PROVIDERS[m.provider]) throw new Error('Proveedor desconocido: ' + m.provider); } s.catalog = c; saveSettings(s); close(); renderSettings(root); toast('Catálogo guardado'); } catch (e) { toast('JSON no válido: ' + e.message, 4500); } }, 'b on')));
+    el('div', { class: 'acts' }, btn('Cancelar', () => close()), btn('Guardar', () => { try { const c = JSON.parse(ta.value); if (!Array.isArray(c)) throw new Error('Debe ser una lista [ … ]'); for (const m of c) { if (!m.id || !m.provider || !m.mode || !m.endpoint) throw new Error('Cada modelo necesita id, provider, mode y endpoint'); if (!PROVIDERS[m.provider]) throw new Error('Proveedor desconocido: ' + m.provider); } s.catalog = c; s.catalogRemoved = DEFAULT_CATALOG.map(d => d.id).filter(id => !c.some(m => m.id === id)); saveSettings(s); close(); renderSettings(root); toast('Catálogo guardado'); } catch (e) { toast('JSON no válido: ' + e.message, 4500); } }, 'b on')));
   close = modal('Catálogo de modelos', body, { wide: true }); }
 function exportCfg(withKeys) { const s = getSettings(); const o = JSON.parse(JSON.stringify(s)); if (!withKeys) { for (const k in o.keys) o.keys[k] = ''; o.llm.key = ''; o.proxy.token = ''; } download(new Blob([JSON.stringify(o, null, 1)], { type: 'application/json' }), withKeys ? 'plato-studio-ajustes-CON-CLAVES.json' : 'plato-studio-ajustes.json'); }
 function importCfg() { const f = el('input', { type: 'file', accept: 'application/json', on: { change: async e => { try { const o = JSON.parse(await e.target.files[0].text()); const s = getSettings(); for (const k of ['keys', 'proxy', 'llm', 'budget']) if (o[k]) for (const kk in o[k]) if (o[k][kk] !== '' && o[k][kk] != null) s[k][kk] = o[k][kk]; if (o.catalog) s.catalog = o.catalog; saveSettings(s); renderSettings(root); toast('Ajustes importados'); } catch (err) { toast('Archivo no válido'); } } } }); f.click(); }

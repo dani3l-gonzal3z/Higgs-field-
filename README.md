@@ -20,6 +20,24 @@ Se abre en su propia ventana (sin barra del navegador), con su propio perfil. Al
 
 Con la app abierta así, los móviles de la misma wifi pueden unirse a las partidas escaneando un QR (y solo a eso: el servidor no expone tus claves, ni el MCP, ni el puente a la red).
 
+### Lo que añade el modo aplicación
+
+Abrir Plató como aplicación (o en el aparato) activa tres servicios del propio ordenador:
+
+- **⚡ Exportación rápida con FFmpeg.** El montaje se renderiza más rápido que el tiempo real, sin tener la app delante, con la música bajando sola cuando hablan los personajes y una copia en `~/PlatoStudio/Montajes`. Usa la GPU si hay codificador por hardware (NVENC, VideoToolbox, Quick Sync). Necesita FFmpeg instalado (`sudo apt install ffmpeg` · `brew install ffmpeg` · `winget install ffmpeg`).
+- **🗣 Voces gratis sin internet (Kokoro-82M).** Instálalas una vez con `node mcp/server.mjs --setup-voices` (descarga ~120 MB; necesita Python 3 con numpy y onnxruntime y el programa `espeak-ng`). Voces en español (Dora, Álex, Santa), inglés, francés, italiano y portugués. Opcional: voces en línea de Edge (gratis pero no oficiales: pueden dejar de funcionar).
+- **🔌 Proxy local.** Higgsfield, Muapi y Replicate funcionan sin montar el mini-proxy de Cloudflare.
+
+El estado de todo esto está en ⚙️ Ajustes → 🏠 Este aparato, donde también puedes probar las voces.
+
+### Subtítulos palabra a palabra
+
+Los subtítulos resaltan la palabra que se está diciendo, en la vista previa y en el vídeo exportado. Con las voces locales o de Edge los tiempos salen de la propia voz; con el resto se estiman por sílabas y pausas.
+
+### Vídeos de stock
+
+Con una clave gratuita de [Pexels](https://www.pexels.com/api/) o [Pixabay](https://pixabay.com/api/docs/) puedes buscar clips reales desde la Galería, el Montaje o cada plano del Director (botón 🎞) y usarlos en vez de generarlos. Cada clip guarda su autor para que puedas citarlo.
+
 ## Inicio y guía
 
 La pantalla de inicio tiene cuatro modos grandes —🎓 Aprender (pronto), 🎬 Contar historias, 🎮 Jugar y 🎨 Crear escenas— y debajo el Estudio Pro (Estudio IA, Lab, Galería, Montaje, Personajes). Se maneja con ratón, táctil, flechas del teclado o un mando de consola.
@@ -51,6 +69,7 @@ Describe cualquier juego —un Monopoly de tu pueblo, carreras en la Luna, un tr
 | 🎞 **Montaje** | Ordena planos, recórtalos, pon fundidos, un rótulo, música y pistas de audio colocadas en el tiempo (voces, efectos), subtítulos incrustados o en .srt, y exporta el corto final. |
 | 👤 **Personajes** | Fichas con descripción e imágenes de referencia para que cada personaje mantenga su identidad entre planos. |
 | 🎮 **Jugar** | Crea cualquier juego describiéndolo y juégalo en la tele con los móviles como mando (ver arriba). |
+| 🗣 **Voces y montaje** | Voces gratis en el aparato, subtítulos palabra a palabra, exportación rápida con FFmpeg y vídeos de stock (ver «Lo que añade el modo aplicación»). |
 | ⚙️ **Ajustes** | Claves, mini-proxy, asistente de IA, presupuesto, historial de gasto (CSV) y catálogo de modelos editable. |
 
 ## Usarla desde cualquier IA (MCP)
@@ -85,7 +104,7 @@ Después abre la app con `?mcp=7821` (por ejemplo `https://dani3l-gonzal3z.githu
 | Proveedor | Cómo se conecta | Clave |
 |---|---|---|
 | **fal.ai** (recomendado) | Directo desde el navegador. También aloja tus archivos de entrada. | [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys) |
-| **Higgsfield API** (pago por uso) | A través del mini-proxy. Credenciales en formato `KEY_ID:KEY_SECRET`. | [console.higgsfield.ai](https://console.higgsfield.ai) |
+| **Higgsfield API** (pago por uso) | A través del mini-proxy o con Plató abierto como aplicación. Credenciales en formato `KEY_ID:KEY_SECRET`. | [console.higgsfield.ai](https://console.higgsfield.ai) |
 | **Muapi** | A través del mini-proxy. | [muapi.ai](https://muapi.ai) |
 | **Replicate** | A través del mini-proxy. | [replicate.com/account/api-tokens](https://replicate.com/account/api-tokens) |
 
@@ -96,7 +115,7 @@ Higgsfield, Muapi y Replicate no aceptan llamadas directas desde una web. Para e
 3. **Settings → Variables and Secrets** → añade el secreto `PROXY_TOKEN` (una contraseña larga). Opcional: `ALLOW_ORIGIN` = `https://dani3l-gonzal3z.github.io`.
 4. En la app, **Ajustes → Mini-proxy**: pega la URL del Worker y la contraseña, y pulsa «Probar proxy».
 
-> ⚠️ Higgsfield no da una forma de subir archivos desde su API pública. Para mandarle imágenes o vídeos de entrada, la app los aloja en fal.ai, así que conviene tener también una clave de fal.
+> Higgsfield: la app sube tus imágenes y vídeos con su URL prefirmada (caduca en 1 hora), así que ya no hace falta clave de fal para mandarle entradas. Catálogo ampliado: Kling 3.0 (normal, Pro y Motion Control, que mueve a tus personajes con la toma del plató), Seedance 2.5 (crear y editar), Higgsfield DoP y Soul Cinema. Los precios del catálogo son orientativos: compruébalos en tu consola.
 
 ## Catálogo de modelos
 
@@ -124,6 +143,13 @@ js/home.js          inicio tipo consola y navegación con mando
 js/guide.js         guía, trucos y misiones
 js/games.js         Jugar: crear, mejorar y lanzar partidas
 js/qr.js            generador de códigos QR
+js/local.js         servicios del aparato (FFmpeg, voces, proxy)
+js/subs.js          subtítulos palabra a palabra (lienzo y .ass)
+js/stock.js         vídeos de stock (Pexels, Pixabay)
+js/device.js        tarjeta «Este aparato» en Ajustes
+mcp/media.mjs       montaje con FFmpeg y proxy local
+mcp/tts.mjs         voces Kokoro (local) y Edge
+mcp/tts_kokoro.py   motor de voz Kokoro con onnxruntime
 games/kit.js        kit 3D para los juegos (piezas, tableros, cámaras, sonido)
 games/runtime.html  entorno aislado donde corre cada juego
 games/pad.js        mando universal (tele y móvil)
@@ -154,6 +180,9 @@ sw.js               uso sin conexión
 No necesita compilación: son archivos estáticos.
 
 ## Créditos
+
+Ideas de montaje y voces inspiradas en [MoneyPrinterTurbo](https://github.com/harry0703/MoneyPrinterTurbo) (MIT). Voces locales con [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0) y los archivos ONNX de [kokoro-onnx](https://github.com/thewh1teagle/kokoro-onnx) (MIT); `mcp/kokoro_vocab.json` procede de ese proyecto. Fonemas con [eSpeak NG](https://github.com/espeak-ng/espeak-ng) (GPL-3.0, se usa como programa aparte, no se incluye).
+
 
 [three.js](https://threejs.org) r160 (licencia MIT, `vendor/three/LICENSE`).
 

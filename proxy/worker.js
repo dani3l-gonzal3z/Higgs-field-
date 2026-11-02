@@ -4,7 +4,7 @@
 //   PROXY_TOKEN   (secreto, obligatorio recomendado): contraseña que la app envía en la cabecera x-proxy-token.
 //   ALLOW_ORIGIN  (opcional): origen permitido, p. ej. https://dani3l-gonzal3z.github.io  (por defecto *).
 //   ALLOW_HOSTS   (opcional): lista separada por comas de dominios permitidos. Por defecto los de abajo.
-const DEFAULT_HOSTS = ['api.higgsfield.ai', 'platform.higgsfield.ai', 'api.muapi.ai', 'api.replicate.com', 'replicate.delivery', 'queue.fal.run', 'rest.alpha.fal.ai', 'fal.media', 'fal.run', 'cloudfront.net', 'storage.googleapis.com', 'amazonaws.com', 'higgsfield.ai', 'muapi.ai'];
+const DEFAULT_HOSTS = ['api.higgsfield.ai', 'platform.higgsfield.ai', 'api.muapi.ai', 'api.replicate.com', 'replicate.delivery', 'queue.fal.run', 'rest.alpha.fal.ai', 'fal.media', 'fal.run', 'cloudfront.net', 'storage.googleapis.com', 'amazonaws.com', 'higgsfield.ai', 'muapi.ai', 'r2.cloudflarestorage.com', 'api.pexels.com', 'videos.pexels.com', 'images.pexels.com', 'pixabay.com', 'cdn.pixabay.com'];
 
 export default {
   async fetch(req, env) {

@@ -1,23 +1,32 @@
 // Conectores con proveedores de generación (todos asíncronos: enviar → consultar estado → resultado).
 import { getSettings, sleep, uid, host } from './core.js';
 import { DEFAULT_CATALOG } from './catalog.js';
+import { proxyBase } from './local.js';
 
 export class ProviderError extends Error { constructor(msg, status, retry = false) { super(msg); this.status = status; this.retry = retry; } }
 
 export let extraCatalog = [];
-export function catalog(s = getSettings()) { const base = (s.catalog && Array.isArray(s.catalog) && s.catalog.length) ? s.catalog : DEFAULT_CATALOG; return extraCatalog.length ? base.concat(extraCatalog) : base; }
+export function catalog(s = getSettings()) { const own = (s.catalog && Array.isArray(s.catalog) && s.catalog.length) ? s.catalog : null; const base = own ? own.concat(DEFAULT_CATALOG.filter(d => !own.some(m => m.id === d.id) && !(s.catalogRemoved || []).includes(d.id))) : DEFAULT_CATALOG; return extraCatalog.length ? base.concat(extraCatalog) : base; }
 let extraFor = null;
 export async function loadExtraCatalog() { const s = getSettings(); const k = s.keys.muapi ? 'muapi' : ''; if (extraFor === k) return extraCatalog; extraFor = k;
   if (!k) { extraCatalog = []; return extraCatalog; } const { registry, toCatalog } = await import('./registry.js'); extraCatalog = (await registry()).map(toCatalog).filter(Boolean); return extraCatalog; }
 
-const viaProxy = (url, s) => s.proxy.url ? s.proxy.url.replace(/\/+$/, '') + '/' + url : url;
+// Proxy: el tuyo de Cloudflare si lo configuraste; si no, el del propio aparato (Plató abierto como aplicación).
+const hasProxy = s => !!(s.proxy.url || proxyBase());
+const viaProxy = (url, s) => s.proxy.url ? s.proxy.url.replace(/\/+$/, '') + '/' + url : proxyBase() ? proxyBase() + url : url;
 
+
+// fetch directo y, si el navegador lo bloquea (CORS), por el proxy (el del aparato o el tuyo).
+export async function pfetch(url, opts = {}) {
+  try { return await fetch(url, opts); } catch (e) { const s = getSettings(); if (!hasProxy(s)) throw e;
+    const h = new Headers(opts.headers || {}); if (s.proxy.url && s.proxy.token) h.set('x-proxy-token', s.proxy.token); return fetch(viaProxy(url, s), { ...opts, headers: h }); }
+}
 async function http(url, opts = {}, { proxy = false, raw = false } = {}) {
-  if (proxy === 'auto') { const s0 = getSettings(); try { return await http(url, opts, { proxy: false, raw }); } catch (e) { if (e.name === 'AbortError' || !(e instanceof ProviderError) || e.status !== 0 || !e.retry) throw e; if (!s0.proxy.url) throw new ProviderError('El navegador bloqueó la conexión directa (CORS). Configura el mini-proxy en Ajustes.', 0); return http(url, opts, { proxy: true, raw }); } }
+  if (proxy === 'auto') { const s0 = getSettings(); try { return await http(url, opts, { proxy: false, raw }); } catch (e) { if (e.name === 'AbortError' || !(e instanceof ProviderError) || e.status !== 0 || !e.retry) throw e; if (!hasProxy(s0)) throw new ProviderError('El navegador bloqueó la conexión directa (CORS). Configura el mini-proxy en Ajustes.', 0); return http(url, opts, { proxy: true, raw }); } }
   if (host.claude) throw new ProviderError('Dentro de Claude no se puede conectar con proveedores externos. Abre la app desde GitHub Pages para generar.', 0);
   const s = getSettings();
-  if (proxy && !s.proxy.url) throw new ProviderError('Este proveedor necesita el mini-proxy. Configúralo en Ajustes → Proxy.', 0);
-  const h = new Headers(opts.headers || {}); if (proxy && s.proxy.token) h.set('x-proxy-token', s.proxy.token);
+  if (proxy && !hasProxy(s)) throw new ProviderError('Este proveedor necesita el mini-proxy (Ajustes → Proxy) o abrir Plató como aplicación.', 0);
+  const h = new Headers(opts.headers || {}); if (proxy && s.proxy.url && s.proxy.token) h.set('x-proxy-token', s.proxy.token);
   let r;
   try { r = await fetch(proxy ? viaProxy(url, s) : url, { ...opts, headers: h }); }
   catch (e) { if (e.name === 'AbortError') throw e; throw new ProviderError(proxy ? 'No se pudo conectar con el proxy. ¿Está desplegado y bien escrito?' : 'Error de red o bloqueo CORS. Prueba a activar el proxy para este proveedor.', 0, true); }
@@ -91,7 +100,13 @@ export const PROVIDERS = {
   },
   higgsfield: {
     name: 'Higgsfield API', keyLabel: 'Credenciales (KEY_ID:KEY_SECRET)', keyHelp: 'console.higgsfield.ai', keyUrl: 'https://console.higgsfield.ai', needsProxy: true,
-    canUpload: () => false,
+    canUpload: s => !!s.keys.higgsfield && hasProxy(s),
+    async upload(blob) { // URL prefirmada de Higgsfield (caduca en 1 h); el archivo pasa por el proxy
+      const s = getSettings(); const type = blob.type || 'application/octet-stream';
+      const u = await http('https://platform.higgsfield.ai/files/generate-upload-url', { method: 'POST', headers: { Authorization: 'Key ' + s.keys.higgsfield, 'Content-Type': 'application/json' }, body: JSON.stringify({ content_type: type }) }, { proxy: true });
+      const put = await fetch(viaProxy(u.upload_url, s), { method: 'PUT', body: blob, headers: { ...(u.upload_headers || { 'Content-Type': type }), ...(s.proxy.url && s.proxy.token ? { 'x-proxy-token': s.proxy.token } : {}) } });
+      if (!put.ok) throw new ProviderError('No se pudo subir el archivo a Higgsfield (' + put.status + ')', put.status);
+      return u.public_url; },
     async run(model, input, { signal, onStatus }) {
       const s = getSettings(); if (!s.keys.higgsfield) throw new ProviderError('Faltan las credenciales de Higgsfield (Ajustes).', 0);
       const H = { Authorization: 'Key ' + s.keys.higgsfield, 'Content-Type': 'application/json', 'Idempotency-Key': uid() };
@@ -128,7 +143,7 @@ export const PROVIDERS = {
   },
   replicate: {
     name: 'Replicate', keyLabel: 'Token de Replicate', keyHelp: 'replicate.com/account/api-tokens', keyUrl: 'https://replicate.com/account/api-tokens', needsProxy: true,
-    canUpload: s => !!s.keys.replicate && !!s.proxy.url,
+    canUpload: s => !!s.keys.replicate && hasProxy(s),
     async upload(blob, name) {
       const s = getSettings(); const fd = new FormData(); fd.append('content', blob, name);
       const r = await http('https://api.replicate.com/v1/files', { method: 'POST', headers: { Authorization: 'Bearer ' + s.keys.replicate }, body: fd }, { proxy: true });
@@ -163,7 +178,7 @@ export async function uploadFor(providerId, blob, name) {
 export async function fetchBlob(url) {
   if (url.startsWith('data:')) return (await fetch(url)).blob();
   try { const r = await fetch(url); if (r.ok) return await r.blob(); } catch (e) {}
-  const s = getSettings(); if (s.proxy.url) { const h = s.proxy.token ? { 'x-proxy-token': s.proxy.token } : {}; const r = await fetch(viaProxy(url, s), { headers: h }); if (r.ok) return await r.blob(); }
+  const s = getSettings(); if (hasProxy(s)) { const h = s.proxy.url && s.proxy.token ? { 'x-proxy-token': s.proxy.token } : {}; const r = await fetch(viaProxy(url, s), { headers: h }); if (r.ok) return await r.blob(); }
   return null;
 }
 
@@ -189,6 +204,6 @@ export function estimate(m, p, videoSecs) {
 export function readiness(m, s = getSettings()) {
   if (m.disabled) return { ok: false, why: 'Desactivado (edítalo en Ajustes → Catálogo)' };
   if (!s.keys[m.provider]) return { ok: false, why: `Falta la clave de ${PROVIDERS[m.provider].name}` };
-  if (PROVIDERS[m.provider].needsProxy && !s.proxy.url) return { ok: false, why: 'Necesita el mini-proxy' };
+  if (PROVIDERS[m.provider].needsProxy && !hasProxy(s)) return { ok: false, why: 'Necesita el mini-proxy o abrir Plató como aplicación' };
   return { ok: true };
 }

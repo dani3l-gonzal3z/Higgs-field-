@@ -68,6 +68,8 @@ export const DEFAULT_SETTINGS = {
   budget: { monthly: 20, eurRate: 0.92, showEur: true, confirmAbove: 2 },
   mcp: { enabled: false, url: 'ws://localhost:7821/bridge', autoApprove: 0.5 },
   catalog: null,
+  stock: { pexels: '', pixabay: '' },
+  voice: { kokoro: 'ef_dora', edge: 'es-ES-ElviraNeural' },
 };
 function merge(a, b) { const o = Array.isArray(a) ? [...a] : { ...a }; for (const k in b) { if (b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && a && typeof a[k] === 'object' && a[k] && !Array.isArray(a[k])) o[k] = merge(a[k], b[k]); else o[k] = b[k]; } return o; }
 export function getSettings() { try { return merge(DEFAULT_SETTINGS, JSON.parse(localStorage.getItem(SK) || '{}')); } catch (e) { return JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); } }

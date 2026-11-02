@@ -8,6 +8,7 @@ import { llmJSON, llmText, llmReady } from './llm.js';
 import { readBook } from './book.js';
 import { host } from './core.js';
 import { guideEvent } from './guide.js';
+import { detectLocal, hasLocalVoice, speakLocal } from './local.js';
 
 const COLORS = ['rojo', 'azul', 'verde', 'amarillo', 'naranja', 'morado', 'rosa', 'blanco', 'negro', 'gris', 'marron', 'granate', 'beige'];
 const LAYOUT = 'studio: plató vacío. city: calles de 12 m a lo largo de z en x=0,±48,±96 y a lo largo de x en z=0,±48,±96; cruce en (0,0) con pasos de cebra en z=±8; carriles a x=±3; aceras a ±7; edificios a partir de 6.5 m del eje; parque en (24,-24). highway: autopista a lo largo de z entre x=-11 y 11, mediana en x=0, carriles x=±3 y ±8. desert: abierto, rocas a partir de 14 m del centro. forest: camino de tierra en x=0 a lo largo de z, árboles desde |x|>4.5. grid: espacio abstracto vacío.';
@@ -61,7 +62,8 @@ function optsCard(pr, inModal) {
     el('div', { class: 'lbl' }, 'Idioma de los diálogos'), seg([['es', 'Español'], ['en', 'English']], () => o.lang, v => { o.lang = v; save(); }),
     el('div', { class: 'lbl' }, 'Modelo de vídeo final'), vms.length ? el('select', { class: 'txt', on: { change: e => { o.videoModel = e.target.value; save(); } } }, vms.map(m => el('option', { value: m.id, selected: m.id === o.videoModel }, `${m.mode === 'v2v' ? '🎬 Desde la previz' : '🖼 Desde el fotograma'} · ${m.name} (${PROVIDERS[m.provider].name}${m.price ? ` · $${m.price.usd}/s` : ''})`))) : el('div', { class: 'note' }, host.claude ? 'Dentro de Claude no se genera: aquí puedes planificar, rodar la previz y montar el animatic.' : 'Añade una clave (fal.ai o Muapi) en Ajustes para generar el vídeo final.'),
     el('div', { class: 'grid2' }, toggle('🔊 Efectos de sonido (MMAudio)', () => o.sfx, v => { o.sfx = v; save(); }), toggle('🎵 Música por escena', () => o.music, v => { o.music = v; save(); }), toggle('🌗 Grabar profundidad', () => o.depth, v => { o.depth = v; save(); })),
-    el('p', { class: 'note' }, 'Voces, efectos y música usan Muapi (ElevenLabs, MMAudio, Lyria). Sin clave de Muapi el capítulo se monta sin audio generado.'));
+    el('div', { class: 'lbl' }, 'Voces de los personajes'), seg(voiceEngines(), () => voiceEngine(o), v => { o.voiceEngine = v; save(); }),
+    el('p', { class: 'note' }, voiceEngine(o) === 'cloud' ? 'Voces con ElevenLabs (Muapi). Efectos y música también usan Muapi; sin su clave se monta sin ellos.' : `Voces gratis${voiceEngine(o) === 'kokoro' ? ' generadas en este aparato, sin internet' : ' de Edge (en línea, servicio no oficial)'}, con subtítulos palabra a palabra. También suenan en el animatic. Efectos y música siguen usando Muapi.`));
   return c;
 }
 async function chapterSource(pr) {
@@ -130,8 +132,12 @@ function shotCard(sc, sh) {
   return el('div', { class: 'shot' }, media, el('div', { class: 'sm' }, el('b', {}, `${sh.id} · ${({ general: 'General', conjunto: 'Conjunto', medio: 'Medio', primer: 'Primer plano', detalle: 'Detalle' })[sh.size] || sh.size} · ${(sh.camera && sh.camera.mode) || 'fija'}`), el('small', {}, `${sh.subject || ''} · ${sh.duration || 5} s`),
     el('p', {}, sh.description || ''), (sh.dialogue || []).length ? el('p', { class: 'dlg' }, sh.dialogue.map(d => `${d.who}: «${d.line}»`).join(' ')) : null,
     el('div', { class: 'badges' }, badge('previz', 'previz'), badge('gen', 'final'), badge('sound', 'sonido')),
-    el('div', { class: 'row-btns' }, btn('🎬', () => shootList([{ sc, sh }]), 'mini-b'), btn('✨', () => genShot(P.proj, sc, sh), 'mini-b'), btn('🔊', () => soundShot(P.proj, sc, sh), 'mini-b'), pv ? btn('👁 previz', () => modal(sh.id, el('video', { src: blobURL(pv.color), controls: true, autoplay: true, loop: true, playsInline: true, style: 'width:100%' }), { wide: true }), 'mini-b') : null)));
+    el('div', { class: 'row-btns' }, btn('🎬', () => shootList([{ sc, sh }]), 'mini-b'), btn('✨', () => genShot(P.proj, sc, sh), 'mini-b'), btn('🎞', () => stockShot(P.proj, sc, sh), 'mini-b', 'Usar un clip de stock en vez de generar'), btn('🔊', () => soundShot(P.proj, sc, sh), 'mini-b'), pv ? btn('👁 previz', () => modal(sh.id, el('video', { src: blobURL(pv.color), controls: true, autoplay: true, loop: true, playsInline: true, style: 'width:100%' }), { wide: true }), 'mini-b') : null)));
 }
+
+// Plano con un clip real de stock (Pexels/Pixabay) en vez de generarlo: gratis.
+async function stockShot(pr, sc, sh) { const { pickStock } = await import('./stock.js'); const q = String(sh.description || sh.subject || '').replace(/[«»"]/g, '').split(/[.,;]/)[0].slice(0, 70);
+  const g = await pickStock({ query: q, aspect: pr.opts.aspect, title: `🎞 Stock para ${sh.id}` }); if (!g) return; sh.final = { id: g.id, blob: g.blob }; sh.stock = g.credit; (sh.st || (sh.st = {})).gen = 'ok'; await save(); refresh(); }
 
 /* ---------- Rodaje automático en el plató ---------- */
 const frameWin = () => document.getElementById('plato').contentWindow;
@@ -172,13 +178,25 @@ async function genAll(pr, o = {}) { const list = shots().filter(x => x.sh.previz
   await pool(list, 3, x => genShot(pr, x.sc, x.sh)); toast('✨ Vídeo final generado', 3500); }
 
 /* ---------- Voces, efectos y música (Muapi) ---------- */
+function voiceEngines() { return [['kokoro', '🏠 Gratis (aparato)'], ['edge', '🌐 Gratis (Edge)'], ['cloud', '☁️ ElevenLabs']]; }
+function voiceEngine(o) { if (o.voiceEngine) return o.voiceEngine; return hasLocalVoice('kokoro') ? 'kokoro' : 'cloud'; }
+// Voz para cada personaje con el motor gratis elegido (por su descripción: mujer, hombre, niño, mayor).
+function freeVoice(pr, c, engine) { const d = (c && (c.voice || '') + ' ' + (c.desc || '') + ' ' + (c.kind || '')).toLowerCase(); const fem = /female|woman|girl|mujer|niña|señora|abuela|grandma|she/.test(d), old = /old|elder|anciano|abuelo|grandpa|mayor/.test(d); const en = pr.opts.lang === 'en';
+  if (engine === 'edge') return en ? (fem ? 'en-US-AriaNeural' : 'en-US-GuyNeural') : fem ? (pr._ef = (pr._ef || 0) + 1) % 2 ? 'es-ES-ElviraNeural' : 'es-MX-DaliaNeural' : (pr._em = (pr._em || 0) + 1) % 2 ? 'es-ES-AlvaroNeural' : 'es-MX-JorgeNeural';
+  return en ? (fem ? 'af_heart' : /child|kid|niño/.test(d) ? 'am_puck' : 'am_michael') : fem ? 'ef_dora' : old ? 'em_santa' : 'em_alex'; }
 async function soundShot(pr, sc, sh) {
-  const s = getSettings(); if (!s.keys.muapi) { toast('Voces y sonido usan Muapi: añade la clave en Ajustes'); return; } if (host.claude) { toast('El audio se genera en la app de GitHub Pages'); return; }
-  const reg = await registry(); sh.st.sound = 'run'; refresh(); sh.audio = sh.audio || [];
+  const s = getSettings(); const engine = voiceEngine(pr.opts); const free = engine !== 'cloud';
+  if (host.claude) { toast('El audio se genera en la app (fuera de Claude)'); return; }
+  if (!free && !s.keys.muapi) { toast('Las voces de ElevenLabs usan Muapi: añade la clave en Ajustes o elige voces gratis'); return; }
+  if (free) { await detectLocal(); if (!hasLocalVoice(engine)) { toast(engine === 'kokoro' ? 'Las voces gratis necesitan Plató abierto como aplicación con las voces instaladas (node mcp/server.mjs --setup-voices)' : 'Las voces de Edge necesitan Plató abierto como aplicación', 6000); return; } }
+  const reg = s.keys.muapi ? await registry() : []; sh.st.sound = 'run'; refresh(); sh.audio = sh.audio || [];
   try {
     const tasks = [];
+    if (free && (sh.dialogue || []).length) { pr.voices = pr.voices || {}; const vk = engine + 'Voices'; pr[vk] = pr[vk] || {}; sh.audio = [];
+      for (const [i, d] of sh.dialogue.entries()) { const ch = (pr.plan.characters || []).find(c => c.name === d.who); const voice = pr[vk][d.who] || (pr[vk][d.who] = freeVoice(pr, ch, engine));
+        const r = await speakLocal({ engine, text: d.line, voice }); sh.audio[i] = { id: uid(), blob: r.blob, who: d.who, line: d.line, dur: r.dur, words: r.words, local: engine }; } }
     if (pr.opts.sfx && sh.final && sh.sfx) { const mm = reg.find(r => r.id === 'mmaudio-v2-video-to-video'); if (mm) tasks.push(runJob({ provider: 'muapi', endpoint: mm.e, name: mm.n, input: { video_url: sh.final.blob, prompt: sh.sfx }, kind: 'video', label: `${sh.id} · sonido`, meta: { project: pr.id, shot: sh.id, role: 'sfx' } }).promise.then(g => { sh.final = { id: g.id, blob: g.blob }; })); }
-    const tts = reg.find(r => r.id === pr.opts.voiceModel) || reg.find(r => r.id === 'elevenlabs-tts-turbo-2-5');
+    const tts = !free && (reg.find(r => r.id === pr.opts.voiceModel) || reg.find(r => r.id === 'elevenlabs-tts-turbo-2-5'));
     if (tts && (sh.dialogue || []).length) { const voices = await voiceMap(pr, tts); sh.audio = [];
       for (const [i, d] of sh.dialogue.entries()) { const input = { prompt: d.line }; if (tts.i && tts.i.voice_id && voices[d.who]) input.voice_id = voices[d.who]; if (tts.i && tts.i.language_code) input.language_code = pr.opts.lang;
         tasks.push(runJob({ provider: 'muapi', endpoint: tts.e, name: tts.n, input, kind: 'audio', label: `${sh.id} · ${d.who}`, meta: { project: pr.id, shot: sh.id, role: 'dialogue' } }).promise.then(g => { sh.audio[i] = { id: g.id, blob: g.blob, who: d.who, line: d.line }; })); } }
@@ -202,8 +220,9 @@ async function assemble(pr, animatic, o = {}) {
     const gid = 'dirclip-' + pr.id + '-' + sh.id + (animatic ? '-a' : ''); const meta = await videoMeta(v); const dur = Math.min(meta.duration || +sh.duration || 5, +sh.duration || meta.duration || 5);
     await db.put('gens', { id: gid, t: Date.now(), kind: 'video', modelName: `${pr.plan.title} · ${sh.id}${animatic ? ' (previz)' : ''}`, provider: 'edit', prompt: sh.description || '', cost: 0, blob: v, thumb: sh.previz && sh.previz.frame, dur: meta.duration || dur, hidden: true });
     const cid = uid();
-    if (sc.shots[0] === sh && sc.musicGen && !animatic) tracks.push({ id: uid(), blob: sc.musicGen.blob, clipId: cid, at: 0, vol: 0.35, label: `Música ${sc.id}` });
-    let lt = 0.3; (sh.dialogue || []).forEach((d, i) => { const a = !animatic && sh.audio && sh.audio[i]; const len = Math.max(1.2, d.line.length / 14); if (a) tracks.push({ id: uid(), blob: a.blob, clipId: cid, at: lt, vol: 1, label: `${d.who}` }); subs.push({ id: uid(), clipId: cid, at: lt, len, text: `${d.who}: ${d.line}` }); lt += len + 0.2; });
+    if (sc.shots[0] === sh && sc.musicGen && !animatic) tracks.push({ id: uid(), blob: sc.musicGen.blob, clipId: cid, at: 0, vol: 0.35, label: `Música ${sc.id}`, kind: 'music' });
+    let lt = 0.3; (sh.dialogue || []).forEach((d, i) => { const a = sh.audio && sh.audio[i] && sh.audio[i].line === d.line ? sh.audio[i] : null; const len = a && a.dur ? Math.max(0.8, a.dur + 0.1) : Math.max(1.2, d.line.length / 14);
+      if (a) tracks.push({ id: uid(), blob: a.blob, clipId: cid, at: lt, vol: 1, label: `${d.who}`, kind: 'voice' }); subs.push({ id: uid(), clipId: cid, at: lt, len, text: `${d.who}: ${d.line}`, words: a && a.words && a.words.length ? a.words : undefined }); lt += len + 0.2; });
     clips.push({ id: cid, genId: gid, in: 0, out: dur, trans: clips.length ? 'cut' : 'fade' }); t += dur; }
   if (!clips.length) { toast(animatic ? 'Rueda primero la previz' : 'No hay planos todavía'); return; }
   const cur = await db.get('projects', 'current'); if (!o.silent && cur && cur.clips && cur.clips.length && !cur.fromDirector) { if (!await confirmBox('Sustituir el montaje', 'El montaje actual se sustituirá por este capítulo.', 'Sustituir')) return; }
@@ -244,7 +263,7 @@ export async function dirRun({ project_id, steps }, approve) { const pr = await 
     else if (st === 'final') { const m = catalog().find(x => x.id === pr.opts.videoModel); if (!m) throw new Error('Elige options.videoModel (un modelo v2v o i2v listo) con director action=create/plan');
       const list = shots().filter(x => x.sh.previz && x.sh.st.gen !== 'ok'); const est = m.price ? list.reduce((a, x) => a + (estimate(m, { duration: +x.sh.duration || 5 }, +x.sh.duration || 5) || 0), 0) : null;
       await approve(est, `Vídeo final de ${list.length} planos con ${m.name}`); await genAll(pr, { silent: true }); }
-    else if (st === 'sound') { await approve(null, 'Voces, efectos y música (Muapi)'); await soundAll(pr); }
+    else if (st === 'sound') { if (voiceEngine(pr.opts) === 'cloud' || pr.opts.sfx || pr.opts.music) await approve(null, 'Voces, efectos y música'); await soundAll(pr); }
     else if (st === 'assemble') await assemble(pr, false, { silent: true });
     done.push(st); await save(); }
   return { ...summary(pr), steps_done: done, text: done.includes('assemble') || done.includes('animatic') ? 'Montaje listo en 🎞 Montaje (usa montage action=export para el vídeo).' : undefined };

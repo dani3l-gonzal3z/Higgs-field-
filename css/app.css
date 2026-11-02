@@ -276,3 +276,12 @@ h3.sec{margin:18px 2px 10px;font-size:12px;letter-spacing:.12em;text-transform:u
 .g-qr{display:flex;flex-direction:column;align-items:center;gap:8px;width:min(300px,100%);text-align:center}.g-qr svg{width:240px;height:240px;border-radius:16px;background:#fff;padding:6px}
 .g-qr b{font-size:20px;letter-spacing:.12em;color:var(--ac)}.g-qr small{color:var(--mut);line-height:1.45}.g-noqr{font-size:90px}
 pre.code{max-height:60vh}
+/* v3.1 · Este aparato, stock y exportación rápida */
+.ex-status{margin-top:8px;color:var(--ac);font-weight:600}
+.devl{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--bd)}.devl i{font-style:normal}.devl div{display:flex;flex-direction:column;gap:2px}.devl small{color:var(--mut);line-height:1.4}
+.devplay{display:flex;flex-direction:column;gap:4px;margin-top:8px}.devplay audio{width:100%}.devplay small{color:var(--mut)}
+.stk .inrow{margin-bottom:8px}.stk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin:10px 0;max-height:60vh;overflow:auto}
+.stk-it{display:flex;flex-direction:column;gap:4px;padding:0;border:1px solid var(--bd);border-radius:14px;overflow:hidden;background:var(--bg1);color:var(--tx);text-align:left}
+.stk-it video{width:100%;aspect-ratio:16/9;object-fit:cover;background:#000;display:block}.stk-it span{padding:0 10px;font-size:12px}.stk-it small{padding:0 10px 8px;color:var(--mut);font-size:11px}
+.stk-it:hover,.stk-it:focus-visible{border-color:var(--ac)}.stk-it.busy{opacity:.5;pointer-events:none}
+a.credit{color:var(--mut);text-decoration:none}a.credit:hover{text-decoration:underline}

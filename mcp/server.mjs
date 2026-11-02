@@ -11,6 +11,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { mediaHandler } from './media.mjs';
+import { setupVoices, stopTTS, speak } from './tts.mjs';
 
 const VERSION = '1.0.0';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -73,6 +75,7 @@ const TOOLS = [
   { name: 'gallery_get', description: 'Export one gallery item to a file on this computer and preview it.', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
   { name: 'director', description: 'AI Director projects (idea/chapter/book → shot list → automatic previz shooting → final video, voices, SFX, music → montage). action=create: pass your own "plan" JSON (same format as get returns: {title, logline, style, characters:[{name,kind,color,desc,voice}], scenes:[{id,heading,summary,place,time,weather,music,setup:[DSL add/set commands],action:[DSL with delay],shots:[{id,from,duration,subject,size,angle,camera:{mode,lens,shake},description,dialogue:[{who,line}],sfx}]}]}). action=plan: let the app\'s own LLM plan from "idea" (text). action=run: steps among previz, animatic, final, sound, assemble. action=get/list.', inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['create', 'plan', 'get', 'list', 'run'] }, project_id: { type: 'string' }, plan: { type: 'object' }, idea: { type: 'string' }, options: { type: 'object', description: '{dur, coverage:"basic|cine", style, aspect, lang:"es|en", videoModel, sfx, music}' }, steps: { type: 'array', items: { type: 'string', enum: ['previz', 'animatic', 'final', 'sound', 'assemble'] } } }, required: ['action'] } },
   { name: 'book_load', description: 'Load an e-book (EPUB, PDF, TXT) from this computer into a new Director project. Returns the chapters; then use director action=plan with project_id and options.chapter, or write your own plan.', inputSchema: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } },
+  { name: 'speak', description: 'Free text-to-speech on this computer (no app needed): engine "kokoro" (offline, voices ef_dora, em_alex, em_santa for Spanish; af_heart, am_michael… for English) or "edge" (online, unofficial; voices like es-ES-ElviraNeural). Saves a WAV/MP3 in the output folder and returns its path, duration and word timings (for karaoke subtitles). Use file:<path> to put it in the montage.', inputSchema: { type: 'object', properties: { text: { type: 'string' }, voice: { type: 'string' }, engine: { type: 'string', enum: ['kokoro', 'edge'] }, speed: { type: 'number', description: '0.5–2' } }, required: ['text'] } },
   { name: 'games', description: 'Plató games: any game (board, cards, racing, shooter, trivia, invented…) as a JS module on the Plató Game Kit, played on the TV with phones as controllers. action=api returns the full kit reference to write one; list; get (code); save (pass full module code: the app runs an automatic play-test and returns errors to fix); play (opens the lobby with a QR for phones).', inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['api', 'list', 'get', 'save', 'play'] }, id: { type: 'string' }, code: { type: 'string' }, note: { type: 'string' } }, required: ['action'] } },
   { name: 'montage', description: 'The app\'s editor timeline: get (clips, audio tracks, subtitles) or export (renders the final video in real time; returns the file).', inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['get', 'export'] } }, required: ['action'] } },
   { name: 'task_result', description: 'Get the result of a long operation that returned a task_id. Waits up to wait_seconds (default 40).', inputSchema: { type: 'object', properties: { task_id: { type: 'string' }, wait_seconds: { type: 'number' } }, required: ['task_id'] } },
@@ -206,6 +209,9 @@ async function runTool(name, args, onProgress) {
     if (t.error) throw t.error; return toContent(t.result); }
   if (name === 'studio_open') return [{ type: 'text', text: await openApp(!!args.headless) + (await waitForApp(20000) ? ' La app ya está conectada.' : ' Aún no se ha conectado: espera unos segundos y llama a studio_status.') }];
   if (name === 'studio_status' && !app) return [{ type: 'text', text: `Plató Studio no está conectado a este servidor MCP (puerto ${PORT}).\nOpciones: llama a studio_open, o abre ${APP_URL} en el navegador (o la app de GitHub Pages con ?mcp=${PORT}). La pestaña debe quedarse abierta y visible mientras trabajas.` }];
+  if (name === 'speak') { const r = await speak({ engine: args.engine || 'kokoro', text: args.text, voice: args.voice || (args.engine === 'edge' ? 'es-ES-ElviraNeural' : 'ef_dora'), speed: args.speed || 1 });
+    const d = path.join(OUT, 'Voces'); fs.mkdirSync(d, { recursive: true }); const f = path.join(d, `voz-${Date.now()}.${r.mime === 'audio/wav' ? 'wav' : 'mp3'}`); fs.writeFileSync(f, r.audio);
+    return [{ type: 'text', text: JSON.stringify({ path: f, media: 'file:' + f, duration: r.dur, words: r.words }) }]; }
   if (name === 'book_load') args = { ...args, file: readLocal(args.path) };
   else args = inlineFiles(args);
   if (!app && flag('open')) { await openApp(flag('headless')); await waitForApp(25000); }
@@ -254,8 +260,10 @@ function serveStatic(req, res) {
   res.writeHead(200, { 'content-type': { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.txt': 'text/plain; charset=utf-8', '.ico': 'image/x-icon' }[ext], 'cache-control': 'no-cache' }); fs.createReadStream(p).pipe(res);
 }
 function readBody(req) { return new Promise((res, rej) => { const c = []; let n = 0; req.on('data', d => { n += d.length; if (n > 400 * 1024 * 1024) { rej(new Error('too big')); req.destroy(); } else c.push(d); }); req.on('end', () => res(Buffer.concat(c).toString('utf8'))); req.on('error', rej); }); }
+let api = null;
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
+  if (url.pathname.startsWith('/api/')) { api = api || mediaHandler({ ORIGINS, isLocal, OUT, log }); await api(req, res, url); return; }
   if (url.pathname === '/health') { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ app: 'plato-studio-mcp', version: VERSION, connected: !!app })); return; }
   if (url.pathname === '/lan') { res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify({ lan: LAN, ips: LAN ? lanIPs() : [], port: PORT })); return; }
   if (url.pathname === '/mcp') {
@@ -284,9 +292,10 @@ function startStdio(relay) {
   process.stdin.on('end', () => { ended = true; if (!inflight) shutdown(); });
 }
 async function relayTo(msg) { const r = await fetch(`http://127.0.0.1:${PORT}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + TOKEN }, body: JSON.stringify(msg) }); return await r.json(); }
-function shutdown() { try { headless && headless.b.close(); } catch (e) {} try { appWin && appWin.kill(); } catch (e) {} process.exit(0); }
+function shutdown() { try { stopTTS(); } catch (e) {} try { headless && headless.b.close(); } catch (e) {} try { appWin && appWin.kill(); } catch (e) {} process.exit(0); }
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);
 
+if (flag('setup-voices')) { setupVoices(m => process.stderr.write(m + '\n')).then(() => process.exit(0), e => { process.stderr.write('❌ ' + e.message + '\n'); process.exit(1); }); }
 server.on('error', async e => {
   if (e.code !== 'EADDRINUSE') { log('error del servidor:', e.message); process.exit(1); }
   let ours = false; try { const h = await (await fetch(`http://127.0.0.1:${PORT}/health`)).json(); ours = h.app === 'plato-studio-mcp'; } catch (err) {}
@@ -294,7 +303,7 @@ server.on('error', async e => {
   if (!ours || HTTP_ONLY) { log(`El puerto ${PORT} está ocupado por otro programa. Usa --port.`); process.exit(1); }
   log(`Ya hay otro servidor de Plató Studio en el puerto ${PORT}: reenvío mis peticiones a él.`); startStdio(relayTo);
 });
-server.listen(PORT, LAN ? '0.0.0.0' : '127.0.0.1', async () => {
+if (!flag('setup-voices')) server.listen(PORT, LAN ? '0.0.0.0' : '127.0.0.1', async () => {
   fs.mkdirSync(OUT, { recursive: true });
   log(`v${VERSION} · app: ${APP_URL} · puente: ws://localhost:${PORT}/bridge · MCP HTTP: http://localhost:${PORT}/mcp · archivos: ${OUT}`);
   if (HTTP_ONLY) log('Token HTTP: ' + TOKEN); else startStdio(null);
