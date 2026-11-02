@@ -6,6 +6,7 @@ import { pickFromGallery } from './gallery.js';
 import { loadChars } from './chars.js';
 import { llmJSON, llmReady } from './llm.js';
 import { addToEdit } from './editor.js';
+import { installButton } from './home.js';
 
 const SLOTS = { video: { label: 'Vídeo de referencia', kind: 'video' }, image: { label: 'Imagen', kind: 'image' }, end_image: { label: 'Imagen final (opcional)', kind: 'image' }, control: { label: 'Vídeo de profundidad (opcional)', kind: 'video' } };
 const MODE_SLOTS = { v2v: ['video', 'image', 'control'], i2v: ['image', 'end_image'], t2v: [], t2i: [], i2i: ['image'] };
@@ -35,7 +36,7 @@ function totalEst() { return selected().reduce((a, m) => a + (estimate(m, ST, vi
 export function renderStudio(r) {
   root = r; r.innerHTML = ''; const s = getSettings();
   if (s.keys.muapi && !ST.extraLoaded) { ST.extraLoaded = true; loadExtraCatalog().then(x => { if (x.length && root === r && location.hash === '#studio') rerender(); }).catch(() => {}); }
-  if (host.claude) r.append(el('section', { class: 'card hero' }, el('div', { class: 'badge prem' }, 'VISTA PREVIA EN CLAUDE'), el('h2', {}, 'Para generar, abre la app instalada'), el('p', { class: 'note' }, 'Dentro de Claude las páginas no pueden conectarse a fal.ai ni a otros proveedores. Aquí puedes preparar todo (entradas, prompt con la IA de Claude, modelos y coste), rodar en el plató, montar y gestionar personajes. La generación funciona en la versión de GitHub Pages.'), el('a', { class: 'b on', href: 'https://dani3l-gonzal3z.github.io/Higgs-field-/', target: '_blank' }, 'Abrir la app ↗')));
+  if (host.claude) r.append(el('section', { class: 'card hero' }, el('div', { class: 'badge prem' }, 'VISTA PREVIA EN CLAUDE'), el('h2', {}, 'Para generar, abre la app instalada'), el('p', { class: 'note' }, 'Dentro de Claude las páginas no pueden conectarse a fal.ai, Higgsfield ni otros proveedores (es una norma de seguridad de Claude). Aquí puedes preparar todo: entradas, prompt con la IA de Claude, modelos y coste. Para generar, abre Plató en tu ordenador.'), installButton()));
   else if (!hasAnyKey(s)) r.append(onboarding());
   const wrap = el('div', { class: 'studio' }); r.append(wrap);
   const colA = el('div', { class: 'col' }), colB = el('div', { class: 'col' }); wrap.append(colA, colB);

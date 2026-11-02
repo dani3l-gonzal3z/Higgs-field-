@@ -114,7 +114,7 @@ const H = {
     if (mode) list = list.filter(m => m.mode === mode); if (q) list = list.filter(m => (m.id + ' ' + m.name).toLowerCase().includes(q));
     list.sort((a, b) => (b.ready - a.ready) || (a.provider === 'muapi') - (b.provider === 'muapi')); return { total: list.length, models: list.slice(0, Math.min(60, +limit || 15)) }; },
   async generate({ model_id, prompt = '', inputs = {}, duration, aspect, resolution, extra = {} }) {
-    if (host.claude) throw new Error('Dentro de Claude no se puede generar: abre la app de GitHub Pages o la local del servidor MCP.');
+    if (host.claude) throw new Error('Dentro de Claude no se puede generar: abre Plató en tu ordenador (Plato.cmd) o la app local del servidor MCP.');
     await loadExtraCatalog(); let m = catalog().find(x => x.id === model_id), r = null;
     if (!m) { const reg = await registry(); const rid = String(model_id).replace(/^reg:/, ''); r = reg.find(x => x.id === rid || ('oga-' + x.c + '-' + x.id) === model_id); if (!r) throw new Error('Modelo desconocido: busca uno con models_search'); }
     const res = {}; for (const [k, v] of Object.entries(inputs || {})) res[k] = await resolveRef(v, k);

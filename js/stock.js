@@ -1,5 +1,5 @@
 // 🎞 Vídeos de stock (Pexels y Pixabay, gratis con clave): buscar, previsualizar y guardar en la galería para usarlos como planos.
-import { el, btn, toast, modal, seg, uid, db, getSettings, videoMeta, thumbFromVideo, emit } from './core.js';
+import { el, btn, toast, modal, seg, uid, db, getSettings, videoMeta, thumbFromVideo, emit, host } from './core.js';
 import { pfetch } from './providers.js';
 
 const ORIENT = { '16:9': 'landscape', '2.39:1': 'landscape', '4:3': 'landscape', '9:16': 'portrait', '1:1': 'square' };
@@ -31,6 +31,7 @@ export async function saveStock(it, label = '') {
 // Buscador: devuelve el clip guardado en la galería (o null).
 export function pickStock({ query = '', aspect = '16:9', title = '🎞 Vídeos de stock' } = {}) {
   return new Promise(res => {
+    if (host.claude) { toast('Los vídeos de stock no se pueden buscar dentro de Claude (no deja conectar con otras webs). Ábrelo en tu ordenador.', 6000); res(null); return; }
     if (!stockReady()) { toast('Añade una clave gratuita de Pexels o Pixabay en Ajustes → Este aparato', 6000, { action: { label: 'Ir a Ajustes', fn: () => location.hash = '#settings' } }); res(null); return; }
     const s = getSettings().stock; const st = { provider: s.pexels ? 'pexels' : 'pixabay', page: 1, done: false };
     const q = el('input', { class: 'txt', type: 'search', placeholder: 'Qué buscas: «calle de noche con lluvia», «romanos», «volcán»…', value: query });

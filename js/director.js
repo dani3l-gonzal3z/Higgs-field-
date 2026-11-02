@@ -161,7 +161,7 @@ async function charDescs() { const cs = await db.all('chars'); const pc = (P.pro
 async function shotPrompt(sc, sh) { const d = await charDescs(); const who = [...new Set([sh.subject, ...(sh.dialogue || []).map(x => x.who)])].filter(Boolean).map(d).filter(Boolean); const st = STYLES.find(s => s[0] === P.proj.opts.style);
   return [sh.description, who.length ? 'Characters: ' + who.join('; ') : '', `${sc.heading || ''}`, P.proj.plan.style || '', st ? st[2] : '', 'Keep the exact motion, timing and camera move of the reference video; replace grey mannequins and simple shapes with real people, vehicles and sets.'].filter(Boolean).join('. '); }
 async function genShot(pr, sc, sh) {
-  if (host.claude) { toast('La generación funciona en la app de GitHub Pages'); return null; }
+  if (host.claude) { toast('Dentro de Claude no se puede generar: abre Plató en tu ordenador (Plato.cmd)', 5000); return null; }
   const m = catalog().find(x => x.id === pr.opts.videoModel); if (!m || !readiness(m).ok) { toast('Elige un modelo de vídeo final listo (Ajustes de producción)'); return null; }
   if (!sh.previz) { toast(`Rueda primero la previz de ${sh.id}`); return null; }
   const prompt = await shotPrompt(sc, sh); const params = { prompt, duration: +sh.duration || 5, aspect: pr.opts.aspect, resolution: '720p', audio: false };
@@ -230,7 +230,7 @@ async function assemble(pr, animatic, o = {}) {
   emit('gens'); toast(animatic ? '🎞 Animatic montado' : '🎞 Capítulo montado', 3500, { action: { label: 'Ir al montaje', fn: () => location.hash = '#edit' } });
 }
 async function autopilot(pr) {
-  if (!await confirmBox('Todo automático', host.claude ? 'Rodaré toda la previz y montaré el animatic (la generación se hace en la app de GitHub).' : 'Rodaré la previz de todos los planos, generaré el vídeo final, las voces, el sonido y la música, y montaré el capítulo. Verás el coste antes de generar.', 'Adelante')) return;
+  if (!await confirmBox('Todo automático', host.claude ? 'Rodaré toda la previz y montaré el animatic (generar vídeo y voces se hace con Plató en tu ordenador).' : 'Rodaré la previz de todos los planos, generaré el vídeo final, las voces, el sonido y la música, y montaré el capítulo. Verás el coste antes de generar.', 'Adelante')) return;
   await shootAll(pr); if (host.claude) { await assemble(pr, true); return; }
   if (catalog().find(x => x.id === pr.opts.videoModel)) await genAll(pr); if (getSettings().keys.muapi) await soundAll(pr); await assemble(pr, false);
 }

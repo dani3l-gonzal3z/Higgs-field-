@@ -1,5 +1,5 @@
 // 🏠 Inicio: la pantalla principal, pensada como una consola (táctil, teclado o mando).
-import { el, btn, db, blobURL, host, toast } from './core.js';
+import { el, btn, db, blobURL, host, toast, modal } from './core.js';
 import { missionsCard, startTour } from './guide.js';
 
 export const MODES = [
@@ -16,6 +16,10 @@ export async function renderHome(r) {
   r.append(el('div', { class: 'h-hero' }, el('div', {}, el('h1', {}, `${hello()} 👋`), el('p', {}, '¿Qué hacemos hoy?'))));
   const modes = el('div', { class: 'h-modes' });
   for (const m of MODES) modes.append(el('a', { href: '#' + m.v, class: 'mode', 'data-v': m.v, 'data-nav': '', style: `--g:${m.grad}` }, el('i', {}, m.ic), el('b', {}, m.t), el('small', {}, m.d), m.badge ? el('em', {}, m.badge) : null));
+  if (host.claude) r.append(el('section', { class: 'card h-claude' }, el('b', {}, 'Estás usando Plató dentro de Claude'),
+    el('div', { class: 'h-cl2' }, el('div', {}, el('small', {}, '✅ Funciona aquí'), el('p', {}, 'Plató 3D · Director (planifica con Claude, rueda la previz y monta el animatic) · Jugar en esta pantalla · Montaje en tiempo real · Personajes')),
+      el('div', {}, el('small', {}, '💻 Necesita Plató en tu ordenador'), el('p', {}, 'Generar vídeo e imágenes con tus claves · Voces gratis · Exportación rápida · Vídeos de stock · Móviles como mando'))),
+    el('p', { class: 'note' }, 'No es un fallo: Claude no deja que sus páginas se conecten a otras webs (fal, Higgsfield, Pexels…) ni a tu ordenador.'), installButton()));
   r.append(modes);
   r.append(el('div', { class: 'h-pro' }, el('h3', { class: 'sec' }, 'Estudio Pro'), el('div', { class: 'h-tiles' }, PRO.map(([v, ic, t]) => el('a', { href: '#' + v, class: 'h-tile', 'data-nav': '' }, el('i', {}, ic), el('span', {}, t))))));
   // Seguir donde lo dejaste
@@ -55,4 +59,16 @@ export function setupSpatialNav() {
       const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0, b = i => gp.buttons[i] && gp.buttons[i].pressed; const st = { left: b(14) || ax < -0.6, right: b(15) || ax > 0.6, up: b(12) || ay < -0.6, down: b(13) || ay > 0.6, a: b(0), back: b(1) };
       for (const k of ['left', 'right', 'up', 'down']) if (st[k] && !prev[k]) move(k); if (st.a && !prev.a && document.activeElement) document.activeElement.click(); if (st.back && !prev.back) location.hash = '#home'; prev = st; }
     requestAnimationFrame(poll); }; addEventListener('gamepadconnected', () => { toast('🎮 Mando conectado'); requestAnimationFrame(poll); }, { once: true });
+}
+
+// Cómo tener Plató completo en tu ordenador (sirve tanto dentro de Claude como en la web).
+export function installButton(label = '💻 Instalar Plató en mi ordenador') { return btn(label, installHelp, 'b on'); }
+export function installHelp() {
+  const step = (n, t, d) => el('div', { class: 'ins-st' }, el('i', {}, n), el('div', {}, el('b', {}, t), d));
+  modal('💻 Plató en tu ordenador (5 min)', el('div', { class: 'ins' },
+    step('1', 'Instala Node.js', el('p', {}, 'Entra en ', el('a', { href: 'https://nodejs.org/es', target: '_blank', rel: 'noopener' }, 'nodejs.org'), ' y descarga la versión LTS. Instálala con las opciones por defecto.')),
+    step('2', 'Descarga Plató', el('p', {}, el('a', { href: 'https://github.com/dani3l-gonzal3z/Higgs-field-/archive/refs/heads/main.zip', target: '_blank', rel: 'noopener' }, 'Descargar Plató (.zip)'), ' y descomprímelo donde quieras.')),
+    step('3', 'Ábrelo', el('p', {}, 'Windows: doble clic en ', el('code', {}, 'Plato.cmd'), '. Mac: clic derecho en ', el('code', {}, 'Plato.command'), ' → Abrir (la primera vez). Linux: ', el('code', {}, './plato.sh'), '. Se abre en su propia ventana; necesita Chrome o Edge instalado.')),
+    step('4', 'Pon tus claves', el('p', {}, 'En ⚙️ Ajustes de esa ventana (no se comparten con esta). Con eso ya generas vídeo e imágenes.')),
+    step('+', 'Opcional', el('p', {}, 'Exportación rápida: instala FFmpeg (Windows: ', el('code', {}, 'winget install ffmpeg'), ' · Mac: ', el('code', {}, 'brew install ffmpeg'), '). Voces gratis: en la carpeta de Plató, ', el('code', {}, 'node mcp/server.mjs --setup-voices'), ' (también necesita Python y espeak-ng). En ⚙️ Ajustes → 🏠 Este aparato ves qué tienes listo.'))), { wide: true });
 }

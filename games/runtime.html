@@ -40,7 +40,22 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0b0c0e;color:#fff;fon
       end: result => { if (S.over) return; S.over = true; const txt = typeof result === 'string' ? result : (players.find(p => p.id === result) || {}).name ? `🏆 Gana ${players.find(p => p.id === result).name}` : '🏁 Fin de la partida'; if (kit) { kit.say(txt, 6); kit.sfx('win'); } post({ type: 'over', result: txt }); } };
     return ctx;
   }
-  async function loadGame(code) { const mod = await import(blobURL(code)); const g = mod.default; if (!g || typeof g !== 'object') throw new Error('El juego debe exportar por defecto un objeto (export default { … })'); if (typeof g.setup !== 'function') throw new Error('Falta setup(ctx)'); if (typeof g.controller !== 'function') throw new Error('Falta controller(ctx, state, player)'); g.meta = g.meta || {}; return g; }
+  // Carga módulos desde texto: con blob: si el navegador lo deja; si no (dentro de Claude, por su política de seguridad), como <script type=module> en línea.
+  let INLINE = null, seq = 0;
+  async function canBlob() { if (INLINE !== null) return !INLINE; try { const m = await import(blobURL('export default 7')); INLINE = m.default !== 7; } catch (e) { INLINE = true; } return !INLINE; }
+  function inlineModule(code) {
+    const id = '__pm' + (++seq); const box = window[id] = {};
+    const src = code.replace(/export\s+default\s+/, `window.${id}.default = `).replace(/export\s+(async\s+)?function\s+([\w$]+)/g, (m, a, n) => `window.${id}.${n} = ${a || ''}function ${n}`);
+    return new Promise((res, rej) => {
+      const t = setTimeout(() => { done(); rej(new Error('El módulo no ha cargado')); }, 30000);
+      const onErr = ev => { done(); rej(ev.error || new Error(ev.message)); };
+      const done = () => { clearTimeout(t); removeEventListener('error', onErr); };
+      box.__ok = () => { done(); res(box); }; addEventListener('error', onErr);
+      const sc = document.createElement('script'); sc.type = 'module'; sc.textContent = src + `\n;window.${id}.__ok();`; document.head.append(sc);
+    });
+  }
+  const importText = async code => (await canBlob()) ? import(blobURL(code)) : inlineModule(code);
+  async function loadGame(code) { const mod = await importText(code); const g = mod.default; if (!g || typeof g !== 'object') throw new Error('El juego debe exportar por defecto un objeto (export default { … })'); if (typeof g.setup !== 'function') throw new Error('Falta setup(ctx)'); if (typeof g.controller !== 'function') throw new Error('Falta controller(ctx, state, player)'); g.meta = g.meta || {}; return g; }
   function specFor(p) { try { return S.game.controller(S.ctx, S.state, p) || {}; } catch (e) { err(e, 'controller'); return { title: 'Error', text: e.message }; } }
   function pushUis(force) { for (const p of S.players) { const spec = specFor(p); const j = JSON.stringify(spec); if (force || S.ui[p.id] !== j) { S.ui[p.id] = j; post({ type: 'ui', player: p.id, spec }); } } }
   function hud() { if (S.game.hud && S.kit) try { S.kit.hud(S.game.hud(S.ctx, S.state) || {}); } catch (e) { err(e, 'hud'); } }
@@ -83,7 +98,12 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0b0c0e;color:#fff;fon
   }
   addEventListener('message', async e => { const m = e.data; if (!m || typeof m !== 'object' || e.source !== parent) return;
     try {
-      if (m.type === 'boot') { const three = blobURL(m.three); const kitSrc = m.kit.replace(/from\s+['"]three['"]/g, `from '${three}'`); S.createKit = (await import(blobURL(kitSrc))).createKit; post({ type: 'booted' }); }
+      if (m.type === 'boot') {
+        if (m.three && await canBlob()) { const three = blobURL(m.three); const kitSrc = m.kit.replace(/from\s+['"]three['"]/g, `from '${three}'`); S.createKit = (await import(blobURL(kitSrc))).createKit; }
+        else { // three.js desde su CDN (permitido en todas partes) mediante un importmap
+          if (!document.querySelector('script[type=importmap]')) { const im = document.createElement('script'); im.type = 'importmap'; im.textContent = JSON.stringify({ imports: { three: m.threeUrl } }); document.head.append(im); }
+          S.createKit = (await inlineModule(m.kit)).createKit; }
+        post({ type: 'booted', inline: !!INLINE }); }
       else if (m.type === 'load') await start(m);
       else if (m.type === 'test') await test(m);
       else if (m.type === 'action') act(m.player, m.name, m.args);

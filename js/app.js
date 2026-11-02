@@ -27,7 +27,8 @@ async function route() {
   const v = VIEWS[location.hash.slice(1)] ? location.hash.slice(1) : 'home';
   for (const m of document.querySelectorAll('.modal')) m.remove();
   buildNav(v); document.body.dataset.view = v; frame.hidden = v !== 'plato'; view.hidden = v === 'plato';
-  if (v !== 'plato') { view.scrollTop = 0; try { await RENDER[v](view); } catch (e) { console.error(e); view.innerHTML = ''; view.append(el('div', { class: 'empty big' }, 'Algo ha fallado al abrir esta sección: ' + e.message)); } }
+  // Cada visita pinta en un contenedor nuevo: si llega otra (p. ej. cuando Claude termina de conectar), la anterior escribe en uno ya retirado y no se duplica nada.
+  if (v !== 'plato') { view.scrollTop = 0; const box = el('div', { class: 'vbox' }); view.replaceChildren(box); try { await RENDER[v](box); } catch (e) { console.error(e); box.innerHTML = ''; box.append(el('div', { class: 'empty big' }, 'Algo ha fallado al abrir esta sección: ' + e.message)); } }
   maybeTour(v);
 }
 addEventListener('hashchange', route);

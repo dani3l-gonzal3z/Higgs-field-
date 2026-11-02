@@ -23,7 +23,7 @@ export async function pfetch(url, opts = {}) {
 }
 async function http(url, opts = {}, { proxy = false, raw = false } = {}) {
   if (proxy === 'auto') { const s0 = getSettings(); try { return await http(url, opts, { proxy: false, raw }); } catch (e) { if (e.name === 'AbortError' || !(e instanceof ProviderError) || e.status !== 0 || !e.retry) throw e; if (!hasProxy(s0)) throw new ProviderError('El navegador bloqueó la conexión directa (CORS). Configura el mini-proxy en Ajustes.', 0); return http(url, opts, { proxy: true, raw }); } }
-  if (host.claude) throw new ProviderError('Dentro de Claude no se puede conectar con proveedores externos. Abre la app desde GitHub Pages para generar.', 0);
+  if (host.claude) throw new ProviderError('Dentro de Claude no se puede conectar con proveedores externos. Para generar abre Plató en tu ordenador (Plato.cmd / Plato.command).', 0);
   const s = getSettings();
   if (proxy && !hasProxy(s)) throw new ProviderError('Este proveedor necesita el mini-proxy (Ajustes → Proxy) o abrir Plató como aplicación.', 0);
   const h = new Headers(opts.headers || {}); if (proxy && s.proxy.url && s.proxy.token) h.set('x-proxy-token', s.proxy.token);

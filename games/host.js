@@ -1,7 +1,9 @@
 // Arranca el entorno aislado de juegos (games/runtime.html) y habla con él por mensajes.
 let BOOT = null;
 export function bootFiles(base = '') {
-  if (!BOOT) BOOT = Promise.all([fetch(base + 'vendor/three/three.module.min.js').then(r => r.text()), fetch(base + 'games/kit.js').then(r => r.text())]).then(([three, kit]) => ({ three, kit }));
+  // three.js: la copia local si existe (funciona sin internet); si no (p. ej. dentro de Claude), el runtime lo carga de su CDN.
+  const THREE_CDN = 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+  if (!BOOT) BOOT = Promise.all([fetch(base + 'vendor/three/three.module.min.js').then(r => r.ok ? r.text() : null).catch(() => null), fetch(base + 'games/kit.js').then(r => r.text())]).then(([three, kit]) => ({ three, kit, threeUrl: THREE_CDN }));
   return BOOT;
 }
 export async function makeRuntime(container, { base = '', hidden = false } = {}) {
