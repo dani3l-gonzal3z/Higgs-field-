@@ -48,6 +48,7 @@ La primera vez que entras en cada parte, una guía te señala lo importante paso
 
 Sube un PDF (o pega un texto, o simplemente di el tema) y un profe low-poly te da la clase en la tele: habla con la boca sincronizada, escribe en la pizarra y cada pocos pasos te hace una pregunta de repaso. Puedes **interrumpirle en cualquier momento**: corta, piensa con tu documento y empieza a contestar con la primera frase, sin esperar a tener la respuesta entera. Tres niveles: lo básico, normal y a fondo.
 
+- El profe tiene libertad para explicar: pizarra, **modelos 3D low-poly** o ambos. Introduce la teoría y, mientras habla, va montando el modelo pieza a pieza (con etiquetas, giros, órbitas o flujos para enseñar cómo funciona); en los pasos siguientes añade piezas o hace brillar la parte de la que habla. También puede sacar un modelo al contestar una pregunta.
 - La boca se anima a partir del texto: cada vocal tiene su forma, la m, la b y la p cierran los labios, la f y la v los muerden… con los tiempos de cada palabra que da la voz. No necesita GPU.
 - Voz: la del aparato (Kokoro, gratis y sin internet) si está instalada; si no, Edge o la del navegador.
 - Los PDF se leen con [pdf.js](https://github.com/mozilla/pdf.js) (Apache-2.0, en `vendor/pdfjs`). Los escaneados (solo imagen) todavía no.

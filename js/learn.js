@@ -53,15 +53,21 @@ export async function makeLesson({ doc, topic, focus, level = lvl() }) {
   const mat = material(doc, focus);
   const prompt = `Eres un profesor excelente que da clases en vídeo, de pie junto a una pizarra, para un adulto curioso. Prepara una clase en español${doc ? ` basada en el material de «${doc.title}»` : ` sobre: ${topic}`}.${focus ? ` Céntrate en: ${focus}.` : ''} ${lv}
 ${mat ? `MATERIAL:\n<<<\n${mat}\n>>>\n` : ''}
+Tienes libertad para explicar como mejor se entienda: con la pizarra, con un modelo 3D low-poly o con ambos. Primero introduce la idea con teoría y, cuando ayude a VER algo (piezas de una máquina, un proceso, una molécula, un planeta, un circuito, una estructura, proporciones, un recorrido…), construye un modelo en "scene": se irá montando pieza a pieza mientras hablas, así que ordena las piezas en el orden en que las nombras.
 Devuelve SOLO un JSON con esta forma:
-{"title":"título corto","summary":"una frase","steps":[{"say":"lo que dices en voz alta","board":{"title":"...","bullets":["..."],"formula":"","note":""},"check":null}]}
+{"title":"título corto","summary":"una frase","steps":[{"say":"lo que dices en voz alta","board":{"title":"...","bullets":["..."],"formula":"","note":""},"scene":null,"check":null}]}
+Formato de "scene" (o null para no tocar el modelo):
+{"items":[pieza,...],"rotate":true} crea un modelo nuevo · {"add":[pieza,...]} añade piezas al anterior · {"highlight":["etiqueta"]} hace brillar partes · {"clear":true} lo quita.
+pieza = {"shape":"box|sphere|cylinder|cone|torus|capsule|plane|ring|tube|arrow|text","pos":[x,y,z],"size":[...],"rot":[gradosX,gradosY,gradosZ],"color":"rojo|azul|verde|amarillo|naranja|morado|rosa|cian|gris|negro|blanco|marrón|cobre|plata|oro|agua|fuego|#hex","label":"nombre corto","anim":"spin|spinx|spinz|orbit|bob|pulse|flow","speed":1}
+Medidas: y hacia arriba, suelo en y=0, el modelo cabe en unas 2 unidades. box [ancho,alto,fondo] · sphere [radio] · cylinder [radio,alto] · cone [radio,alto] · torus [radio,grosor] · capsule [radio,largo] · plane [ancho,alto] · ring [radio] (órbitas) · tube con "points":[[x,y,z],...] (cables, trayectorias) · arrow desde pos con "dir":[x,y,z] y "len" · text con "text". "orbit" gira alrededor del centro a la distancia de su pos; "flow" va en bucle de pos a "to":[x,y,z] (corriente, agua, partículas).
+Si el tema lo permite, usa el 3D en 2 a 5 pasos, con 3 a 16 piezas y etiquetas en las partes importantes; en los pasos siguientes puedes añadir piezas o hacer brillar partes mientras lo explicas.
 Reglas:
 - Entre 6 y 10 pasos. Empieza enganchando con por qué importa. Un concepto por paso, con ejemplos concretos. Termina con un resumen.
 - "say": 2 a 4 frases habladas y naturales, sin markdown, sin emojis, sin listas; no leas la pizarra literalmente.
 - "board": lo que escribirías: título corto, hasta 5 viñetas de menos de 9 palabras, "formula" para números, ecuaciones o reglas clave (o vacío), "note" opcional.
 - Cada 2 o 3 pasos pon en "check" una pregunta de repaso: {"q":"...","options":["...","...","..."],"answer":0,"explain":"por qué, en una frase"}. En el resto, "check": null.
 ${doc ? '- Si el material no basta, dilo en el primer paso y completa con conocimiento general fiable, sin inventar datos del documento.' : '- No menciones documentos ni material de apoyo: explica directamente con conocimiento general fiable.'}`;
-  const j = await llmJSON(prompt, { maxTokens: 6000 }); if (!j || !Array.isArray(j.steps) || !j.steps.length) throw new Error('La clase no ha salido bien; prueba otra vez');
+  const j = await llmJSON(prompt, { maxTokens: 9000 }); if (!j || !Array.isArray(j.steps) || !j.steps.length) throw new Error('La clase no ha salido bien; prueba otra vez');
   j.steps = j.steps.filter(s => s && s.say).slice(0, 14); return { id: 'lesson-' + uid(), docId: doc && doc.id, topic, focus, level, ...j };
 }
 
@@ -77,10 +83,44 @@ function tts(text) { // promesa de {blob, words} (o null para la voz del navegad
 /* ---------- Reproductor ---------- */
 function layer() { let l = document.getElementById('learnlayer'); if (!l) { l = el('div', { id: 'learnlayer' }); document.getElementById('main').append(l); } return l; }
 function post(m) { const s = L.session; if (s && s.frame && s.frame.contentWindow) s.frame.contentWindow.postMessage(m, '*'); }
-let spokenWait = new Map(); addEventListener('message', e => { const m = e.data || {}; if (m.type === 'spoken' && spokenWait.has(m.id)) { spokenWait.get(m.id)(m.ok); spokenWait.delete(m.id); } if (m.type === 'learn-ready' && L.session && L.session.readyRes) L.session.readyRes(); });
-async function say(text, { gen } = {}) { const s = L.session; if (!s || !text) return false; const a = await tts(text); if (!L.session || s.gen !== gen) return false;
-  const id = uid(); const done = new Promise(r => spokenWait.set(id, r)); post({ type: 'speak', id, text, audio: a && a.blob, words: a && a.words, lang: 'es', rate: 1 }); return await done; }
-function stopTalk() { const s = L.session; if (!s) return; s.gen++; post({ type: 'stop' }); for (const [, r] of spokenWait) r(false); spokenWait.clear(); }
+addEventListener('message', e => { const m = e.data || {}; if (m.type === 'learn-ready' && L.session && L.session.readyRes) L.session.readyRes(); });
+// La voz suena aquí (la página principal), que es la que recibe tus toques: así el navegador la deja sonar desde el primer clic.
+// Al profe le mandamos el texto y el reloj de la voz para mover la boca y los subtítulos.
+const SILENT = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+const AUD = { el: null };
+export function unlockAudio() {
+  try { if (!AUD.el) { AUD.el = new Audio(); AUD.el.setAttribute('playsinline', ''); } AUD.el.src = SILENT; const p = AUD.el.play(); p && p.catch(() => {}); } catch (e) {}
+  try { if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } } catch (e) {}
+}
+addEventListener('pointerdown', unlockAudio, { once: true, capture: true });
+function pickVoice() { try { const vs = speechSynthesis.getVoices(); return vs.find(v => /^es/i.test(v.lang) && /natural|neural|google|online|premium|enhanced/i.test(v.name)) || vs.find(v => /^es/i.test(v.lang)) || null; } catch (e) { return null; } }
+function playSpeech(text, a) { const s = L.session; const id = uid();
+  return new Promise(res => {
+    let done = false, raf = 0, t0 = performance.now(), pausedAt = 0, pausedTotal = 0; const words = text.split(/\s+/).filter(Boolean);
+    const fin = ok => { if (done) return; done = true; cancelAnimationFrame(raf); clearTimeout(guardT); post({ type: 'end', id }); if (s.cur && s.cur.id === id) s.cur = null; res(ok); };
+    post({ type: 'speak', id, text, words: a && a.words, external: true });
+    let clock = () => (performance.now() - t0 - pausedTotal - (pausedAt ? performance.now() - pausedAt : 0)) / 1000, guardT = 0;
+    const tick = () => { if (done) return; post({ type: 'clock', id, t: clock(), paused: !!(s.cur && s.cur.isPaused && s.cur.isPaused()) }); raf = requestAnimationFrame(tick); };
+    const browser = () => {
+      if (!('speechSynthesis' in window)) { guardT = setTimeout(() => fin(true), (text.length / 14 + 0.6) * 1000); s.cur = { id, pause() { pausedAt = performance.now(); }, resume() { if (pausedAt) { pausedTotal += performance.now() - pausedAt; pausedAt = 0; } }, stop() { fin(false); }, isPaused: () => !!pausedAt }; tick(); return; }
+      const u = new SpeechSynthesisUtterance(text); const v = pickVoice(); if (v) u.voice = v; u.lang = (v && v.lang) || 'es-ES';
+      const starts = []; let pos = 0; for (const w of words) { const i = text.indexOf(w, pos); starts.push(i < 0 ? pos : i); pos = (i < 0 ? pos : i) + w.length; }
+      u.onstart = () => { t0 = performance.now(); };
+      u.onboundary = e => { if (e.name && e.name !== 'word') return; let k = 0; while (k + 1 < starts.length && starts[k + 1] <= e.charIndex) k++; post({ type: 'word', id, k }); };
+      u.onend = () => fin(true); u.onerror = () => fin(false);
+      s.cur = { id, pause() { pausedAt = performance.now(); try { speechSynthesis.pause(); } catch (e) {} }, resume() { if (pausedAt) { pausedTotal += performance.now() - pausedAt; pausedAt = 0; } try { speechSynthesis.resume(); } catch (e) {} }, stop() { try { speechSynthesis.cancel(); } catch (e) {} fin(false); }, isPaused: () => !!pausedAt };
+      // Red de seguridad: hay navegadores que no avisan al terminar (o no tienen voces).
+      const est = text.length / 12 + 3; const guard = () => { if (done) return; if (pausedAt || (speechSynthesis.speaking && clock() < est * 2)) guardT = setTimeout(guard, 1000); else fin(true); }; guardT = setTimeout(guard, est * 1000);
+      try { speechSynthesis.cancel(); } catch (e) {} speechSynthesis.speak(u); tick(); };
+    if (a && a.blob) { const el = AUD.el || (AUD.el = new Audio()); el.setAttribute('playsinline', ''); el.src = URL.createObjectURL(a.blob); clock = () => el.currentTime;
+      el.onended = () => fin(true); el.onerror = () => fin(false);
+      s.cur = { id, pause() { el.pause(); }, resume() { el.play().catch(() => {}); }, stop() { el.pause(); fin(false); }, isPaused: () => el.paused && !el.ended };
+      el.play().then(tick, () => { s.cur = null; browser(); }); }
+    else browser();
+  }); }
+async function say(text, { gen, scene } = {}) { const s = L.session; if (!s || !text) return false; const a = await tts(text); if (!L.session || s.gen !== gen) return false;
+  const p = playSpeech(text, a); if (scene) post({ type: 'scene', scene }); return await p; }
+function stopTalk() { const s = L.session; if (!s) return; s.gen++; if (s.cur) s.cur.stop(); try { speechSynthesis.cancel(); } catch (e) {} }
 
 export async function startLesson(lesson, { doc } = {}) {
   endLesson(); if (location.hash !== '#learn') location.hash = '#learn'; const ly = layer(); ly.innerHTML = ''; ly.classList.add('on'); document.body.classList.add('learning');
@@ -89,7 +129,7 @@ export async function startLesson(lesson, { doc } = {}) {
   const ready = new Promise(r => { s.readyRes = r; setTimeout(r, 15000); });
   const stepLbl = el('span', { class: 'ln-step' }); const playB = btn('⏸', () => togglePause(), 'ln-b');
   const ask = el('input', { class: 'txt', placeholder: 'Pregúntale lo que quieras… (te corta y te contesta)', enterkeyhint: 'send' });
-  const send = () => { const q = ask.value.trim(); if (!q) return; ask.value = ''; answer(q); }; ask.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+  const send = () => { unlockAudio(); const q = ask.value.trim(); if (!q) return; ask.value = ''; answer(q); }; ask.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
   const quiz = el('div', { class: 'ln-quiz', hidden: true }); s.ui = { stepLbl, playB, quiz };
   ly.append(frame, el('div', { class: 'ln-top' }, el('b', {}, lesson.title || 'Clase'), stepLbl, btn('✕', () => endLesson(), 'ln-b')), quiz,
     el('div', { class: 'ln-bar' }, btn('⏮', () => go(s.i - 1), 'ln-b'), playB, btn('⏭', () => go(s.i + 1), 'ln-b'), btn('🔁', () => go(s.i), 'ln-b'), el('div', { class: 'ln-ask' }, ask, btn('Preguntar', send, 'b on'))));
@@ -104,7 +144,7 @@ async function run(s) {
     if (s.paused) { await new Promise(r => setTimeout(r, 250)); continue; }
     const st = s.lesson.steps[s.i]; post({ type: 'board', board: st.board || {} }); status();
     const nx = s.lesson.steps[s.i + 1]; if (nx) tts(nx.say);
-    const ok = await say(st.say, { gen }); if (L.session !== s || s.gen !== gen) return;
+    const ok = await say(st.say, { gen, scene: st.scene }); if (L.session !== s || s.gen !== gen) return;
     if (st.check && st.check.options) { const right = await quizAsk(s, st.check); if (L.session !== s || s.gen !== gen) return;
       const ex = (right ? '¡Exacto! ' : `No del todo: era «${st.check.options[st.check.answer]}». `) + (st.check.explain || ''); await say(ex, { gen }); if (L.session !== s || s.gen !== gen) return; }
     if (!ok && s.paused) continue; s.i++; await new Promise(r => setTimeout(r, 450));
@@ -115,8 +155,12 @@ async function run(s) {
 function quizAsk(s, q) { return new Promise(res => { s.quiz = q; status(); const box = s.ui.quiz; box.hidden = false; box.innerHTML = '';
   box.append(el('b', {}, q.q), ...q.options.map((o, k) => btn(o, () => pick(k), 'ln-opt'))); s.quizPick = pick;
   function pick(k) { if (s.quiz !== q) return; s.quiz = null; s.quizPick = null; box.hidden = true; status(); res(k === q.answer); } }); }
-function go(i) { const s = L.session; if (!s) return; s.i = Math.max(0, Math.min(s.lesson.steps.length - 1, i)); s.paused = false; s.ui.playB.textContent = '⏸'; s.mode = 'lesson'; if (s.quiz) { s.quiz = null; s.ui.quiz.hidden = true; } stopTalk(); run(s); }
-function togglePause(force) { const s = L.session; if (!s) return; s.paused = force != null ? force : !s.paused; s.ui.playB.textContent = s.paused ? '▶' : '⏸'; post({ type: s.paused ? 'pause' : 'resume' }); status(); }
+function go(i) { const s = L.session; if (!s) return; s.i = Math.max(0, Math.min(s.lesson.steps.length - 1, i)); replayScene(s); s.paused = false; s.ui.playB.textContent = '⏸'; s.mode = 'lesson'; if (s.quiz) { s.quiz = null; s.ui.quiz.hidden = true; } stopTalk(); run(s); }
+// Reconstruye el modelo 3D tal como estaría al empezar el paso i (los pasos pueden ir añadiendo piezas).
+function replayScene(s) { post({ type: 'clearScene' }); const items = []; let any = false;
+  for (let k = 0; k < s.i; k++) { const sc = s.lesson.steps[k].scene; if (!sc) continue; if (sc.clear) { items.length = 0; } if (sc.items) { items.length = 0; items.push(...sc.items); any = true; } if (sc.add) { items.push(...sc.add); any = true; } }
+  if (any && items.length) post({ type: 'scene', scene: { items, rotate: true } }); }
+function togglePause(force) { const s = L.session; if (!s) return; s.paused = force != null ? force : !s.paused; s.ui.playB.textContent = s.paused ? '▶' : '⏸'; if (s.cur) s.paused ? s.cur.pause() : s.cur.resume(); status(); }
 export function endLesson() { const s = L.session; if (!s) return; stopTalk(); L.session = null; s.ly.classList.remove('on'); s.ly.innerHTML = ''; document.body.classList.remove('learning'); pushStatus({ state: 'idle' }); }
 export function lessonControl(cmd, arg) { const s = L.session; if (!s) return 'No hay ninguna clase en marcha.';
   if (cmd === 'pause') togglePause(true); else if (cmd === 'resume') { togglePause(false); if (s.mode === 'answer') go(s.i); } else if (cmd === 'next') go(s.i + 1); else if (cmd === 'prev') go(s.i - 1); else if (cmd === 'repeat') go(s.i); else if (cmd === 'stop') endLesson();
@@ -128,20 +172,24 @@ export async function answer(question, { doc } = {}) {
   stopTalk(); const gen = s.gen; s.mode = 'answer'; status(); post({ type: 'pose', name: 'think' });
   const d = doc || s.doc; const st = s.lesson.steps[s.i];
   const prompt = `Eres el profesor de una clase en vídeo y te acaban de interrumpir con una pregunta. Contesta en español, hablando, en 2 a 5 frases claras (máximo 90 palabras), sin markdown ni listas ni emojis.
-Si ayuda, la PRIMERA línea puede ser «PIZARRA: título | punto 1 | punto 2» con lo que escribirías en la pizarra; después la respuesta hablada.
+Si ayuda, antes de la respuesta puedes poner una línea «PIZARRA: título | punto 1 | punto 2» y/o una línea «ESCENA: {json}» con un modelo 3D low-poly para verlo (mismo formato que en la clase: {\"items\":[{\"shape\":\"box|sphere|cylinder|cone|torus|arrow|tube|text\",\"pos\":[x,y,z],\"size\":[...],\"color\":\"...\",\"label\":\"...\",\"anim\":\"spin|orbit|flow|pulse\"}]}, en una sola línea). Después, la respuesta hablada.
 ${s.lesson.title ? `Clase: «${s.lesson.title}»${st ? `, ahora en: ${(st.board && st.board.title) || ''} — ${st.say}` : ''}.` : ''}
 ${d ? `Material relevante de «${d.title}»:\n<<<\n${relevant(d.text, question + ' ' + ((st && st.say) || ''), 7000)}\n>>>\nSi el material no responde, dilo y contesta con conocimiento general.` : ''}
 PREGUNTA: ${question}`;
   const q = []; let used = 0, board = false, full = ''; let speaking = null;
   const pump = async () => { while (q.length && L.session === s && s.gen === gen) { const t = q.shift(); const nxt = q[0]; if (nxt) tts(nxt); await say(t, { gen }); } speaking = null; };
   const feed = (text, final) => { full = text; let body = text;
-    if (!board) { const nl = text.indexOf('\n'); if (/^\s*PIZARRA:/i.test(text)) { if (nl < 0 && !final) return; const line = (nl < 0 ? text : text.slice(0, nl)).replace(/^\s*PIZARRA:\s*/i, ''); const [title, ...bul] = line.split('|').map(x => x.trim()).filter(Boolean); post({ type: 'board', board: { title, bullets: bul } }); board = true; used = nl < 0 ? text.length : nl + 1; } else if (text.trim().length > 9 || final) board = true; }
+    // Líneas de cabecera opcionales: PIZARRA: … y ESCENA: {…}
+    while (!board) { const rest = text.slice(used); const m0 = rest.match(/^\s*(PIZARRA|ESCENA):/i); if (!m0) { if (rest.trim().length > 9 || final) board = true; else return; break; }
+      const nl = rest.indexOf('\n'); if (nl < 0 && !final) return; const line = (nl < 0 ? rest : rest.slice(0, nl)); used += nl < 0 ? rest.length : nl + 1;
+      if (/^\s*PIZARRA:/i.test(line)) { const [title, ...bul] = line.replace(/^\s*PIZARRA:\s*/i, '').split('|').map(x => x.trim()).filter(Boolean); post({ type: 'board', board: { title, bullets: bul } }); }
+      else { try { const j = JSON.parse(line.replace(/^\s*ESCENA:\s*/i, '').trim()); post({ type: 'scene', scene: j }); } catch (e) {} } }
     body = text.slice(used); const re = /[^.!?…]+[.!?…]+["»)]?(\s|$)/g; let m, last = 0; while ((m = re.exec(body))) { const sen = m[0].trim(); if (sen.length > 1) { q.push(sen); tts(sen); } last = re.lastIndex; }
     if (final && body.slice(last).trim()) { q.push(body.slice(last).trim()); last = body.length; } used += last; if (q.length && !speaking) speaking = pump(); };
   try { const t = await llmStream(prompt, { onText: x => { if (L.session === s && s.gen === gen) feed(x, false); } }); if (L.session === s && s.gen === gen) feed(t, true); }
   catch (e) { if (L.session === s) { q.push('Perdona, no he podido pensar la respuesta: ' + e.message); if (!speaking) speaking = pump(); } }
   while (speaking) await speaking; if (L.session === s && s.gen === gen) { post({ type: 'pose', name: 'idle' }); s.mode = 'lesson'; s.paused = true; s.ui.playB.textContent = '▶'; status(); }
-  return full.replace(/^\s*PIZARRA:.*\n?/i, '').trim();
+  return full.replace(/^\s*(PIZARRA|ESCENA):.*\n?/gim, '').trim();
 }
 
 /* ---------- Estado para el móvil ---------- */
@@ -160,7 +208,7 @@ export async function renderLearn(r) {
   const focus = el('input', { class: 'txt', placeholder: 'Opcional: en qué centrarse o para qué lo necesitas' });
   const file = el('input', { type: 'file', accept: '.pdf,.txt,.md,.html,application/pdf,text/*', hidden: true });
   const busy = (b, t) => { b.disabled = !!t; if (t) { b.dataset.l = b.dataset.l || b.textContent; b.textContent = '⏳ ' + t; } else if (b.dataset.l) b.textContent = b.dataset.l; };
-  const go = async (b) => { const t = topic.value.trim(); if (!t) { toast('Escribe un tema o sube un documento'); return; } busy(b, 'Preparando la clase…'); try { await explain({ topic: t, focus: focus.value.trim() }); } catch (e) { toast('⚠️ ' + e.message, 6000); } busy(b); };
+  const go = async (b) => { unlockAudio(); const t = topic.value.trim(); if (!t) { toast('Escribe un tema o sube un documento'); return; } busy(b, 'Preparando la clase…'); try { await explain({ topic: t, focus: focus.value.trim() }); } catch (e) { toast('⚠️ ' + e.message, 6000); } busy(b); };
   file.addEventListener('change', async () => { const f = file.files[0]; if (!f) return; const t = toast('📄 Leyendo ' + f.name + '…', 60000); try { const d = await addDoc(f, f.name); hideToast(); toast(`📄 «${d.title}» listo (${d.pages} pág.)`); renderLearn(r); } catch (e) { hideToast(); toast('⚠️ ' + e.message, 6000); } file.value = ''; });
   const eng = engine(); const vnote = { kokoro: 'Voz del aparato (gratis, sin internet)', edge: 'Voz de Edge (gratis, en línea)', browser: 'Voz del navegador' }[eng];
   r.append(el('section', { class: 'card ln-hero' }, el('div', { class: 'badge prem' }, 'APRENDER'), el('h2', {}, '🎓 Tu profe para cualquier tema'),
@@ -170,7 +218,7 @@ export async function renderLearn(r) {
     el('p', { class: 'note' }, `🗣 ${vnote}.${eng === 'browser' && !host.claude ? ' Con Plató abierto como aplicación y las voces instaladas suena mucho mejor.' : ''}`)));
   const docs = await docsList();
   const lib = el('div', { class: 'ln-lib' }); for (const d of docs) lib.append(el('div', { class: 'ln-doc' }, el('i', {}, d.source === 'movil' ? '📱' : d.source === 'texto' ? '📝' : '📄'), el('div', {}, el('b', {}, d.title), el('small', {}, `${d.pages > 1 ? d.pages + ' páginas · ' : ''}${Math.round(d.chars / 1000)}k caracteres`)),
-    btn('🎓 Clase', async e => { const b = e.currentTarget; busy(b, 'Preparando…'); try { await explain({ docId: d.id, focus: focus.value.trim() }); } catch (er) { toast('⚠️ ' + er.message, 6000); } busy(b); }, 'b on'),
+    btn('🎓 Clase', async e => { unlockAudio(); const b = e.currentTarget; busy(b, 'Preparando…'); try { await explain({ docId: d.id, focus: focus.value.trim() }); } catch (er) { toast('⚠️ ' + er.message, 6000); } busy(b); }, 'b on'),
     btn('❓', () => askDoc(d), 'mini-b'),
     btn('🗑', async () => { await db.del('projects', d.id); renderLearn(r); }, 'mini-b')));
   r.append(el('h3', { class: 'sec' }, 'Tus documentos'), docs.length ? lib : el('div', { class: 'empty' }, 'Sube un PDF o mándalo desde el móvil y te lo explico.'));
