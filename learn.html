@@ -12,6 +12,8 @@
   @media (max-aspect-ratio:1/1){#sub{bottom:max(140px,18%);font-size:clamp(15px,4.2vw,20px);max-width:92%}}
   #ui3d{position:absolute;right:12px;top:72px;display:none;flex-direction:column;gap:6px;z-index:3}#ui3d.on{display:flex}#ui3d button.sel{background:rgba(255,226,138,.9);color:#111}#ui3d button{border:0;border-radius:12px;padding:8px 10px;background:rgba(15,18,26,.75);color:#fff;font:600 13px system-ui,sans-serif;backdrop-filter:blur(6px)}
   #card3d{position:absolute;left:50%;top:72px;transform:translateX(-50%);max-width:min(420px,80%);padding:10px 14px;border-radius:14px;background:rgba(15,18,26,.88);color:#fff;font:14px/1.45 system-ui,sans-serif;display:none;z-index:3;border:1px solid rgba(255,226,138,.4)}#card3d.on{display:block}#card3d b{color:#ffe28a}#card3d p{margin:4px 0 0}
+  #ctl3d{position:absolute;left:12px;top:72px;display:none;flex-direction:column;gap:6px;z-index:3;min-width:180px;max-width:min(260px,46%);padding:10px 12px;border-radius:14px;background:rgba(15,18,26,.82);color:#fff;font:13px/1.35 system-ui,sans-serif;border:1px solid rgba(34,211,238,.45);backdrop-filter:blur(6px)}#ctl3d.on{display:flex}#ctl3d b{color:#67e8f9}#ctl3d small{opacity:.75}#ctl3d input{width:100%;accent-color:#22d3ee}#ctl3d button{border:0;border-radius:10px;padding:8px;background:#334155;color:#fff;font:600 13px system-ui,sans-serif}#ctl3d button.sel{background:#22d3ee;color:#062028}#ctl3d span{font-weight:700}
+  body.hasctl #card3d{top:auto;bottom:max(160px,24%)}
   #sub.on{opacity:1}#sub b{color:#ffd23a;font-weight:800}#sub span.d{color:rgba(255,255,255,.62)}
 </style>
 </head>
@@ -141,7 +143,7 @@ const COL = { rojo: '#e5484d', azul: '#3b82f6', verde: '#22c55e', amarillo: '#fa
 const colorOf = c => { const k = String(c || '').toLowerCase().trim(); return COL[k] || (/^#[0-9a-f]{3,8}$/i.test(k) ? k : '#94a3b8'); };
 const stage = new THREE.Group(); scene.add(stage); const stageInner = new THREE.Group(); stage.add(stageInner);
 const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.08, 0.1, 10), M('#3a4358')); pedestal.position.y = -0.05; stage.add(pedestal); stage.visible = false;
-let ITEMS = [], GROUPS = {}, SCENE_ON = false, sceneT = 0, buildStart = 0, EXPLODE = 0, explodeT = 0, userT = 0;
+let KIND = 'machine', ITEMS = [], GROUPS = {}, SCENE_ON = false, sceneT = 0, buildStart = 0, EXPLODE = 0, explodeT = 0, userT = 0;
 function labelSprite(text) { const c = document.createElement('canvas'); const x = c.getContext('2d', { willReadFrequently: true }); const fs = 44; x.font = `700 ${fs}px system-ui,sans-serif`; const w = Math.ceil(x.measureText(text).width) + 36; c.width = w; c.height = fs + 26;
   x.font = `700 ${fs}px system-ui,sans-serif`; x.fillStyle = 'rgba(15,18,26,.85)'; x.beginPath(); x.roundRect(0, 0, w, c.height, 16); x.fill(); x.fillStyle = '#ffe28a'; x.textBaseline = 'middle'; x.fillText(text, 18, c.height / 2 + 2);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true })); sp.renderOrder = 10; const h = 0.125; sp.scale.set(h * w / c.height, h, 1); sp.userData.s0 = sp.scale.clone(); return sp; }
@@ -170,17 +172,24 @@ function makeItem(it) {
     const n = new THREE.Mesh(new THREE.BoxGeometry(w, h / 2, d), new THREE.MeshStandardMaterial({ color: '#e5484d', flatShading: true, roughness: 0.6, emissive: new THREE.Color('#000') })); n.position.y = h / 4;
     const so = new THREE.Mesh(new THREE.BoxGeometry(w, h / 2, d), new THREE.MeshStandardMaterial({ color: '#3b82f6', flatShading: true, roughness: 0.6, emissive: new THREE.Color('#000') })); so.position.y = -h / 4; g.add(n, so); g.userData.mats = [n.material, so.material]; }
   else { const m = new THREE.Mesh(geomOf(it), mat); g.add(m); if (it.shape === 'plane') m.rotation.x = 0; }
-  if (it.label && it.shape !== 'text') { const sp = labelSprite(String(it.label)); const box = new THREE.Box3().setFromObject(g); sp.position.set(0, (box.max.y - g.position.y) + 0.14, 0); g.add(sp); g.userData.label = sp; }
+  if (it.top) { const tm = new THREE.MeshStandardMaterial({ color: colorOf(it.top.color || it.color), flatShading: true, roughness: 0.6, emissive: new THREE.Color('#000') }); const m2 = new THREE.Mesh(geomOf(it.top), tm); m2.position.y = +it.top.y || 0; g.add(m2); g.userData.mats = [mat, tm]; }
+  if (it.label && it.shape !== 'text') { const sp = labelSprite(String(it.tag || it.label)); const box = new THREE.Box3().setFromObject(g); sp.position.set(0, (box.max.y - g.position.y) + 0.14, 0); g.add(sp); g.userData.label = sp; }
   g.userData.mat = mat; g.userData.base = g.position.clone(); g.userData.phase = Math.random() * 6; g.scale.setScalar(0.001); g.userData.shown = 0; return g;
 }
 function setScene(sc) {
-  if (!sc || (!sc.items && !sc.add && !sc.highlight && !sc.clear)) return;
+  if (!sc || (!sc.items && !sc.add && !sc.highlight && !sc.clear && !sc.visual && !sc.camera && !sc.control && !sc.remove)) return;
+  if (sc.visual) { const ex = expandVisual(sc.visual); sc = { ...sc, items: ex.items.concat(sc.add || []), groups: { ...ex.groups, ...(sc.groups || {}) }, rotate: sc.rotate ?? ex.rotate, add: null, kind: ex.kind }; }
+  else if (sc.items && sc.add) sc = { ...sc, items: sc.items.concat(sc.add), add: null };
+  const structural = !!(sc.items || sc.add || sc.remove || sc.clear); if (sc.items || sc.clear) { setCam(null); CAM.pending = null; }
   if (sc.clear || sc.items) { for (const it of ITEMS) stageInner.remove(it); ITEMS = []; }
   if (sc.items || sc.clear) { for (const k in GROUPS) stageInner.remove(GROUPS[k]); GROUPS = {}; }
   for (const [name, gs] of Object.entries(sc.groups || {})) { let G = GROUPS[name]; if (!G) { G = GROUPS[name] = new THREE.Group(); stageInner.add(G); } G.position.set(...V(gs.pos)); const r = V(gs.rot).map(d => d * Math.PI / 180); G.rotation.set(r[0], r[1], r[2]); G.userData.spec = gs; }
   for (const it of (sc.items || sc.add || []).slice(0, 48)) { const o = makeItem(it); ITEMS.push(o); (it.group && (GROUPS[it.group] || (GROUPS[it.group] = Object.assign(new THREE.Group(), { userData: { spec: {} } }), stageInner.add(GROUPS[it.group]), GROUPS[it.group])) || stageInner).add(o); }
-  for (const o of ITEMS) o.userData.hl = (sc.highlight || []).includes(o.userData.spec.label);
+  if (sc.highlight || structural) { const hs = (sc.highlight || []).map(normW); for (const o of ITEMS) o.userData.hl = hs.includes(normW(o.userData.spec.label || '')); }
   if (sc.remove) for (const lab of sc.remove) { const i = ITEMS.findIndex(o => o.userData.spec.label === lab); if (i >= 0) { ITEMS[i].parent && ITEMS[i].parent.remove(ITEMS[i]); ITEMS.splice(i, 1); } }
+  if ('control' in sc || sc.items || sc.clear) setControl(sc.control || null);
+  if (sc.camera) CAM.pending = { cam: sc.camera, at: null };
+  if (!structural) { revealPlan(); return; }
   // Encaja el modelo en el pedestal
   // Medimos en coordenadas del propio modelo (sin la posición, giro ni escala del escenario)
   const keep = { p: stage.position.clone(), r: stage.rotation.y, rx: stage.rotation.x, s: stage.scale.x }; stage.position.set(0, 0, 0); stage.rotation.set(0, 0, 0); stage.scale.setScalar(1); const gr = {}; for (const k in GROUPS) { gr[k] = GROUPS[k].rotation.clone(); const sp = GROUPS[k].userData.spec || {}; const r0 = V(sp.rot).map(d => d * Math.PI / 180); GROUPS[k].rotation.set(r0[0], r0[1], r0[2]); }
@@ -189,48 +198,59 @@ function setScene(sc) {
   const portrait = innerWidth / innerHeight < 1; const k = Math.min((portrait ? 1.35 : 1.9) / Math.max(size.x, size.z, 0.01), (portrait ? 1.1 : 1.2) / Math.max(size.y, 0.01), 2.5);
   stageInner.scale.setScalar(k); stageInner.position.set(-ctr.x * k, -box.min.y * k + 0.02, -ctr.z * k);
   // Etiquetas del mismo tamaño en pantalla aunque el modelo se amplíe o encoja
-  const lf = Math.max(0.45, Math.min(1.1, 0.95 / k)); for (const o of ITEMS) { const sp = o.userData.label; if (sp && sp.userData.s0) sp.scale.copy(sp.userData.s0).multiplyScalar(lf); }
+  const lf = Math.max(0.45, Math.min(1.1, 0.95 / k)); for (const o of ITEMS) { const sp = o.userData.label; if (sp && sp.userData.s0) { sp.userData.lf = lf; sp.scale.copy(sp.userData.s0).multiplyScalar(lf); } }
   stage.position.copy(keep.p); stage.rotation.set(keep.rx, keep.r, 0); stage.scale.setScalar(keep.s); for (const k in gr) GROUPS[k].rotation.copy(gr[k]);
   if (sc.instant) for (const o of ITEMS) if (!o.userData.shown) o.userData.shown = 0.0001;
   for (const o of ITEMS) if (!o.userData.shown) o.scale.setScalar(0.001);
   // Vector de despiece: cada pieza se aleja del centro
   const wp = o => o.userData.base.clone().add(o.parent && o.parent !== stageInner ? o.parent.position : new THREE.Vector3()); const c0 = new THREE.Vector3(); ITEMS.forEach(o => c0.add(wp(o))); c0.multiplyScalar(1 / Math.max(1, ITEMS.length));
   ITEMS.forEach(o => { const d = wp(o).sub(c0); d.y = Math.max(0, d.y) + (o.parent !== stageInner ? 0.25 : 0); o.userData.ex = d.lengthSq() < 0.0025 ? new THREE.Vector3() : d.normalize().multiplyScalar(0.6); });
-  SCENE_ON = ITEMS.length > 0; stage.userData.spin = sc.rotate !== false; buildStart = performance.now(); if (SCENE_ON) { pose = 'point'; poseT = 1.6; } revealPlan(); ui3d();
+  SCENE_ON = ITEMS.length > 0; if (sc.items) { KIND = sc.kind || 'machine'; stage.userData.spin = sc.rotate !== false; const tilt = { process: 0.42, cycle: 0.42, map: 0.5, concepts: 0.5, timeline: 0.22 }[KIND] || 0; stage.userData.tilt = tilt; stage.rotation.set(tilt, stage.userData.spin ? stage.rotation.y : 0, 0); } buildStart = performance.now(); if (SCENE_ON) { pose = 'point'; poseT = 1.6; } revealPlan(); ui3d();
 }
 // Cada pieza aparece cuando el profe la nombra (si su etiqueta sale en la frase); el resto, repartidas a lo largo de la explicación.
 const normW = w => String(w).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9ñ]/g, '');
-function revealPlan() { if (!S || !S.words) return; const ws = S.words.map(x => normW(x.w)); const pend = ITEMS.filter(o => !o.userData.shown); if (!pend.length) return; const tot = S.total || 1;
-  const stem = t => t.slice(0, Math.max(4, t.length - 2)), hit = (w, t) => w.startsWith(stem(t));
-  pend.forEach((o, i) => { const lab = String(o.userData.spec.label || o.userData.spec.say || '').split(/\s+/).map(normW).filter(t => t.length >= 3); let at = null;
-    // Primero la etiqueta entera en orden («imán norte» ≠ «imán sur»); si no, su palabra más larga.
-    if (lab.length) for (let k = 0; k < ws.length && at == null; k++) { if (!hit(ws[k], lab[0])) continue; let p = k, ok = true; for (const t of lab.slice(1)) { let q = -1; for (let d = 1; d <= 3; d++) if (ws[p + d] && hit(ws[p + d], t)) { q = p + d; break; } if (q < 0) { ok = false; break; } p = q; } if (ok) at = S.words[k].s; }
-    if (at == null && lab.length) { const t = [...lab].sort((a, b) => b.length - a.length)[0]; const k = ws.findIndex(w => hit(w, t)); if (k >= 0) at = S.words[k].s; }
-    o.userData.at = at != null ? at : tot * 0.85 * (i + 1) / (pend.length + 1); }); }
+function revealPlan() { if (CAM.pending && S) { const f = CAM.pending.cam && CAM.pending.cam.focus; const a = f ? labelTime(f) : null; CAM.pending.at = a != null ? Math.max(0, a - 0.2) : 0.6; }
+  if (!S || !S.words) return; const pend = ITEMS.filter(o => !o.userData.shown); if (!pend.length) return; const tot = S.total || 1;
+  pend.forEach((o, i) => { const at = labelTime(o.userData.spec.label || o.userData.spec.with || ''); o.userData.at = at != null ? at : tot * 0.85 * (i + 1) / (pend.length + 1); }); }
+// Momento (s) en que el profe dice una etiqueta: primero la etiqueta entera en orden («imán norte» ≠ «imán sur»); si no, su palabra más larga.
+function labelTime(label) { if (!S || !S.words) return null; const ws = S.words.map(x => normW(x.w)); const stem = t => t.slice(0, Math.max(4, t.length - 2)), hit = (w, t) => w.startsWith(stem(t));
+  const lab = String(label).split(/\s+/).map(normW).filter(t => t.length >= 3); if (!lab.length) return null;
+  for (let k = 0; k < ws.length; k++) { if (!hit(ws[k], lab[0])) continue; let p = k, ok = true; for (const t of lab.slice(1)) { let q = -1; for (let d = 1; d <= 3; d++) if (ws[p + d] && hit(ws[p + d], t)) { q = p + d; break; } if (q < 0) { ok = false; break; } p = q; } if (ok) return S.words[k].s; }
+  const t = [...lab].sort((a, b) => b.length - a.length)[0]; const k = ws.findIndex(w => hit(w, t)); return k >= 0 ? S.words[k].s : null; }
 function animStage(dt, t) {
   sceneT += ((SCENE_ON ? 1 : 0) - sceneT) * (1 - Math.exp(-dt * 4)); stage.visible = sceneT > 0.02;
-  if (!stage.visible) return; stage.scale.setScalar((0.3 + 0.7 * sceneT) * zoom * LAY.sscale); userT = Math.max(0, userT - dt); if (stage.userData.spin && userT === 0 && !drag) stage.rotation.y += dt * 0.22;
+  if (!stage.visible) return; stage.scale.setScalar((0.3 + 0.7 * sceneT) * zoom * LAY.sscale); userT = Math.max(0, userT - dt); if (stage.userData.spin && userT === 0 && !drag && !CAM.focus) stage.rotation.y += dt * 0.22;
   // Aparición progresiva: las piezas salen a medida que avanza la explicación (o cada medio segundo si no hay voz)
   const prog = S && S.total ? Math.min(1, S.clock() / (S.total * 0.85)) : Math.min(1, (performance.now() - buildStart) / (Math.max(1, ITEMS.length) * 500));
   const nShow = Math.max(1, Math.ceil(prog * ITEMS.length)); const now = S && S.clock ? S.clock() : 1e9;
   ITEMS.forEach((o, i) => { const u = o.userData; if (u.shown) return; const ok = u.at != null && S ? now >= u.at : i < nShow; if (ok) u.shown = 0.0001; });
-  for (const G of Object.values(GROUPS)) { const a = G.userData.spec && G.userData.spec.anim, sv = +(G.userData.spec && G.userData.spec.speed) || 1; if (a === 'spin') G.rotation.y += dt * 1.6 * sv; else if (a === 'spinx') G.rotation.x += dt * 1.6 * sv; else if (a === 'spinz') G.rotation.z += dt * 1.6 * sv; }
+  if (CAM.pending && (!S || CAM.pending.at == null || now >= CAM.pending.at)) { const c = CAM.pending.cam; CAM.pending = null; setCam(c); }
+  const nLab = ITEMS.filter(o => o.userData.label).length;
+  for (const G of Object.values(GROUPS)) { const a = G.userData.spec && G.userData.spec.anim, sv = (+(G.userData.spec && G.userData.spec.speed) || 1) * (G.userData.cs ?? 1) * (G.userData.cd ?? 1); if (a === 'spin') G.rotation.y += dt * 1.6 * sv; else if (a === 'spinx') G.rotation.x += dt * 1.6 * sv; else if (a === 'spinz') G.rotation.z += dt * 1.6 * sv; }
   explodeT += (EXPLODE - explodeT) * (1 - Math.exp(-dt * 5));
   for (const o of ITEMS) { const u = o.userData, sp = u.spec;
     // Nombres: con muchas piezas, cada etiqueta se ve unos segundos al aparecer, al brillar o al tocarla (🏷 las muestra todas)
-    if (u.label) { if (u.shown > 0 && !u.bornAt) u.bornAt = t; u.label.visible = u.shown > 0.5 && (LABELS === 'all' || ITEMS.length <= 6 || u.hl || u.picked || (t - u.bornAt) < 7); }
+    if (u.label) { if (u.shown > 0 && !u.bornAt) u.bornAt = t; u.label.visible = u.shown > 0.5 && (CAM.focus ? CAM.focus === o : (LABELS === 'all' || sp.keepLabel || nLab <= 6 || u.hl || u.picked || (t - u.bornAt) < 7)); const lb = u.label.userData; if (lb.s0) { lb.f = (lb.f ?? 1) + ((CAM.focus ? 0.4 : 1) - (lb.f ?? 1)) * (1 - Math.exp(-dt * 4)); u.label.scale.copy(lb.s0).multiplyScalar((lb.lf || 1) * lb.f); } }
+    o.visible = u.cv !== false;
     if (u.shown > 0 && u.shown < 1) { u.shown = Math.min(1, u.shown + dt * 2.6); const e = 1 - Math.pow(1 - u.shown, 3); o.scale.setScalar(Math.max(0.001, e * (1 + 0.15 * Math.sin(u.shown * Math.PI)))); }
-    if (u.shown < 1) continue; const sv = +sp.speed || 1; const p = u.ex ? u.base.clone().add(u.ex.clone().multiplyScalar(explodeT)) : u.base; if (!sp.anim || sp.anim === 'spin' || sp.anim === 'spinx' || sp.anim === 'spinz' || sp.anim === 'pulse') o.position.copy(p);
+    if (u.shown < 1) continue; const sv = (+sp.speed || 1) * (u.cs ?? 1) * (u.cd ?? 1); u.ph = (u.ph || 0) + dt * sv;
+    if (sp.anim !== 'pulse') { const s1 = o.scale.x + ((u.csc ?? 1) - o.scale.x) * (1 - Math.exp(-dt * 6)); o.scale.setScalar(s1); } const p = u.ex ? u.base.clone().add(u.ex.clone().multiplyScalar(explodeT)) : u.base; if (!sp.anim || sp.anim === 'spin' || sp.anim === 'spinx' || sp.anim === 'spinz' || sp.anim === 'pulse') o.position.copy(p);
     switch (sp.anim) {
       case 'spin': o.rotation.y += dt * 1.6 * sv; break;
       case 'spinx': o.rotation.x += dt * 1.6 * sv; break;
       case 'spinz': o.rotation.z += dt * 1.6 * sv; break;
-      case 'orbit': { const R = +sp.radius || Math.hypot(p.x, p.z) || 0.6; const a = t * sv + u.phase; o.position.set(Math.cos(a) * R, p.y, Math.sin(a) * R); break; }
-      case 'bob': o.position.y = p.y + Math.sin(t * 2 * sv + u.phase) * 0.08; break;
-      case 'pulse': o.scale.setScalar(1 + Math.sin(t * 3 * sv) * 0.12); break;
-      case 'flow': { const to = new THREE.Vector3(...V(sp.to, [p.x, p.y + 1, p.z])); const f = ((t * 0.4 * sv) + u.phase) % 1; o.position.lerpVectors(p, to, f); break; }
+      case 'orbit': { const R = +sp.radius || Math.hypot(p.x, p.z) || 0.6; const a = u.ph + u.phase; o.position.set(Math.cos(a) * R, p.y, Math.sin(a) * R); break; }
+      case 'bob': o.position.x = p.x; o.position.z = p.z; o.position.y = p.y + Math.sin(u.ph * 2 + u.phase) * 0.08; break;
+      case 'pulse': o.position.copy(p); o.scale.setScalar((1 + Math.sin(u.ph * 3) * 0.12) * (u.csc ?? 1)); break;
+      case 'flow': { const to = new THREE.Vector3(...V(sp.to, [p.x, p.y + 1, p.z])); const f = (((u.ph * 0.4) + u.phase) % 1 + 1) % 1; o.position.lerpVectors(p, to, f); break; }
+      case 'path': { if (!u.curve) { const pts = (sp.path || []).map(q => new THREE.Vector3(...V(q))); u.curve = pts.length > 1 ? new THREE.CatmullRomCurve3(pts, !!sp.closed, 'catmullrom', 0.1) : null; } if (u.curve) { const f = ((u.ph * (+sp.rate || 0.12)) % 1 + 1) % 1; o.position.copy(u.curve.getPointAt(f)); } break; }
     }
-    const glow = u.hl || u.picked; for (const mm of (u.mats || [u.mat])) if (mm) mm.emissive.setRGB(glow ? 0.35 + 0.25 * Math.sin(t * 5) : 0, glow ? 0.25 + 0.2 * Math.sin(t * 5) : 0, 0);
+    const glow = u.hl || u.picked || CAM.focus === o, wv = 0.35 + 0.25 * Math.sin(t * 5), tap = u.tap && u.tap.until > t ? u.tap : null, cg = u.cg || 0;
+    for (const mm of (u.mats || [u.mat])) if (mm) { if (tap) mm.emissive.setRGB(tap.ok ? 0.05 : 0.6, tap.ok ? 0.55 : 0.05, tap.ok ? 0.2 : 0.05); else mm.emissive.setRGB(glow ? wv : cg * 0.6, glow ? wv * 0.7 : cg * 0.45, 0);
+      // Rayos X / corte: el resto del modelo se vuelve transparente o se corta para ver la pieza enfocada por dentro
+      if (mm.userData.op0 == null) mm.userData.op0 = mm.opacity; const xr = CAM.focus && CAM.focus !== o && CAM.mode === 'xray'; const top = xr ? 0.13 : mm.userData.op0;
+      if (Math.abs(mm.opacity - top) > 0.005 || xr) { if (!mm.transparent) { mm.transparent = true; mm.needsUpdate = true; } mm.opacity += (top - mm.opacity) * (1 - Math.exp(-dt * 6)); mm.depthWrite = mm.opacity > 0.9; } else if (mm.userData.op0 >= 1 && mm.transparent && !xr) { mm.opacity = 1; mm.transparent = false; mm.depthWrite = true; mm.needsUpdate = true; }
+      const cut = CAM.focus && CAM.focus !== o && CAM.mode === 'cut'; const want = cut ? CLIP : NOCLIP; if (mm.clippingPlanes !== want) { mm.clippingPlanes = want; mm.side = cut ? THREE.DoubleSide : THREE.FrontSide; mm.needsUpdate = true; } }
   }
 }
 
@@ -255,7 +275,7 @@ function animate() {
   else if (pose === 'think') { armR.rotation.set(-0.6, 0, -0.25); armR.userData.el.rotation.set(-1.9, 0, 0); armL.rotation.set(-0.3, 0, 0.35); armL.userData.el.rotation.set(-1.4, 0, 0); }
   else { armR.rotation.set(-0.25 - g * 0.25 * (0.5 + Math.sin(t * 2.1)), 0, -0.12 - g * 0.1 * Math.sin(t * 1.7)); armR.userData.el.rotation.set(-0.5 - g * 0.5 * (0.5 + Math.sin(t * 2.6)), 0, 0);
     armL.rotation.set(-0.15 - g * 0.2 * (0.5 + Math.sin(t * 1.8 + 1)), 0, 0.12 + g * 0.08 * Math.sin(t * 1.3)); armL.userData.el.rotation.set(-0.35 - g * 0.4 * (0.5 + Math.sin(t * 2.2 + 2)), 0, 0); }
-  animStage(dt, t); layoutLerp(dt);
+  animStage(dt, t); layoutLerp(dt); camTick(dt);
   renderer.render(scene, camera);
 }
 // Dos disposiciones: solo pizarra, o modelo 3D en el centro y la pizarra arriba más pequeña.
@@ -265,19 +285,103 @@ function layoutTargets() { const w = innerWidth, h = innerHeight, portrait = w /
   else { P.position.x = -1.75; P.rotation.y = 0.35; LAY.board.set(sc ? 1.95 : 1.15, sc ? 2.62 : 1.75, -0.9); LAY.bscale = sc ? 0.62 : 1; LAY.stage.set(0.7, 1.02, 0.5); LAY.sscale = 1.12; } }
 function layoutLerp(dt) { layoutTargets(); const k = 1 - Math.exp(-dt * 4); board.position.lerp(LAY.board, k); board.scale.setScalar(board.scale.x + (LAY.bscale - board.scale.x) * k); stage.position.lerp(LAY.stage, k); }
 function fit() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h); camera.aspect = w / h; layoutTargets(); board.position.copy(LAY.board); board.scale.setScalar(LAY.bscale); stage.position.copy(LAY.stage);
-  const portrait = w / h < 1; if (portrait) { camera.position.set(0, 2.75, 8.2); camera.lookAt(0, 2.55, 0); camera.fov = 54; }
-  else { camera.position.set(0, 1.75, 6.3); camera.lookAt(0, 1.5, 0); camera.fov = w / h > 1.6 ? 35 : 42; }
+  const portrait = w / h < 1; if (portrait) { CAM.base.pos.set(0, 2.75, 8.2); CAM.base.look.set(0, 2.55, 0); camera.fov = 54; }
+  else { CAM.base.pos.set(0, 1.75, 6.3); CAM.base.look.set(0, 1.5, 0); camera.fov = w / h > 1.6 ? 35 : 42; }
+  if (!CAM.focus) { camera.position.copy(CAM.base.pos); CAM.look.copy(CAM.base.look); camera.lookAt(CAM.look); }
   camera.updateProjectionMatrix(); }
+/* ---------- Visuales por plantilla: la IA da los datos y aquí se colocan siempre bien ---------- */
+const PAL = ['#3b82f6', '#f97316', '#22c55e', '#a855f7', '#facc15', '#ec4899', '#14b8a6', '#ef4444', '#84cc16', '#06b6d4'];
+const fmtN = n => { const x = +n; if (!isFinite(x)) return String(n ?? ''); return Math.abs(x) >= 1000 ? x.toLocaleString('es-ES', { maximumFractionDigits: 0 }) : x.toLocaleString('es-ES', { maximumFractionDigits: 2 }); };
+function expandVisual(v) {
+  const kind = String(v.kind || 'machine').toLowerCase(), items = [], groups = {}; const col = (x, i) => (x && x.color) || PAL[i % PAL.length]; const L = x => String((x && (x.label || x.name)) || '').slice(0, 40);
+  if (kind === 'machine' || kind === 'model') return { kind, items: (v.items || []).slice(0, 40), groups: v.groups || {}, rotate: v.rotate !== false };
+  if (kind === 'process' || kind === 'cycle') { const st = (v.steps || []).slice(0, 8), n = st.length; if (!n) return { kind, items, groups };
+    const loop = kind === 'cycle' || !!v.loop; let P;
+    if (loop) { const R = Math.max(0.65, n * 0.8 / (2 * Math.PI)); P = st.map((_, i) => { const a = Math.PI / 2 + i / n * 2 * Math.PI; return [Math.cos(a) * R, 0, Math.sin(a) * R]; }); }
+    else if (n <= 5) P = st.map((_, i) => { const x = (i - (n - 1) / 2) * 0.85; return [x, 0, -x * x * 0.08]; });
+    else { const h = Math.ceil(n / 2); P = st.map((_, i) => i < h ? [(i - (h - 1) / 2) * 0.85, 0, -0.45] : [((h - 1) / 2 - (i - h) - (h - (n - h)) / 2) * 0.85, 0, 0.45]); }
+    st.forEach((x, i) => { const [px, , pz] = P[i]; items.push({ shape: 'cylinder', pos: [px, 0.06, pz], size: [0.25, 0.12], color: col(x, i), label: L(x), tag: `${i + 1}. ${L(x)}`, info: x.info || '', top: { shape: x.shape || 'sphere', size: [0.11, 0.2], y: 0.17, color: col(x, i) } }); });
+    const seg = (a, b, w) => { const d = [b[0] - a[0], 0, b[2] - a[2]], len = Math.hypot(d[0], d[2]); if (len < 0.65) return; const u = [d[0] / len, 0, d[2] / len]; items.push({ shape: 'arrow', pos: [a[0] + u[0] * 0.3, 0.1, a[2] + u[2] * 0.3], dir: u, len: len - 0.6, color: 'gris', with: w, nopick: true }); };
+    for (let i = 0; i < n - 1; i++) seg(P[i], P[i + 1], L(st[i + 1])); if (loop && n > 2) seg(P[n - 1], P[0], L(st[0]));
+    items.push({ shape: 'sphere', size: [0.07], color: v.tokenColor || 'amarillo', anim: 'path', path: P.map(p => [p[0], 0.42, p[2]]).concat(loop ? [] : []), closed: loop, rate: 0.7 / (n * 1.6), pos: [P[0][0], 0.42, P[0][2]], label: '', with: L(st[0]), nopick: true, token: true });
+    return { kind, items, groups, rotate: false }; }
+  if (kind === 'compare' || kind === 'scale') { const it = (v.items || []).slice(0, 8); const vals = it.map(x => Math.abs(+x.value) || 0); const mx = Math.max(...vals, 1e-9); let x = 0; const out = [];
+    it.forEach((o, i) => { const sh = o.shape === 'box' || o.shape === 'cube' ? 'box' : o.shape === 'bar' || o.shape === 'cylinder' ? 'cylinder' : 'sphere'; const s = Math.max(0.025, 1.1 * vals[i] / mx);
+      const w = sh === 'cylinder' ? 0.28 : s; const pos = sh === 'cylinder' ? [x + w / 2, s * 0.65, 0] : [x + w / 2, s / 2, 0]; x += w + 0.18;
+      out.push({ shape: sh, pos, size: sh === 'sphere' ? [s / 2] : sh === 'box' ? [s, s, s] : [0.14, s * 1.3], color: col(o, i), label: L(o), tag: `${L(o)} · ${fmtN(o.value)}${o.unit ? ' ' + o.unit : v.unit ? ' ' + v.unit : ''}`, info: o.info || '', keepLabel: true }); });
+    out.forEach(o => { o.pos[0] -= (x - 0.18) / 2; items.push(o); }); return { kind, items, groups, rotate: false }; }
+  if (kind === 'timeline') { const ev = (v.events || []).slice(0, 10), n = ev.length; if (!n) return { kind, items, groups };
+    const ys = ev.map(e => parseFloat(String(e.year ?? e.when ?? '').replace(/[^\d.\-]/g, ''))); const num = ys.every(isFinite) && Math.max(...ys) > Math.min(...ys);
+    let xs = ev.map((_, i) => n === 1 ? 0 : -1.3 + 2.6 * i / (n - 1)); if (num) { const a = Math.min(...ys), b = Math.max(...ys); xs = ys.map(y => -1.3 + 2.6 * (y - a) / (b - a)); for (let i = 1; i < n; i++) if (xs[i] - xs[i - 1] < 0.2) xs[i] = xs[i - 1] + 0.2; const sh = (xs[n - 1] - 1.3) / 2; if (sh > 0) xs = xs.map(q => q - sh); }
+    items.push({ shape: 'box', pos: [0, 0.03, 0], size: [Math.max(2.8, xs[n - 1] - xs[0] + 0.3), 0.05, 0.1], color: 'gris', with: L(ev[0]), nopick: true });
+    ev.forEach((e, i) => { const h = i % 2 ? 0.62 : 0.36, z = i % 2 ? -0.08 : 0.08; const w = e.year ?? e.when ?? ''; items.push({ shape: 'cylinder', pos: [xs[i], h / 2 + 0.03, z], size: [0.014, h], color: 'blanco', label: L(e), tag: `${w ? w + ' · ' : ''}${L(e)}`, info: e.info || '', keepLabel: n <= 7, top: { shape: 'sphere', size: [0.06], y: h / 2, color: col(e, i) } }); });
+    return { kind, items, groups, rotate: false }; }
+  if (kind === 'chart' || kind === 'graph') { const se = (v.series || v.items || []).slice(0, 10), n = se.length; if (!n) return { kind, items, groups }; const vals = se.map(o => Math.max(0, +o.value || 0)); const mx = Math.max(...vals, 1e-9); const W = (n - 1) * 0.32;
+    items.push({ shape: 'box', pos: [0, 0.015, 0], size: [W + 0.42, 0.03, 0.42], color: 'gris', with: L(se[0]), nopick: true });
+    const line = v.type === 'line', P = [];
+    se.forEach((o, i) => { const h = Math.max(0.02, 1.3 * vals[i] / mx), x = -W / 2 + i * 0.32; const tag = `${L(o)}: ${fmtN(o.value)}${v.unit ? ' ' + v.unit : ''}`;
+      if (line) { P.push([x, h, 0]); items.push({ shape: 'sphere', pos: [x, h, 0], size: [0.05], color: col(o, 0), label: L(o), tag, info: o.info || '', keepLabel: n <= 6 }); }
+      else items.push({ shape: 'box', pos: [x, h / 2 + 0.03, 0], size: [0.22, h, 0.22], color: col(o, i), label: L(o), tag, info: o.info || '', keepLabel: n <= 6 }); });
+    if (line && P.length > 1) items.push({ shape: 'tube', pos: [0, 0, 0], points: P, size: [0.018], color: 'amarillo', with: L(se[0]), nopick: true });
+    return { kind, items, groups, rotate: false }; }
+  if (kind === 'map' || kind === 'concepts') { const c = v.center || { label: v.title || 'Idea' }; items.push({ shape: 'sphere', pos: [0, 0.3, 0], size: [0.2], color: c.color || 'oro', label: L(c), info: c.info || '' });
+    const nodes = (v.nodes || []).slice(0, 12), cl = normW(L(c)); const root = nodes.filter(x => !x.parent || normW(x.parent) === cl), kids = nodes.filter(x => !root.includes(x)); const pos = {};
+    root.forEach((x, i) => { const a = i / Math.max(1, root.length) * Math.PI * 2 + 0.3; pos[normW(L(x))] = { a, p: [Math.cos(a) * 0.85, 0.25, Math.sin(a) * 0.85] }; });
+    const per = {}; kids.forEach(x => { const k = normW(x.parent); (per[k] = per[k] || []).push(x); });
+    for (const [k, arr] of Object.entries(per)) { const pa = pos[k] ? pos[k].a : Math.random() * 6; arr.forEach((x, j) => { const a = pa + (j - (arr.length - 1) / 2) * 0.42; pos[normW(L(x))] = { a, p: [Math.cos(a) * 1.5, 0.2, Math.sin(a) * 1.5], par: pos[k] ? pos[k].p : [0, 0.3, 0] }; }); }
+    nodes.forEach((x, i) => { const q = pos[normW(L(x))]; if (!q) return; const from = q.par || [0, 0.3, 0]; items.push({ shape: 'tube', pos: [0, 0, 0], points: [from, q.p], size: [0.012], color: 'gris', with: L(x), nopick: true }); items.push({ shape: 'sphere', pos: q.p, size: [q.par ? 0.09 : 0.13], color: col(x, i), label: L(x), info: x.info || '' }); });
+    return { kind, items, groups, rotate: true }; }
+  return { kind, items: (v.items || []).slice(0, 40), groups: v.groups || {}, rotate: true };
+}
+
+/* ---------- Cámara de documental: plano general, primer plano, rayos X y corte ---------- */
+const CAM = { base: { pos: new THREE.Vector3(0, 1.75, 6.3), look: new THREE.Vector3(0, 1.5, 0) }, look: new THREE.Vector3(0, 1.5, 0), focus: null, mode: 'wide', pending: null };
+const CLIP = [new THREE.Plane()], NOCLIP = []; renderer.localClippingEnabled = true;
+const findItem = lab => { const k = normW(lab || ''); if (!k) return null; return ITEMS.find(o => normW(o.userData.spec.label || '') === k) || ITEMS.find(o => { const l = normW(o.userData.spec.label || ''); return l && (l.startsWith(k) || k.startsWith(l)); }) || null; };
+function setCam(c) { if (!c || !c.focus || c.mode === 'wide') { CAM.focus = null; CAM.mode = 'wide'; return; } const o = findItem(c.focus); if (!o) { CAM.focus = null; CAM.mode = 'wide'; return; } CAM.focus = o; CAM.mode = ['xray', 'cut', 'close'].includes(c.mode) ? c.mode : 'close'; if (!o.userData.shown) o.userData.shown = 0.0001; userT = 0; }
+const _b = new THREE.Box3(), _c = new THREE.Vector3(), _s = new THREE.Vector3(), _tp = new THREE.Vector3(), _d = new THREE.Vector3();
+function meshBox(o) { _b.makeEmpty(); o.updateMatrixWorld(true); o.traverse(m => { if (m.isMesh) _b.expandByObject(m); }); return _b; }
+function camTick(dt) { let tp = CAM.base.pos, tl = CAM.base.look;
+  if (CAM.focus && (!CAM.focus.parent || !SCENE_ON)) CAM.focus = null;
+  if (CAM.focus) { const b = meshBox(CAM.focus); if (!b.isEmpty()) { b.getCenter(_c); b.getSize(_s); const r = Math.max(_s.x, _s.y, _s.z) * 0.5;
+      _d.copy(CAM.base.pos).sub(_c).normalize(); const dist = Math.max(1.35, Math.min(3.4, r * 4.5 + (CAM.mode === 'close' ? 0.6 : 1.0))); _tp.copy(_c).addScaledVector(_d, dist); _tp.y += r * 0.6 + 0.15; tp = _tp; tl = _c;
+      if (CAM.mode === 'cut') CLIP[0].setFromNormalAndCoplanarPoint(_d.clone().negate(), _c); } }
+  const k = 1 - Math.exp(-dt * 2.2); camera.position.lerp(tp, k); CAM.look.lerp(tl, k); camera.lookAt(CAM.look); }
+
+/* ---------- «Pruébalo tú»: un mando que cambia el modelo ---------- */
+const ctlEl = document.createElement('div'); ctlEl.id = 'ctl3d'; document.body.append(ctlEl); let CTRL = null;
+function targetsOf(name) { const k = normW(name || ''); const out = []; for (const [g, G] of Object.entries(GROUPS)) if (normW(g) === k) out.push(G.userData); for (const o of ITEMS) { const l = normW(o.userData.spec.label || ''); if (l && (l === k || (k.length > 3 && l.startsWith(k)))) out.push(o.userData); } return out; }
+function applyControl() { for (const o of ITEMS) Object.assign(o.userData, { cs: 1, cd: 1, csc: 1, cv: true, cg: 0 }); for (const G of Object.values(GROUPS)) Object.assign(G.userData, { cs: 1, cd: 1 }); if (!CTRL) return;
+  const n = CTRL.type === 'switch' ? (CTRL.v ? 1 : 0) : Math.max(0, Math.min(1, (CTRL.v - CTRL.min) / ((CTRL.max - CTRL.min) || 1)));
+  for (const a of (CTRL.affects || []).slice(0, 8)) { const kk = isFinite(+a.k) ? +a.k : 1; for (const u of targetsOf(a.target)) {
+    if (a.prop === 'speed') u.cs = n * 2 * kk; else if (a.prop === 'reverse') u.cd = n > 0.5 ? -1 : 1; else if (a.prop === 'scale' || a.prop === 'size' || a.prop === 'height') u.csc = Math.max(0.1, 0.4 + 1.2 * n * kk); else if (a.prop === 'visible') u.cv = kk < 0 ? n <= 0.5 : n > 0.5; else if (a.prop === 'glow') u.cg = n; } } }
+function setControl(c) { CTRL = null; ctlEl.innerHTML = ''; document.body.classList.remove('hasctl');
+  if (c && c.label) { const min = isFinite(+c.min) ? +c.min : 0, max = isFinite(+c.max) && +c.max !== min ? +c.max : min + 1; CTRL = { ...c, type: c.type === 'switch' ? 'switch' : 'slider', min, max, v: c.value != null ? +c.value : c.type === 'switch' ? 0 : (min + max) / 2 };
+    const head = document.createElement('b'); head.textContent = '🎛 Pruébalo: ' + c.label; ctlEl.append(head);
+    if (CTRL.type === 'switch') { const b = document.createElement('button'); const upd = () => { b.textContent = CTRL.v ? (c.on || 'Encendido') : (c.off || 'Apagado'); b.classList.toggle('sel', !!CTRL.v); }; upd(); b.onclick = () => { CTRL.v = CTRL.v ? 0 : 1; upd(); applyControl(); userT = 6; parent.postMessage({ type: 'control', label: c.label, value: CTRL.v }, '*'); }; ctlEl.append(b); }
+    else { const r = document.createElement('input'); r.type = 'range'; r.min = min; r.max = max; r.step = (max - min) / 100; r.value = CTRL.v; const val = document.createElement('span'); const upd = () => { val.textContent = fmtN(CTRL.v) + (c.unit ? ' ' + c.unit : ''); }; upd();
+      r.oninput = () => { CTRL.v = +r.value; upd(); applyControl(); userT = 6; }; r.onchange = () => parent.postMessage({ type: 'control', label: c.label, value: CTRL.v }, '*'); ctlEl.append(r, val); }
+    if (c.hint) { const h = document.createElement('small'); h.textContent = c.hint; ctlEl.append(h); } document.body.classList.add('hasctl'); }
+  ctlEl.classList.toggle('on', !!CTRL); applyControl(); }
+
+/* ---------- Preguntas de tocar la pieza ---------- */
+let TAPQ = null;
+function tapQuiz(label) { const o = findItem(label); TAPQ = o ? { label } : null; for (const x of ITEMS) if (x.userData.spec.label && !x.userData.shown) x.userData.shown = 0.0001; pick(null); setCam(null); EXPLODE = 0;
+  parent.postMessage({ type: 'tapReady', ok: !!o, labels: ITEMS.filter(x => x.userData.spec.label && !x.userData.spec.nopick).map(x => x.userData.spec.label) }, '*'); }
+function tapResult(m) { TAPQ = null; const t = clock.elapsedTime; const right = findItem(m.label), got = m.picked ? findItem(m.picked) : null;
+  if (got && got !== right) got.userData.tap = { ok: false, until: t + 2.5 }; if (right) { right.userData.tap = { ok: true, until: t + 3.5 }; setCam({ focus: m.label, mode: 'close' }); setTimeout(() => { if (CAM.focus === right) setCam(null); }, 3800); } }
+
 /* ---------- 3D interactivo: girar con el dedo, pellizcar para ampliar, tocar una pieza para saber qué es, despiezar ---------- */
 const ui = document.createElement('div'); ui.id = 'ui3d'; ui.innerHTML = '<button data-a="explode">💥 Despiezar</button><button data-a="reset">↺ Centrar</button><button data-a="labels">🏷 Nombres</button>'; document.body.append(ui);
 const card = document.createElement('div'); card.id = 'card3d'; document.body.append(card);
 let LABELS = 'auto', drag = null, zoom = 1; const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
-function ui3d() { ui.classList.toggle('on', SCENE_ON); }
+function ui3d() { ui.classList.toggle('on', SCENE_ON); const ex = ui.querySelector('[data-a=explode]'); ex.style.display = KIND === 'machine' || KIND === 'model' ? '' : 'none'; if (ex.style.display) { EXPLODE = 0; ex.textContent = '💥 Despiezar'; } }
 ui.addEventListener('click', e => { const bt = e.target.closest('button'); const a = bt && bt.dataset.a; if (!a) return; userT = 8;
   if (a === 'explode') { EXPLODE = EXPLODE ? 0 : 1; bt.textContent = EXPLODE ? '🧩 Montar' : '💥 Despiezar'; }
-  if (a === 'reset') { zoom = 1; stage.rotation.set(0, 0, 0); EXPLODE = 0; ui.querySelector('[data-a=explode]').textContent = '💥 Despiezar'; pick(null); userT = 0; }
+  if (a === 'reset') { zoom = 1; stage.rotation.set(stage.userData.tilt || 0, 0, 0); setCam(null); EXPLODE = 0; ui.querySelector('[data-a=explode]').textContent = '💥 Despiezar'; pick(null); userT = 0; }
   if (a === 'labels') { LABELS = LABELS === 'all' ? 'auto' : 'all'; bt.classList.toggle('sel', LABELS === 'all'); } });
-function pick(o) { for (const x of ITEMS) x.userData.picked = false; if (!o) { card.classList.remove('on'); return; } o.userData.picked = true; const sp = o.userData.spec;
+function pick(o) { for (const x of ITEMS) x.userData.picked = false; if (!o) { card.classList.remove('on'); return; } const sp = o.userData.spec;
+  if (TAPQ) { parent.postMessage({ type: 'part', label: sp.label || '', info: '', quiz: true }, '*'); return; } o.userData.picked = true;
   card.innerHTML = `<b>${esc(sp.label || 'Pieza')}</b>${sp.info ? `<p>${esc(sp.info)}</p>` : ''}`; card.classList.add('on'); parent.postMessage({ type: 'part', label: sp.label || '', info: sp.info || '' }, '*'); }
 const cv = renderer.domElement; cv.style.touchAction = 'none'; const touches = new Map();
 cv.addEventListener('pointerdown', e => { touches.set(e.pointerId, { x: e.clientX, y: e.clientY }); drag = touches.size === 1 ? { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, moved: false } : null; try { cv.setPointerCapture(e.pointerId); } catch (er) {} });
@@ -286,10 +390,10 @@ cv.addEventListener('pointermove', e => { if (!touches.has(e.pointerId)) return;
   touches.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (!drag || !SCENE_ON) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY;
   if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 6) drag.moved = true; stage.rotation.y += dx * 0.01; stage.rotation.x = Math.max(-0.7, Math.min(0.7, stage.rotation.x + dy * 0.006)); userT = 8; });
 const up = e => { touches.delete(e.pointerId); if (drag && !drag.moved && SCENE_ON) { const r = cv.getBoundingClientRect(); ndc.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, camera);
-  const hits = ray.intersectObjects(ITEMS.filter(o => o.userData.shown >= 1), true).filter(h => !h.object.isSprite); if (hits.length) { let o = hits[0].object; while (o && !ITEMS.includes(o)) o = o.parent; pick(o); userT = 10; } else pick(null); } drag = null; };
+  const hits = ray.intersectObjects(ITEMS.filter(o => o.userData.shown >= 1 && !o.userData.spec.nopick && o.visible), true).filter(h => !h.object.isSprite); if (hits.length) { let o = hits[0].object; while (o && !ITEMS.includes(o)) o = o.parent; pick(o); userT = 10; } else pick(null); } drag = null; };
 cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
 cv.addEventListener('wheel', e => { if (!SCENE_ON) return; e.preventDefault(); zoom = Math.max(0.6, Math.min(2.6, zoom * (e.deltaY < 0 ? 1.1 : 0.9))); userT = 8; }, { passive: false });
-window.__plato3d = { get ITEMS() { return ITEMS; }, get GROUPS() { return GROUPS; }, stage, camera, renderer, THREE, pick };
+window.__plato3d = { get ITEMS() { return ITEMS; }, get GROUPS() { return GROUPS; }, stage, camera, renderer, THREE, pick, CAM, get CTRL() { return CTRL; }, expandVisual };
 
 addEventListener('resize', fit); fit(); animate();
 
@@ -300,7 +404,10 @@ addEventListener('message', e => { const m = e.data || {}; if (e.source !== pare
   else if (m.type === 'word') { if (S && S.ext && S.id === m.id && S.words[m.k]) EXT.off = S.words[m.k].s - (EXT.t + (performance.now() - EXT.at) / 1000); }
   else if (m.type === 'end') { if (S && S.ext && S.id === m.id) finish(true); }
   else if (m.type === 'scene') setScene(m.scene);
-  else if (m.type === 'clearScene') { setScene({ clear: true, items: [] }); SCENE_ON = false; ui3d(); pick(null); }
+  else if (m.type === 'clearScene') { setScene({ clear: true, items: [] }); SCENE_ON = false; ui3d(); pick(null); setControl(null); setCam(null); TAPQ = null; }
+  else if (m.type === 'camera') { CAM.pending = null; if (m.cam) { CAM.pending = { cam: m.cam, at: null }; revealPlan(); } else setCam(null); }
+  else if (m.type === 'tapQuiz') tapQuiz(m.label);
+  else if (m.type === 'tapResult') tapResult(m);
   else if (m.type === 'pause') { if (S && S.audio) S.audio.pause(); else try { speechSynthesis.pause(); } catch (er) {} }
   else if (m.type === 'resume') { if (S && S.audio) S.audio.play().catch(() => {}); else try { speechSynthesis.resume(); } catch (er) {} }
   else if (m.type === 'board') { drawBoard(m.board || {}); if (m.board && (m.board.title || m.board.formula)) { pose = 'point'; poseT = 1.6; } }

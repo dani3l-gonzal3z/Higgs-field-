@@ -303,3 +303,8 @@ a.credit{color:var(--mut);text-decoration:none}a.credit:hover{text-decoration:un
 .ln-doc>i{font-style:normal;font-size:24px}.ln-doc>div{flex:1;min-width:0;display:flex;flex-direction:column}.ln-doc b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ln-doc small{color:var(--mut)}
 .ln-phone{margin-top:18px}.ln-pair{display:flex;gap:18px;align-items:center;flex-wrap:wrap}.ln-pair>div:last-child{flex:1;min-width:240px}.ln-url{display:block;font-size:11px;color:var(--mut);word-break:break-all;margin:6px 0}
 @media (max-width:640px){.ln-bar{left:6px;right:6px;bottom:6px}.ln-quiz{top:auto;bottom:130px;right:8px}}
+
+.ln-tap{font-size:14px;opacity:.85;padding:2px}
+.ln-quiz.tapq{left:50%;right:auto;transform:translateX(-50%);top:64px;bottom:auto;width:min(340px,calc(100% - 32px));padding:10px 12px;gap:6px}
+.ln-quiz.tapq b{font-size:15px}
+@media (max-width:640px){.ln-quiz.tapq{top:auto;bottom:130px}}

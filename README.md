@@ -48,9 +48,18 @@ La primera vez que entras en cada parte, una guía te señala lo importante paso
 
 Sube un PDF (o pega un texto, o simplemente di el tema) y un profe low-poly te da la clase en la tele: habla con la boca sincronizada, escribe en la pizarra y cada pocos pasos te hace una pregunta de repaso. Puedes **interrumpirle en cualquier momento**: corta, piensa con tu documento y empieza a contestar con la primera frase, sin esperar a tener la respuesta entera. Tres niveles: lo básico, normal y a fondo.
 
-- El profe tiene libertad para explicar: pizarra, **modelos 3D low-poly** o ambos. Empieza a montar el modelo desde el primer paso, mientras da la teoría, y **cada pieza aparece justo cuando la nombra**; en los pasos siguientes añade piezas o hace brillar la parte de la que habla. También puede sacar un modelo al contestar una pregunta.
-- El modelo es **interactivo**: gíralo con el dedo, pellizca para ampliar, toca una pieza para ver qué es y para qué sirve, y pulsa «Despiezar» para separarlo. Piezas disponibles para el profe: cajas, cilindros, esferas…, y también espiras, bobinas, engranajes, imanes, cables y flechas de fuerza; las piezas que se mueven juntas (un rotor) giran como un grupo.
-- Con la voz del navegador, el profe habla frase a frase: así el final de cada frase llega siempre (la clase avanza sola) y boca y subtítulos se re-sincronizan en cada frase; además ajusta solo su velocidad a la de tu voz.
+- El profe explica con la pizarra y con un **escenario 3D low-poly** que enseña viendo, no decorando. La IA elige el tipo de visual y da los datos, y Plató lo coloca siempre bien:
+  - **proceso o ciclo**, con una ficha que recorre los pasos;
+  - **comparación a escala** (planetas, células, distancias…);
+  - **línea de tiempo** con los hechos separados según su fecha;
+  - **gráfica** de barras o de líneas;
+  - **mapa de ideas** conectadas;
+  - **máquina por piezas** (espiras, bobinas, engranajes, imanes, cables, flechas de fuerza…, con grupos que giran juntos).
+
+  Empieza a montarlo desde el primer paso, y cada elemento aparece justo cuando el profe lo nombra.
+- **Cámara de documental**: cuando habla de una parte, la cámara se acerca (primer plano), pone el resto en rayos X o lo corta para ver por dentro, y luego vuelve al plano general.
+- **Pruébalo tú**: el visual puede traer un mando (deslizador o interruptor) que cambia el modelo: más corriente y el rotor gira más rápido, a cero se para, un interruptor invierte el giro…
+- Es **interactivo**: gíralo con el dedo, pellizca para ampliar, toca un elemento para ver qué es, despieza las máquinas. Algunas preguntas de repaso son de **tocar** («toca la pieza que invierte la corriente»): la correcta se ilumina en verde y la cámara se acerca a ella. En el móvil salen las piezas como botones.
 - La boca se anima a partir del texto: cada vocal tiene su forma, la m, la b y la p cierran los labios, la f y la v los muerden… con los tiempos de cada palabra que da la voz. No necesita GPU.
 - Voz: la del aparato (Kokoro, gratis y sin internet) si está instalada; si no, Edge o la del navegador.
 - Los PDF se leen con [pdf.js](https://github.com/mozilla/pdf.js) (Apache-2.0, en `vendor/pdfjs`). Los escaneados (solo imagen) todavía no.

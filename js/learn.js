@@ -53,33 +53,35 @@ export async function makeLesson({ doc, topic, focus, level = lvl() }) {
   const mat = material(doc, focus);
   const prompt = `Eres un profesor excelente que da clases en vídeo, de pie junto a una pizarra, para un adulto curioso. Prepara una clase en español${doc ? ` basada en el material de «${doc.title}»` : ` sobre: ${topic}`}.${focus ? ` Céntrate en: ${focus}.` : ''} ${lv}
 ${mat ? `MATERIAL:\n<<<\n${mat}\n>>>\n` : ''}
-Tienes libertad para explicar como mejor se entienda: con la pizarra, con un modelo 3D low-poly o con ambos. Si el tema tiene algo que se pueda VER (una máquina y sus piezas, un proceso, una molécula, un sistema planetario, un circuito, una estructura, un recorrido…), monta un modelo 3D que quien aprende podrá girar, ampliar, tocar pieza a pieza y despiezar.
-Cómo construir bien el modelo:
-- Empieza a montarlo YA en el paso 1 o 2, mientras das la teoría inicial: en "scene" del primer paso pon la base o el esqueleto, y en los pasos siguientes ve añadiendo piezas con "add" a medida que las explicas. No lo dejes todo para el final.
-- Cada pieza aparece en el momento exacto en que dices su "label" en voz alta, así que NOMBRA en "say" cada pieza con la misma palabra de su etiqueta ("el imán norte", "la espira", "el eje").
-- Cada pieza lleva "label" (1 a 3 palabras) e "info" (una frase que explica para qué sirve; se muestra al tocarla).
-- Antes de escribir coordenadas, piensa el plano: dónde va cada pieza respecto a las demás, que se toquen donde deben tocarse y que no se atraviesen sin querer. Usa medidas realistas entre sí. Todo el modelo cabe en unas 2 unidades, suelo en y=0, y hacia arriba.
-- Prefiere pocas piezas bien colocadas (5 a 14) a muchas mal colocadas. Usa colores con sentido (cobre para cables, rojo/azul para polos, etc.).
-- Las piezas que se mueven juntas van en un grupo: "groups":{"Rotor":{"pos":[x,y,z],"anim":"spinz"}} y cada pieza con "group":"Rotor" usa coordenadas relativas al grupo.
-Devuelve SOLO un JSON con esta forma:
-{"title":"título corto","summary":"una frase","steps":[{"say":"lo que dices en voz alta","board":{"title":"...","bullets":["..."],"formula":"","note":""},"scene":null,"check":null}]}
-Formato de "scene" (o null para no tocar el modelo):
-{"items":[pieza,...],"groups":{...}} crea un modelo nuevo · {"add":[pieza,...],"groups":{...}} añade piezas (y grupos) al anterior · {"highlight":["etiqueta"]} hace brillar partes · {"remove":["etiqueta"]} quita piezas · {"clear":true} lo quita todo.
-pieza = {"shape":"...","pos":[x,y,z],"size":[...],"rot":[gradosX,gradosY,gradosZ],"color":"rojo|azul|verde|amarillo|naranja|morado|rosa|cian|gris|negro|blanco|marrón|cobre|plata|oro|agua|fuego|#hex","label":"nombre","info":"para qué sirve","group":"opcional","anim":"spin|spinx|spinz|orbit|bob|pulse|flow","speed":1}
-Formas y "size": box [ancho,alto,fondo] · sphere [radio] · cylinder [radio,alto] (de pie, eje vertical; tumbado con "rot":[90,0,0] o [0,0,90]) · cone [radio,alto] · torus [radio,grosor] · capsule [radio,largo] · plane [ancho,alto] · ring [radio] (órbitas) · loop [ancho,alto,grosor] (espira o marco rectangular de cable, en el plano XY) · coil [radio,largo,grosor] con "turns" (bobina o muelle, eje vertical) · gear [radio,grosor] con "teeth" (engranaje, en el plano XY) · magnet [ancho,alto,fondo] (imán con polo norte rojo arriba y sur azul abajo) · tube con "points":[[x,y,z],...] (cables, tuberías, trayectorias) · arrow desde pos con "dir":[x,y,z] y "len" (fuerzas, campos, sentidos) · text con "text". "orbit" gira alrededor del centro a la distancia de su pos; "flow" recorre en bucle de pos a "to":[x,y,z] (corriente, agua, partículas).
-Ejemplo de modelo bien hecho (motor eléctrico; adáptalo a tu tema, no lo copies):
-paso 1 "scene": {"items":[{"shape":"box","pos":[0,0.05,0],"size":[2,0.1,1.2],"color":"gris","label":"Base","info":"Sujeta todo el motor."},{"shape":"box","pos":[-0.75,0.55,0],"size":[0.3,0.8,0.8],"color":"rojo","label":"Imán norte","info":"Uno de los dos polos que crean el campo magnético."},{"shape":"box","pos":[0.75,0.55,0],"size":[0.3,0.8,0.8],"color":"azul","label":"Imán sur","info":"El polo opuesto; el campo va del norte al sur."},{"shape":"arrow","pos":[-0.55,0.3,0.5],"dir":[1,0,0],"len":1.1,"color":"cian","label":"Campo magnético","info":"Las líneas de fuerza que empujan al cable con corriente."}]}
-paso 2 "scene": {"groups":{"Rotor":{"pos":[0,0.55,0],"anim":"spinz"}},"add":[{"shape":"cylinder","group":"Rotor","pos":[0,0,0],"size":[0.04,1.6],"rot":[90,0,0],"color":"plata","label":"Eje","info":"Gira y transmite el movimiento hacia fuera."},{"shape":"loop","group":"Rotor","pos":[0,0,0],"size":[0.8,0.6,0.035],"rot":[0,90,0],"color":"cobre","label":"Espira","info":"El cable por el que pasa la corriente; el campo la empuja y gira."}]}
-paso 3 "scene": {"add":[{"shape":"cylinder","group":"Rotor","pos":[0,0,0.6],"size":[0.08,0.14],"rot":[90,0,0],"color":"oro","label":"Conmutador","info":"Invierte la corriente cada media vuelta para que el giro no se pare."},{"shape":"box","pos":[0.13,0.55,0.6],"size":[0.06,0.1,0.08],"color":"negro","label":"Escobillas","info":"Rozan el conmutador y le llevan la corriente de la pila."}]}
-paso 4 "scene": {"highlight":["Espira","Campo magnético"]}
+Junto al profe hay un escenario 3D low-poly. Úsalo para que se ENTIENDA viendo, no para decorar: que se vea la causa y el efecto, y que quien aprende pueda tocar y probar. Tú das los datos y Plató lo coloca solo (no inventes coordenadas salvo en "machine").
+Elige el visual que mejor enseñe cada idea (puedes cambiar de visual a mitad de la clase):
+- process: pasos de un proceso o ciclo, con una ficha que los recorre. {"visual":{"kind":"process","loop":false,"steps":[{"label":"Evaporación","info":"una frase","color":"agua","shape":"sphere|cone|box|cylinder"}]}} (3 a 8 pasos; "loop":true para ciclos)
+- compare: tamaños o cantidades A ESCALA entre sí (planetas, células, distancias, precios…). {"visual":{"kind":"compare","unit":"km","items":[{"label":"Tierra","value":12742,"info":"…","shape":"sphere|box|bar","color":"azul"}]}}
+- timeline: hechos en el tiempo, separados según la fecha. {"visual":{"kind":"timeline","events":[{"label":"Imprenta","year":1450,"info":"…"}]}}
+- chart: datos numéricos que crecen ante tus ojos. {"visual":{"kind":"chart","type":"bar|line","unit":"%","series":[{"label":"2020","value":12,"info":"…"}]}}
+- map: ideas conectadas alrededor de una central. {"visual":{"kind":"map","center":{"label":"Célula","info":"…"},"nodes":[{"label":"Núcleo","info":"…"},{"label":"ADN","parent":"Núcleo","info":"…"}]}}
+- machine: una máquina, un objeto o una estructura por piezas: {"visual":{"kind":"machine","items":[pieza,…],"groups":{…}}} y en pasos siguientes {"add":[pieza,…]} para ir añadiendo piezas.
+Todo elemento lleva "label" (1 a 3 palabras) e "info" (una frase: qué es o para qué sirve; sale al tocarlo). Cada elemento aparece justo cuando dices su "label" en voz alta, así que nómbralos en "say" con esa misma palabra.
+Empieza el visual YA en el paso 1 o 2, mientras das la teoría, y ve construyendo sobre él.
+Además, en "scene" de cualquier paso puedes añadir (combinables entre sí y con lo anterior):
+- "camera": plano de documental cuando hables de una parte concreta: {"focus":"etiqueta","mode":"close|xray|cut"} (close = primer plano; xray = el resto se vuelve transparente; cut = corta el resto para ver por dentro). El paso siguiente vuelve solo al plano general.
+- "highlight": ["etiqueta"] para hacer brillar partes.
+- "control": un mando «Pruébalo tú» para experimentar con una variable (corriente, temperatura, fuerza, velocidad…): {"label":"Corriente","type":"slider|switch","min":0,"max":10,"value":5,"unit":"A","hint":"Sube la corriente y mira el rotor","affects":[{"target":"etiqueta o grupo","prop":"speed|reverse|scale|visible|glow","k":1}]}. speed: a la mitad del recorrido va normal, a cero se para; reverse (switch): invierte el giro; scale: cambia el tamaño; visible (switch): aparece/desaparece; glow: brilla más cuanto más alto. Pon como mucho un mando por visual, cuando de verdad ayude a entender, y en "say" invita a probarlo.
+Formato de pieza (solo en machine): {"shape":"box|sphere|cylinder|cone|torus|capsule|plane|ring|loop|coil|gear|magnet|tube|arrow|text","pos":[x,y,z],"size":[…],"rot":[gradosX,gradosY,gradosZ],"color":"rojo|azul|verde|amarillo|naranja|morado|rosa|cian|gris|negro|blanco|marrón|cobre|plata|oro|agua|fuego|#hex","label":"…","info":"…","group":"opcional","anim":"spin|spinx|spinz|orbit|bob|pulse|flow","speed":1}
+Medidas: suelo en y=0, y hacia arriba, todo cabe en unas 2 unidades; piensa el plano antes: que las piezas se toquen donde deben y no se atraviesen. box [ancho,alto,fondo] · sphere [radio] · cylinder [radio,alto] (de pie; tumbado con "rot":[90,0,0] o [0,0,90]) · cone [radio,alto] · torus [radio,grosor] · loop [ancho,alto,grosor] (espira rectangular, plano XY) · coil [radio,largo,grosor] con "turns" · gear [radio,grosor] con "teeth" · magnet [ancho,alto,fondo] (norte rojo arriba) · tube con "points":[[x,y,z],…] · arrow con "dir":[x,y,z] y "len" · ring [radio] · text con "text". "orbit" gira alrededor del centro; "flow" va en bucle de pos a "to":[x,y,z]. Piezas que se mueven juntas: "groups":{"Rotor":{"pos":[x,y,z],"anim":"spinz"}} y "group":"Rotor" en cada pieza (coordenadas relativas al grupo).
+Ejemplo de machine bien hecha (motor eléctrico; adáptalo, no lo copies):
+paso 1 "scene": {"visual":{"kind":"machine","items":[{"shape":"box","pos":[0,0.05,0],"size":[2,0.1,1.2],"color":"gris","label":"Base","info":"Sujeta todo el motor."},{"shape":"box","pos":[-0.75,0.55,0],"size":[0.3,0.8,0.8],"color":"rojo","label":"Imán norte","info":"Uno de los polos que crean el campo magnético."},{"shape":"box","pos":[0.75,0.55,0],"size":[0.3,0.8,0.8],"color":"azul","label":"Imán sur","info":"El polo opuesto; el campo va del norte al sur."},{"shape":"arrow","pos":[-0.55,0.3,0.5],"dir":[1,0,0],"len":1.1,"color":"cian","label":"Campo magnético","info":"Las líneas de fuerza que empujan al cable con corriente."}]}}
+paso 2 "scene": {"groups":{"Rotor":{"pos":[0,0.55,0],"anim":"spinz"}},"add":[{"shape":"cylinder","group":"Rotor","pos":[0,0,0],"size":[0.04,1.6],"rot":[90,0,0],"color":"plata","label":"Eje","info":"Gira y saca el movimiento fuera."},{"shape":"loop","group":"Rotor","pos":[0,0,0],"size":[0.8,0.6,0.035],"rot":[0,90,0],"color":"cobre","label":"Espira","info":"El cable con corriente; el campo la empuja y gira."}],"control":{"label":"Corriente","type":"slider","min":0,"max":10,"value":5,"unit":"A","hint":"Bájala a cero y mira qué pasa","affects":[{"target":"Rotor","prop":"speed"}]}}
+paso 3 "scene": {"add":[{"shape":"cylinder","group":"Rotor","pos":[0,0,0.6],"size":[0.08,0.14],"rot":[90,0,0],"color":"oro","label":"Conmutador","info":"Invierte la corriente cada media vuelta para que no se pare."}],"camera":{"focus":"Conmutador","mode":"close"}}
+paso 4 "check": {"q":"Toca la pieza que invierte la corriente","tap":"Conmutador","explain":"…"}
 Reglas:
 - Entre 6 y 10 pasos. Empieza enganchando con por qué importa. Un concepto por paso, con ejemplos concretos. Termina con un resumen.
 - No despaches la teoría de los primeros pasos en una frase: explícala con calma y con un ejemplo, mientras el modelo se va montando.
 - "say": 3 a 5 frases habladas y naturales, sin markdown, sin emojis, sin listas; no leas la pizarra literalmente.
 - "board": lo que escribirías: título corto, hasta 5 viñetas de menos de 9 palabras, "formula" para números, ecuaciones o reglas clave (o vacío), "note" opcional.
-- Cada 2 o 3 pasos pon en "check" una pregunta de repaso: {"q":"...","options":["...","...","..."],"answer":0,"explain":"por qué, en una frase"}. En el resto, "check": null.
+- Cada 2 o 3 pasos pon en "check" una pregunta de repaso: {"q":"...","options":["...","...","..."],"answer":0,"explain":"por qué, en una frase"}. Si hay un visual en pantalla, alterna con preguntas de tocar: {"q":"Toca …","tap":"etiqueta exacta de un elemento","options":["…","…","…"],"answer":0,"explain":"…"} (las opciones son el plan B si no se puede tocar). En el resto, "check": null.
 ${doc ? '- Si el material no basta, dilo en el primer paso y completa con conocimiento general fiable, sin inventar datos del documento.' : '- No menciones documentos ni material de apoyo: explica directamente con conocimiento general fiable.'}`;
-  const j = await llmJSON(prompt, { maxTokens: 9000 }); if (!j || !Array.isArray(j.steps) || !j.steps.length) throw new Error('La clase no ha salido bien; prueba otra vez');
+  const j = await llmJSON(prompt, { maxTokens: 12000 }); if (!j || !Array.isArray(j.steps) || !j.steps.length) throw new Error('La clase no ha salido bien; prueba otra vez');
   j.steps = j.steps.filter(s => s && s.say).slice(0, 14); return { id: 'lesson-' + uid(), docId: doc && doc.id, topic, focus, level, ...j };
 }
 
@@ -95,7 +97,10 @@ function tts(text) { // promesa de {blob, words} (o null para la voz del navegad
 /* ---------- Reproductor ---------- */
 function layer() { let l = document.getElementById('learnlayer'); if (!l) { l = el('div', { id: 'learnlayer' }); document.getElementById('main').append(l); } return l; }
 function post(m) { const s = L.session; if (s && s.frame && s.frame.contentWindow) s.frame.contentWindow.postMessage(m, '*'); }
-addEventListener('message', e => { const m = e.data || {}; if (m.type === 'learn-ready' && L.session && L.session.readyRes) L.session.readyRes(); });
+addEventListener('message', e => { const m = e.data || {}; const s = L.session; if (!s || !s.frame || e.source !== s.frame.contentWindow) return;
+  if (m.type === 'learn-ready' && s.readyRes) s.readyRes();
+  else if (m.type === 'tapReady' && s.tapReady) { const f = s.tapReady; s.tapReady = null; f(m); }
+  else if (m.type === 'part' && m.quiz && s.tapPick) s.tapPick(m.label); });
 // La voz suena aquí (la página principal), que es la que recibe tus toques: así el navegador la deja sonar desde el primer clic.
 // Al profe le mandamos el texto y el reloj de la voz para mover la boca y los subtítulos.
 const SILENT = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
@@ -173,24 +178,39 @@ async function run(s) {
   const gen = s.gen; status();
   while (L.session === s && s.gen === gen && s.i < s.lesson.steps.length) {
     if (s.paused) { await new Promise(r => setTimeout(r, 250)); continue; }
-    const st = s.lesson.steps[s.i]; post({ type: 'board', board: st.board || {} }); status();
+    const st = s.lesson.steps[s.i]; post({ type: 'board', board: st.board || {} }); if (!(st.scene && st.scene.camera)) post({ type: 'camera', cam: null }); status();
     const nx = s.lesson.steps[s.i + 1]; if (nx) tts(nx.say);
     const ok = await say(st.say, { gen, scene: st.scene }); if (L.session !== s || s.gen !== gen) return;
-    if (st.check && st.check.options) { const right = await quizAsk(s, st.check); if (L.session !== s || s.gen !== gen) return;
-      const ex = (right ? '¡Exacto! ' : `No del todo: era «${st.check.options[st.check.answer]}». `) + (st.check.explain || ''); await say(ex, { gen }); if (L.session !== s || s.gen !== gen) return; }
+    if (st.check && (st.check.tap || (st.check.options && st.check.options.length))) { const right = await quizAsk(s, st.check); if (L.session !== s || s.gen !== gen) return;
+      if (right !== null) { const sol = s.tapUsed ? st.check.tap : (st.check.options || [])[st.check.answer];
+        const ex = (right ? '¡Exacto! ' : `No del todo: era ${s.tapUsed ? 'esta, ' : ''}«${sol}». `) + (st.check.explain || ''); await say(ex, { gen }); if (L.session !== s || s.gen !== gen) return; } }
     if (!ok && s.paused) continue; s.i++; await new Promise(r => setTimeout(r, 450));
   }
   if (L.session === s && s.gen === gen && !s.lesson.steps.length) { post({ type: 'board', board: { title: s.lesson.title || 'Pregúntame', bullets: ['Escribe tu pregunta abajo', 'o mándamela desde el móvil'] } }); s.i = 0; return; }
   if (L.session === s && s.gen === gen) { post({ type: 'board', board: { title: '¡Clase terminada!', bullets: ['Pregúntame lo que quieras', 'o repite cualquier paso con ⏮'] } }); s.i = s.lesson.steps.length - 1; status(); }
 }
-function quizAsk(s, q) { return new Promise(res => { s.quiz = q; status(); const box = s.ui.quiz; box.hidden = false; box.innerHTML = '';
+function quizAsk(s, q) { s.tapUsed = false; return (q.tap ? tapAsk(s, q) : Promise.resolve(undefined)).then(r => r !== undefined ? r : (q.options && q.options.length ? optAsk(s, q) : null)); }
+function optAsk(s, q) { return new Promise(res => { s.quiz = q; status(); const box = s.ui.quiz; box.hidden = false; box.innerHTML = ''; box.classList.remove('tapq');
   box.append(el('b', {}, q.q), ...q.options.map((o, k) => btn(o, () => pick(k), 'ln-opt'))); s.quizPick = pick;
   function pick(k) { if (s.quiz !== q) return; s.quiz = null; s.quizPick = null; box.hidden = true; status(); res(k === q.answer); } }); }
-function go(i) { const s = L.session; if (!s) return; s.i = Math.max(0, Math.min(s.lesson.steps.length - 1, i)); replayScene(s); s.paused = false; s.ui.playB.textContent = '⏸'; s.mode = 'lesson'; if (s.quiz) { s.quiz = null; s.ui.quiz.hidden = true; } stopTalk(); run(s); }
+// «Toca la pieza que…»: se responde tocando el modelo (en el móvil salen las piezas como botones). Si no hay modelo, se cae a la de opciones.
+const nrm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9ñ]/g, '');
+function tapAsk(s, q) { return new Promise(res => {
+  const to = setTimeout(() => { s.tapReady = null; res(undefined); }, 1500);
+  s.tapReady = m => { clearTimeout(to); if (!m.ok) return res(undefined); s.tapUsed = true;
+    const labels = [...new Set(m.labels || [])]; const opts = labels.filter(l => nrm(l) !== nrm(q.tap)).sort(() => Math.random() - 0.5).slice(0, 4).concat([labels.find(l => nrm(l) === nrm(q.tap)) || q.tap]).sort(() => Math.random() - 0.5);
+    const qq = { q: q.q, options: opts, tap: q.tap }; s.quiz = qq; status(); const box = s.ui.quiz; box.hidden = false; box.innerHTML = ''; box.classList.add('tapq');
+    box.append(el('b', {}, q.q), el('div', { class: 'ln-tap' }, '👆 Toca la pieza en el modelo'), btn('No lo sé', () => done(''), 'ln-opt'));
+    const done = lab => { if (s.quiz !== qq) return; s.quiz = null; s.quizPick = null; s.tapPick = null; box.hidden = true; status(); const ok = !!lab && nrm(lab) === nrm(q.tap); post({ type: 'tapResult', ok, label: q.tap, picked: lab }); res(ok); };
+    s.tapPick = done; s.quizPick = k => done(opts[k]); };
+  post({ type: 'tapQuiz', label: q.tap }); }); }
+function go(i) { const s = L.session; if (!s) return; s.i = Math.max(0, Math.min(s.lesson.steps.length - 1, i)); replayScene(s); s.paused = false; s.ui.playB.textContent = '⏸'; s.mode = 'lesson'; if (s.quiz) { s.quiz = null; s.ui.quiz.hidden = true; } s.tapPick = null; s.tapReady = null; stopTalk(); run(s); }
 // Reconstruye el modelo 3D tal como estaría al empezar el paso i (los pasos pueden ir añadiendo piezas).
-function replayScene(s) { post({ type: 'clearScene' }); const items = []; let groups = {}, any = false;
-  for (let k = 0; k < s.i; k++) { const sc = s.lesson.steps[k].scene; if (!sc) continue; if (sc.clear) { items.length = 0; groups = {}; } if (sc.items) { items.length = 0; groups = {}; items.push(...sc.items); any = true; } if (sc.add) { items.push(...sc.add); any = true; } if (sc.groups) Object.assign(groups, sc.groups); }
-  if (any && items.length) post({ type: 'scene', scene: { items, groups, rotate: true, instant: true } }); }
+function replayScene(s) { post({ type: 'clearScene' }); let base = null, add = [], groups = {}, control = null;
+  for (let k = 0; k < s.i; k++) { const sc = s.lesson.steps[k].scene; if (!sc) continue;
+    if (sc.clear) { base = null; add = []; groups = {}; control = null; } if (sc.visual) { base = { visual: sc.visual }; add = []; groups = {}; control = null; } if (sc.items) { base = { items: sc.items }; add = []; groups = {}; control = null; }
+    if (sc.add) add.push(...sc.add); if (sc.groups) Object.assign(groups, sc.groups); if (sc.control) control = sc.control; }
+  if (base) post({ type: 'scene', scene: { ...base, add, groups, control, ...(base.items ? { rotate: true } : {}), instant: true } }); }
 function togglePause(force) { const s = L.session; if (!s) return; s.paused = force != null ? force : !s.paused; s.ui.playB.textContent = s.paused ? '▶' : '⏸'; if (s.cur) s.paused ? s.cur.pause() : s.cur.resume(); status(); }
 export function endLesson() { const s = L.session; if (!s) return; stopTalk(); L.session = null; s.ly.classList.remove('on'); s.ly.innerHTML = ''; document.body.classList.remove('learning'); pushStatus({ state: 'idle' }); }
 export function lessonControl(cmd, arg) { const s = L.session; if (!s) return 'No hay ninguna clase en marcha.';
@@ -203,7 +223,7 @@ export async function answer(question, { doc } = {}) {
   stopTalk(); const gen = s.gen; s.mode = 'answer'; status(); post({ type: 'pose', name: 'think' });
   const d = doc || s.doc; const st = s.lesson.steps[s.i];
   const prompt = `Eres el profesor de una clase en vídeo y te acaban de interrumpir con una pregunta. Contesta en español, hablando, en 2 a 5 frases claras (máximo 90 palabras), sin markdown ni listas ni emojis.
-Si ayuda, antes de la respuesta puedes poner una línea «PIZARRA: título | punto 1 | punto 2» y/o una línea «ESCENA: {json}» con un modelo 3D low-poly para verlo (mismo formato que en la clase: {\"items\":[{\"shape\":\"box|sphere|cylinder|cone|torus|loop|coil|gear|magnet|arrow|tube|text\",\"pos\":[x,y,z],\"size\":[...],\"color\":\"...\",\"label\":\"...\",\"info\":\"para qué sirve\",\"anim\":\"spin|orbit|flow|pulse\"}]}, en una sola línea; suelo en y=0, cabe en 2 unidades, piezas que se toquen donde deben; cada pieza aparece cuando dices su etiqueta, así que nómbrala). Después, la respuesta hablada.
+Si ayuda, antes de la respuesta puedes poner una línea «PIZARRA: título | punto 1 | punto 2» y/o una línea «ESCENA: {json}» con un visual 3D en una sola línea, por ejemplo {\"visual\":{\"kind\":\"process|compare|timeline|chart|map\",…datos…}} (process: \"steps\":[{\"label\",\"info\"}] · compare: \"items\":[{\"label\",\"value\",\"info\"}],\"unit\" · timeline: \"events\":[{\"label\",\"year\",\"info\"}] · chart: \"series\":[{\"label\",\"value\"}] · map: \"center\":{\"label\"},\"nodes\":[{\"label\",\"parent\"}]); cada elemento aparece cuando dices su etiqueta, así que nómbrala). Después, la respuesta hablada.
 ${s.lesson.title ? `Clase: «${s.lesson.title}»${st ? `, ahora en: ${(st.board && st.board.title) || ''} — ${st.say}` : ''}.` : ''}
 ${d ? `Material relevante de «${d.title}»:\n<<<\n${relevant(d.text, question + ' ' + ((st && st.say) || ''), 7000)}\n>>>\nSi el material no responde, dilo y contesta con conocimiento general.` : ''}
 PREGUNTA: ${question}`;
