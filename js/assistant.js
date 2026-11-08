@@ -46,6 +46,8 @@ const TOOLS = `Herramientas (usa como mucho una por mensaje):
 - ask {question, doc_id?} → contesta en voz alta en la tele (úsalo si están viendo una clase o piden que lo explique en la tele).
 - summary {doc_id, focus?} → resume un documento aquí en el chat.
 - lesson {cmd: "pause"|"resume"|"next"|"prev"|"repeat"|"stop"} → controla la clase en marcha.
+- continue_lesson {id, restart?: bool} → retoma una clase guardada donde se quedó (o desde el principio).
+- review_lesson {id} → repaso rápido con las preguntas de una clase guardada.
 - open {view: "home"|"learn"|"director"|"games"|"plato"|"studio"|"lab"|"gallery"|"edit"|"settings"} → abre una sección en la tele.
 - create_game {idea} → programa un juego nuevo (tarda 1-2 min).
 - play_game {id} → abre un juego guardado en la tele.
@@ -55,13 +57,14 @@ const TOOLS = `Herramientas (usa como mucho una por mensaje):
 async function onChat(it) {
   if (!llmReady()) return reply('Necesito la IA configurada en Ajustes del aparato para conversar.', { ref: it.n });
   const Lm = await import('./learn.js'); const G = await import('./games.js');
-  const docs = (await Lm.docsList()).slice(0, 12); const games = (await G.gamesList()).slice(0, 12); const sess = Lm.L.session;
+  const docs = (await Lm.docsList()).slice(0, 12); const lessons = (await Lm.lessonsList()).slice(0, 12); const games = (await G.gamesList()).slice(0, 12); const sess = Lm.L.session;
   history.push({ role: 'user', text: it.text }); history = history.slice(-12);
   const prompt = `Eres Plató, un aparato de casa (estudio audiovisual, profesor y consola de juegos) y hablas con su dueño por el chat del móvil. Respondes en español, cercano, breve y útil.
 ${TOOLS}
 Estado: ${sess ? `clase en la tele «${sess.lesson.title}», paso ${sess.i + 1} de ${sess.lesson.steps.length}` : 'sin clase en marcha'}; sección abierta: ${location.hash.slice(1) || 'home'}.
 Documentos: ${docs.map(d => `${d.id}: «${d.title}»`).join('; ') || 'ninguno'}${it.doc ? ` (acaba de mandar ${it.doc.id})` : ''}.
 Juegos: ${games.map(g => `${g.id}: «${g.title}»`).join('; ') || 'ninguno'}.
+Clases guardadas: ${lessons.map(l => `${l.id}: «${l.title}» (${l.progress && l.progress.done ? 'terminada' : 'paso ' + (((l.progress && l.progress.i) || 0) + 1) + ' de ' + l.lesson.steps.length})`).join('; ') || 'ninguna'}.
 Conversación reciente:
 ${history.map(h => (h.role === 'user' ? 'Usuario: ' : 'Plató: ') + h.text).join('\n')}
 Devuelve SOLO JSON: {"reply":"lo que contestas en el chat (puede ser la respuesta completa si es una pregunta general)","tool":null | {"name":"...","args":{...}}}
@@ -80,6 +83,8 @@ async function runAction(name, a, it) {
   if (name === 'summary') { const d = await db.get('projects', a.doc_id); if (!d) throw new Error('No encuentro ese documento'); const { llmText } = await import('./llm.js');
     const t = await llmText(`Resume en español, claro y bien estructurado (máximo 250 palabras, con viñetas cortas si ayuda), el documento «${d.title}»${a.focus ? ' centrándote en ' + a.focus : ''}:\n<<<\n${Lm.relevant(d.text, a.focus || d.title, 24000)}\n>>>`, { maxTokens: 1500 }); return t; }
   if (name === 'lesson') return Lm.lessonControl(a.cmd, a.arg);
+  if (name === 'continue_lesson') { await Lm.openLesson(a.id, { restart: !!a.restart }); return '▶ Clase en marcha en la tele.'; }
+  if (name === 'review_lesson') { await Lm.reviewLesson(a.id); return '🧠 Repaso en marcha en la tele: contesta desde aquí o tocando la pantalla.'; }
   if (name === 'open') { location.hash = '#' + (a.view || 'home'); return null; }
   if (name === 'say') { if (!Lm.L.session) await Lm.startLesson({ title: 'Plató', steps: [] }); await Lm.answer('Di exactamente esto, sin añadir nada: ' + a.text); return null; }
   if (name === 'create_game') { const G = await import('./games.js'); const g = await G.gamesCreate(a.idea || it.text); return { text: `🎮 «${g.title}» listo${g.fixed ? ' (me corregí sola al probarlo)' : ''}. ${g.description || ''}`, card: { actions: [{ label: '▶ Jugar en la tele', cmd: 'play', arg: g.id }] } }; }

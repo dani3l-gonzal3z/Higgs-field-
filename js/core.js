@@ -73,7 +73,7 @@ export const DEFAULT_SETTINGS = {
 };
 function merge(a, b) { const o = Array.isArray(a) ? [...a] : { ...a }; for (const k in b) { if (b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && a && typeof a[k] === 'object' && a[k] && !Array.isArray(a[k])) o[k] = merge(a[k], b[k]); else o[k] = b[k]; } return o; }
 export function getSettings() { try { return merge(DEFAULT_SETTINGS, JSON.parse(localStorage.getItem(SK) || '{}')); } catch (e) { return JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); } }
-export function saveSettings(s) { localStorage.setItem(SK, JSON.stringify(s)); dispatchEvent(new Event('studio:settings')); }
+export function saveSettings(s, quiet = false) { localStorage.setItem(SK, JSON.stringify(s)); if (!quiet) dispatchEvent(new Event('studio:settings')); }
 export function hasAnyKey(s = getSettings()) { return Object.values(s.keys).some(Boolean); }
 
 /* ---------- Base de datos local (IndexedDB) ---------- */

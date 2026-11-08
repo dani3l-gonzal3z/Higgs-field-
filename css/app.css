@@ -308,3 +308,29 @@ a.credit{color:var(--mut);text-decoration:none}a.credit:hover{text-decoration:un
 .ln-quiz.tapq{left:50%;right:auto;transform:translateX(-50%);top:64px;bottom:auto;width:min(340px,calc(100% - 32px));padding:10px 12px;gap:6px}
 .ln-quiz.tapq b{font-size:15px}
 @media (max-width:640px){.ln-quiz.tapq{top:auto;bottom:130px}}
+
+/* Tu profe y tu aula */
+.cl{display:flex;flex-direction:column;gap:10px}
+.cl-prev{width:100%;height:min(300px,38vh);border:0;border-radius:14px;background:#1a2130}
+.cl-body{display:flex;flex-direction:column;gap:10px;max-height:46vh;overflow:auto;padding-right:4px}
+.cl-row{display:flex;flex-direction:column;gap:6px}
+.cl-row .seg{flex-wrap:wrap}
+.cl-sw{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.cl-sw .sw{width:28px;height:28px;border-radius:50%;border:2px solid rgba(255,255,255,.18);padding:0;cursor:pointer}
+.cl-sw .sw.on{border-color:#fff;box-shadow:0 0 0 2px var(--hot,#ffb02e)}
+.cl-sw input[type=color]{width:32px;height:30px;border:0;background:none;padding:0}
+.cl-presets{display:flex;flex-wrap:wrap;gap:6px}
+.cl-chk{display:inline-flex;align-items:center;gap:4px;font-size:14px;margin-right:12px}
+.cl-chks{display:flex;flex-wrap:wrap;gap:6px 4px}
+.cl-val{min-width:48px;text-align:right;font-weight:700}
+.cl-row input[type=range]{width:100%}
+/* Tus clases */
+.ln-les .ln-les-info{flex:1;min-width:0}
+.ln-les .ln-les-info b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ln-prog{height:4px;border-radius:3px;background:rgba(255,255,255,.1);margin-top:5px;overflow:hidden}
+.ln-prog span{display:block;height:100%;background:var(--hot,#ffb02e)}
+.ln-notes h4{margin:16px 0 4px}
+.ln-notes ul{margin:4px 0 6px 18px;padding:0}
+.ln-notes .ln-say{opacity:.8;font-size:14px;line-height:1.5}
+.ln-notes .ln-formula{font-family:"Cambria Math",Georgia,serif;font-size:20px;margin:6px 0}
+@media (max-width:640px){.ln-les{flex-wrap:wrap}.ln-les .ln-les-info{flex-basis:calc(100% - 44px)}}

@@ -1,9 +1,10 @@
 // 🎓 Aprender: un profe low-poly que te da la clase en la tele con pizarra y voz, a partir de tus PDF o de cualquier tema,
 // y que contesta tus preguntas en el momento (empieza a hablar con la primera frase y se calla si le interrumpes).
-import { el, btn, toast, seg, uid, db, getSettings, saveSettings, host, emit } from './core.js';
+import { el, btn, toast, seg, uid, db, getSettings, saveSettings, host, emit, confirmBox, modal, download } from './core.js';
 import { llmJSON, llmStream, llmReady } from './llm.js';
 import { detectLocal, hasLocalVoice, speakLocal, localBase, localCaps } from './local.js';
 import { qrSVG } from './qr.js';
+import { teacher, room, personaPrompt, voiceRate, openClassroom } from './classroom.js';
 
 const PDFJS_VER = '5.4.296';
 const hideToast = () => { const t = document.getElementById('toast'); if (t) t.classList.remove('show'); };
@@ -51,7 +52,7 @@ export async function makeLesson({ doc, topic, focus, level = lvl() }) {
   if (!llmReady()) throw new Error('Configura la IA en Ajustes (o usa Plató dentro de Claude)');
   const lv = { basico: 'Nivel básico: sin tecnicismos, con analogías de la vida diaria.', normal: 'Nivel normal: claro y riguroso, con ejemplos.', fondo: 'Nivel a fondo: con detalle técnico, matices y casos límite; quien escucha es un adulto con base.' }[level] || '';
   const mat = material(doc, focus);
-  const prompt = `Eres un profesor excelente que da clases en vídeo, de pie junto a una pizarra, para un adulto curioso. Prepara una clase en español${doc ? ` basada en el material de «${doc.title}»` : ` sobre: ${topic}`}.${focus ? ` Céntrate en: ${focus}.` : ''} ${lv}
+  const prompt = `Eres un profesor excelente que da clases en vídeo, de pie junto a una pizarra, para un adulto curioso. ${personaPrompt()} Prepara una clase en español${doc ? ` basada en el material de «${doc.title}»` : ` sobre: ${topic}`}.${focus ? ` Céntrate en: ${focus}.` : ''} ${lv}
 ${mat ? `MATERIAL:\n<<<\n${mat}\n>>>\n` : ''}
 Junto al profe hay un escenario 3D low-poly. Úsalo para que se ENTIENDA viendo, no para decorar: que se vea la causa y el efecto, y que quien aprende pueda tocar y probar. Tú das los datos y Plató lo coloca solo (no inventes coordenadas salvo en "machine").
 Elige el visual que mejor enseñe cada idea (puedes cambiar de visual a mitad de la clase):
@@ -92,10 +93,47 @@ ${doc ? '- Si el material no basta, dilo en el primer paso y completa con conoci
 function engine() { const e = (getSettings().learn || {}).voice || 'auto'; if (e !== 'auto') return e; return hasLocalVoice('voicestudio') ? 'voicestudio' : hasLocalVoice('kokoro') ? 'kokoro' : hasLocalVoice('edge') ? 'edge' : 'browser'; }
 const VCACHE = new Map();
 function tts(text) { // promesa de {blob, words} (o null para la voz del navegador); se reutiliza para adelantar la siguiente frase
-  const e = engine(); if (e === 'browser') return Promise.resolve(null); const k = e + '|' + text; if (VCACHE.has(k)) return VCACHE.get(k);
+  const e = engine(); if (e === 'browser') return Promise.resolve(null); const vr = voiceRate(); const k = e + '|' + vr + '|' + text; if (VCACHE.has(k)) return VCACHE.get(k);
   const s = getSettings(); const voice = (s.voice || {})[e] || (e === 'edge' ? 'es-ES-ElviraNeural' : e === 'voicestudio' ? 'default' : 'ef_dora');
-  const p = speakLocal({ engine: e, text, voice }).catch(err => { console.warn('voz', err); return null; }); VCACHE.set(k, p); if (VCACHE.size > 60) VCACHE.delete(VCACHE.keys().next().value); return p;
+  const p = speakLocal({ engine: e, text, voice, speed: vr }).catch(err => { console.warn('voz', err); return null; }); VCACHE.set(k, p); if (VCACHE.size > 60) VCACHE.delete(VCACHE.keys().next().value); return p;
 }
+
+/* ---------- Tus clases: se guardan solas, se retoman, se repasan y se borran ---------- */
+export async function lessonsList() { return (await db.all('projects')).filter(p => p.kind === 'lesson').sort((a, b) => b.t - a.t); }
+async function saveLessonRec(lesson, { doc, topic, focus, level }) { const r = { id: 'lesson-' + uid(), kind: 'lesson', t: Date.now(), created: Date.now(), title: lesson.title || topic || 'Clase', topic: topic || '', focus: focus || '', level: level || lvl(), docId: doc ? doc.id : null, lesson, progress: { i: 0, done: false, answers: {} } };
+  await db.put('projects', r); emit('lessons'); return r; }
+let saveT = 0;
+function saveProgress(s, now) { if (!s || !s.rec || !s.lesson.steps.length) return; const p = s.rec.progress = s.rec.progress || {}; p.i = s.i; p.answers = { ...(p.answers || {}), ...s.answers }; s.rec.t = Date.now();
+  clearTimeout(saveT); const w = () => db.put('projects', s.rec).then(() => emit('lessons')).catch(() => {}); if (now) w(); else saveT = setTimeout(w, 700); }
+function finishLesson(s) { if (s.rec) { s.rec.progress.done = true; saveProgress(s, true); }
+  if (s.review) { const v = Object.values(s.answers); s.review.review = { t: Date.now(), right: v.filter(Boolean).length, total: v.length }; s.review.t = Date.now(); db.put('projects', s.review).then(() => emit('lessons')).catch(() => {}); } }
+const score = r => { const v = Object.values((r.progress && r.progress.answers) || {}); return { right: v.filter(Boolean).length, total: v.length }; };
+export async function openLesson(id, { restart = false } = {}) { const r = await db.get('projects', id); if (!r) throw new Error('No encuentro esa clase'); const doc = r.docId ? await db.get('projects', r.docId) : null;
+  const n = r.lesson.steps.length; const at = restart || (r.progress && r.progress.done) ? 0 : Math.min((r.progress && r.progress.i) || 0, n - 1); if (restart || (r.progress && r.progress.done)) r.progress = { ...r.progress, i: 0, answers: {} };
+  return startLesson(r.lesson, { doc, rec: r, at }); }
+// Repaso: solo las preguntas de la clase, con su modelo 3D delante para las de tocar
+export async function reviewLesson(id) { const r = await db.get('projects', id); if (!r) throw new Error('No encuentro esa clase'); const steps = r.lesson.steps; const checks = steps.map(st => st.check).filter(c => c && (c.tap || (c.options && c.options.length)));
+  if (!checks.length) throw new Error('Esta clase no tiene preguntas para repasar'); const doc = r.docId ? await db.get('projects', r.docId) : null; const sc = compositeScene(steps, steps.length);
+  const lesson = { title: 'Repaso · ' + r.title, steps: checks.map((c, k) => ({ say: k === 0 ? `Vamos a repasar «${r.title}». ${checks.length} preguntas. Primera.` : k === checks.length - 1 ? 'Última pregunta.' : `Pregunta ${k + 1}.`, board: { title: `Repaso · ${k + 1} de ${checks.length}`, bullets: [c.q] }, scene: k === 0 ? sc : null, check: c })) };
+  return startLesson(lesson, { doc, review: r }); }
+// Apuntes: lo de la pizarra de cada paso, ordenado, para leer, copiar o descargar
+function notesOf(r) { const L2 = [`# ${r.title}`, '']; r.lesson.steps.forEach((st, k) => { const b = st.board || {}; L2.push(`## ${k + 1}. ${b.title || 'Paso ' + (k + 1)}`); if (b.formula) L2.push('', '    ' + b.formula); for (const x of b.bullets || []) L2.push('- ' + x); if (b.note) L2.push('', '_' + b.note + '_'); L2.push('', st.say, ''); if (st.check && st.check.q) L2.push(`> Pregunta: ${st.check.q}${st.check.explain ? ' — ' + st.check.explain : ''}`, ''); }); return L2.join('\n'); }
+function showNotes(r) { const md = notesOf(r); const body = el('div', { class: 'ln-notes' });
+  r.lesson.steps.forEach((st, k) => { const b = st.board || {}; body.append(el('h4', {}, `${k + 1}. ${b.title || 'Paso ' + (k + 1)}`), b.formula ? el('div', { class: 'ln-formula' }, b.formula) : '', (b.bullets || []).length ? el('ul', {}, ...b.bullets.map(x => el('li', {}, x))) : '', b.note ? el('p', { class: 'note' }, b.note) : '', el('p', { class: 'ln-say' }, st.say)); });
+  modal('📝 Apuntes · ' + r.title, el('div', {}, el('div', { class: 'row-btns' }, btn('📋 Copiar', async () => { try { await navigator.clipboard.writeText(md); toast('Copiado'); } catch (e) { toast('No se pudo copiar'); } }, 'mini-b'), btn('⬇ Descargar', () => download(new Blob([md], { type: 'text/markdown' }), r.title.replace(/[^\p{L}\p{N} _-]/gu, '').slice(0, 60) + '.md'), 'mini-b')), body), { wide: true }); }
+async function lessonsCard(rr) { const list = await lessonsList(); const box = el('div', { class: 'ln-lib' });
+  const q = el('input', { class: 'txt', placeholder: '🔎 Buscar en tus clases', hidden: list.length < 6 }); const draw = () => { box.innerHTML = ''; const f = q.value.trim().toLowerCase();
+    for (const r of list.filter(x => !f || (x.title + ' ' + x.topic).toLowerCase().includes(f))) { const n = r.lesson.steps.length, p = r.progress || {}, sc = score(r), done = p.done; const pct = done ? 100 : Math.round(((p.i || 0) / Math.max(1, n)) * 100);
+      const hasQ = r.lesson.steps.some(st => st.check && (st.check.tap || (st.check.options || []).length));
+      const meta = [new Date(r.created || r.t).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }), done ? '✓ terminada' : `paso ${(p.i || 0) + 1} de ${n}`, sc.total ? `${sc.right}/${sc.total} aciertos` : '', r.review ? `repaso: ${r.review.right}/${r.review.total}` : ''].filter(Boolean).join(' · ');
+      box.append(el('div', { class: 'ln-doc ln-les' }, el('i', {}, done ? '✅' : '🎓'), el('div', { class: 'ln-les-info' }, el('b', {}, r.title), el('small', {}, meta), el('div', { class: 'ln-prog' }, el('span', { style: `width:${pct}%` }))),
+        btn(done ? '↺ Otra vez' : (p.i ? '▶ Seguir' : '▶ Empezar'), e => { unlockAudio(); openLesson(r.id).catch(er => toast('⚠️ ' + er.message)); }, 'b on'),
+        hasQ ? btn('🧠', () => { unlockAudio(); reviewLesson(r.id).catch(er => toast('⚠️ ' + er.message)); }, 'mini-b') : '',
+        btn('📝', () => showNotes(r), 'mini-b'),
+        btn('✏️', () => { const i = el('input', { class: 'txt', value: r.title, maxlength: 80 }); const ok = async () => { const t = i.value.trim(); if (t) { r.title = t.slice(0, 80); await db.put('projects', r); } close(); renderLearn(rr); }; i.addEventListener('keydown', e => { if (e.key === 'Enter') ok(); }); const close = modal('✏️ Nombre de la clase', el('div', {}, i, el('div', { class: 'row-btns' }, btn('Guardar', ok, 'b hot')))); setTimeout(() => i.focus(), 50); }, 'mini-b'),
+        btn('🗑', async () => { if (await confirmBox('Borrar clase', `¿Borrar «${r.title}»? No se puede deshacer.`, 'Borrar')) { await db.del('projects', r.id); renderLearn(rr); } }, 'mini-b'))); }
+    if (!box.children.length) box.append(el('div', { class: 'empty' }, f ? 'Nada con ese nombre.' : 'Aquí aparecerán las clases que hagas, para volver a verlas o seguir donde lo dejaste.')); };
+  q.addEventListener('input', draw); draw(); return el('div', {}, el('h3', { class: 'sec' }, 'Tus clases'), q, box); }
 
 /* ---------- Reproductor ---------- */
 function layer() { let l = document.getElementById('learnlayer'); if (!l) { l = el('div', { id: 'learnlayer' }); document.getElementById('main').append(l); } return l; }
@@ -113,20 +151,21 @@ export function unlockAudio() {
   try { if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } } catch (e) {}
 }
 addEventListener('pointerdown', unlockAudio, { once: true, capture: true });
-function pickVoice() { try { const vs = speechSynthesis.getVoices(); return vs.find(v => /^es/i.test(v.lang) && /natural|neural|google|online|premium|enhanced/i.test(v.name)) || vs.find(v => /^es/i.test(v.lang)) || null; } catch (e) { return null; } }
+function pickVoice() { try { const vs = speechSynthesis.getVoices(); const want = (getSettings().learn || {}).browserVoice; const w = want && vs.find(v => v.name === want); if (w) return w; return vs.find(v => /^es/i.test(v.lang) && /natural|neural|google|online|premium|enhanced/i.test(v.name)) || vs.find(v => /^es/i.test(v.lang)) || null; } catch (e) { return null; } }
 // Trozos para la voz del navegador: frases, y las largas partidas por comas (máx. ~22 palabras).
 function speechChunks(words) { const out = []; let cur = [];
   words.forEach((w, i) => { cur.push(i); if (/[.!?…;:]$/.test(w) || (cur.length >= 14 && /,$/.test(w)) || cur.length >= 22) { out.push(cur); cur = []; } }); if (cur.length) out.push(cur); return out; }
 // Misma estimación que usa el profe para mover la boca (segundos a velocidad 1).
 function estDur(ws) { let t = 0; for (const w of ws) t += Math.max(0.18, w.replace(/[^\p{L}\p{N}]/gu, '').length * 0.075) + (/[.,;:!?…]$/.test(w) ? 0.28 : 0.05); return t; }
 // Autoajuste: compara lo que tarda de verdad la voz con lo estimado y corrige la velocidad de boca y subtítulos.
+// RATE.f está normalizado a velocidad 1; con la velocidad elegida para el profe se divide por ella.
 const RATE = { f: (() => { try { return Math.min(2, Math.max(0.5, +localStorage.getItem('plato.speechRate2') || 1)); } catch (e) { return 1; } })() };
-function calib(ws, real) { if (ws.length < 4 || !(real > 0.4)) return; const m = Math.min(2, Math.max(0.5, real / estDur(ws))); RATE.f = RATE.f * 0.6 + m * 0.4; try { localStorage.setItem('plato.speechRate2', RATE.f.toFixed(3)); } catch (e) {} }
+function calib(ws, real) { if (ws.length < 4 || !(real > 0.4)) return; const m = Math.min(2, Math.max(0.5, real / estDur(ws) * voiceRate())); RATE.f = RATE.f * 0.6 + m * 0.4; try { localStorage.setItem('plato.speechRate2', RATE.f.toFixed(3)); } catch (e) {} }
 function playSpeech(text, a) { const s = L.session; const id = uid();
   return new Promise(res => {
     let done = false, raf = 0, t0 = performance.now(), pausedAt = 0, pausedTotal = 0; const words = text.split(/\s+/).filter(Boolean);
     const fin = ok => { if (done) return; done = true; cancelAnimationFrame(raf); clearTimeout(guardT); post({ type: 'end', id }); if (s.cur && s.cur.id === id) s.cur = null; res(ok); };
-    post({ type: 'speak', id, text, words: a && a.words, external: true, rate: 1 / RATE.f });
+    post({ type: 'speak', id, text, words: a && a.words, external: true, rate: voiceRate() / RATE.f });
     let clock = () => (performance.now() - t0 - pausedTotal - (pausedAt ? performance.now() - pausedAt : 0)) / 1000, guardT = 0;
     const tick = () => { if (done) return; post({ type: 'clock', id, t: clock(), paused: !!(s.cur && s.cur.isPaused && s.cur.isPaused()) }); raf = requestAnimationFrame(tick); };
     const browser = () => {
@@ -137,11 +176,11 @@ function playSpeech(text, a) { const s = L.session; const id = uid();
       // En iPhone/Safari las frases encoladas se pierden tras la primera: ahí va todo en una sola locución (sus voces son locales y no tienen el corte de ~15 s).
       // Solo troceamos con voces en red (Chrome de escritorio), que son las que se cortan solas.
       const v = pickVoice(); const chunks = v && v.localService === false ? speechChunks(words) : [words.map((_, i) => i)]; let last = -1, ended = 0, stopped = false;
-      const keep = s.utters = []; window.__platoUtters = keep; const est = estDur(words) * RATE.f + 3;
+      const keep = s.utters = []; window.__platoUtters = keep; const est = estDur(words) * RATE.f / voiceRate() + 3;
       const t1 = []; // inicio real de cada frase (para el autoajuste)
       chunks.forEach((ch, ci) => {
         const txt = chunks.length === 1 ? text : ch.map(k => words[k]).join(' '); const u = new SpeechSynthesisUtterance(txt); keep.push(u);
-        if (v) u.voice = v; u.lang = (v && v.lang) || 'es-ES';
+        if (v) u.voice = v; u.lang = (v && v.lang) || 'es-ES'; u.rate = voiceRate();
         const st = []; let pos = 0; for (const k of ch) { const i = txt.indexOf(words[k], pos); st.push(i < 0 ? pos : i); pos = (i < 0 ? pos : i) + words[k].length; }
         u.onstart = () => { if (done) return; last = ci; t1[ci] = performance.now() - pausedTotal; if (ci === 0) t0 = performance.now(); post({ type: 'word', id, k: ch[0] }); };
         u.onboundary = e => { if (done || (e.name && e.name !== 'word')) return; let j = 0; while (j + 1 < st.length && st[j + 1] <= e.charIndex) j++; post({ type: 'word', id, k: ch[j] }); };
@@ -163,10 +202,10 @@ async function say(text, { gen, scene } = {}) { const s = L.session; if (!s || !
   const p = playSpeech(text, a); if (scene) post({ type: 'scene', scene }); return await p; }
 function stopTalk() { const s = L.session; if (!s) return; s.gen++; if (s.cur) s.cur.stop(); try { speechSynthesis.cancel(); } catch (e) {} }
 
-export async function startLesson(lesson, { doc } = {}) {
+export async function startLesson(lesson, { doc, rec, at = 0, review } = {}) {
   endLesson(); if (location.hash !== '#learn') location.hash = '#learn'; const ly = layer(); ly.innerHTML = ''; ly.classList.add('on'); document.body.classList.add('learning');
   const frame = el('iframe', { class: 'ln-frame', src: 'learn.html', allow: 'autoplay' });
-  const s = L.session = { lesson, doc, i: 0, gen: 0, paused: false, frame, ly, readyRes: null, mode: 'lesson', quiz: null };
+  const s = L.session = { lesson, doc, rec, review, answers: {}, i: Math.max(0, Math.min(at || 0, Math.max(0, lesson.steps.length - 1))), gen: 0, paused: false, frame, ly, readyRes: null, mode: 'lesson', quiz: null };
   const ready = new Promise(r => { s.readyRes = r; setTimeout(r, 15000); });
   const stepLbl = el('span', { class: 'ln-step' }); const playB = btn('⏸', () => togglePause(), 'ln-b');
   const ask = el('input', { class: 'txt', placeholder: 'Pregúntale lo que quieras… (te corta y te contesta)', enterkeyhint: 'send' });
@@ -174,25 +213,27 @@ export async function startLesson(lesson, { doc } = {}) {
   const quiz = el('div', { class: 'ln-quiz', hidden: true }); s.ui = { stepLbl, playB, quiz };
   ly.append(frame, el('div', { class: 'ln-top' }, el('b', {}, lesson.title || 'Clase'), stepLbl, btn('✕', () => endLesson(), 'ln-b')), quiz,
     el('div', { class: 'ln-bar' }, btn('⏮', () => go(s.i - 1), 'ln-b'), playB, btn('⏭', () => go(s.i + 1), 'ln-b'), btn('🔁', () => go(s.i), 'ln-b'), el('div', { class: 'ln-ask' }, ask, btn('Preguntar', send, 'b on'))));
-  await ready; if (L.session !== s) return; import('./guide.js').then(m => m.guideEvent && m.guideEvent('learn')).catch(() => {});
+  await ready; if (L.session !== s) return; post({ type: 'look', look: teacher() }); post({ type: 'room', room: room() });
+  if (s.i > 0) { replayScene(s); toast(`▶ Seguimos por el paso ${s.i + 1} de ${lesson.steps.length}`); }
+  import('./guide.js').then(m => m.guideEvent && m.guideEvent('learn')).catch(() => {});
   // Adelanta la voz de los dos primeros pasos
-  lesson.steps.slice(0, 2).forEach(st => tts(st.say)); run(s);
+  lesson.steps.slice(s.i, s.i + 2).forEach(st => tts(st.say)); run(s);
 }
 function status() { const s = L.session; const st = s && s.lesson.steps[s.i]; pushStatus(s ? { state: s.mode === 'answer' ? 'answer' : s.paused ? 'paused' : 'lesson', title: s.lesson.title, step: s.i + 1, total: s.lesson.steps.length, quiz: s.quiz ? { q: s.quiz.q, options: s.quiz.options } : null } : { state: 'idle' }); if (s) s.ui.stepLbl.textContent = s.lesson.steps.length ? `${s.i + 1} / ${s.lesson.steps.length}` : ''; }
 async function run(s) {
   const gen = s.gen; status();
   while (L.session === s && s.gen === gen && s.i < s.lesson.steps.length) {
     if (s.paused) { await new Promise(r => setTimeout(r, 250)); continue; }
-    const st = s.lesson.steps[s.i]; post({ type: 'board', board: st.board || {} }); if (!(st.scene && st.scene.camera)) post({ type: 'camera', cam: null }); status();
+    const st = s.lesson.steps[s.i]; saveProgress(s); post({ type: 'board', board: st.board || {} }); if (!(st.scene && st.scene.camera)) post({ type: 'camera', cam: null }); status();
     const nx = s.lesson.steps[s.i + 1]; if (nx) tts(nx.say);
     const ok = await say(st.say, { gen, scene: st.scene }); if (L.session !== s || s.gen !== gen) return;
     if (st.check && (st.check.tap || (st.check.options && st.check.options.length))) { const right = await quizAsk(s, st.check); if (L.session !== s || s.gen !== gen) return;
-      if (right !== null) { const sol = s.tapUsed ? st.check.tap : (st.check.options || [])[st.check.answer];
+      if (right !== null) { s.answers[s.i] = !!right; saveProgress(s); const sol = s.tapUsed ? st.check.tap : (st.check.options || [])[st.check.answer];
         const ex = (right ? '¡Exacto! ' : `No del todo: era ${s.tapUsed ? 'esta, ' : ''}«${sol}». `) + (st.check.explain || ''); await say(ex, { gen }); if (L.session !== s || s.gen !== gen) return; } }
     if (!ok && s.paused) continue; s.i++; await new Promise(r => setTimeout(r, 450));
   }
   if (L.session === s && s.gen === gen && !s.lesson.steps.length) { post({ type: 'board', board: { title: s.lesson.title || 'Pregúntame', bullets: ['Escribe tu pregunta abajo', 'o mándamela desde el móvil'] } }); s.i = 0; return; }
-  if (L.session === s && s.gen === gen) { post({ type: 'board', board: { title: '¡Clase terminada!', bullets: ['Pregúntame lo que quieras', 'o repite cualquier paso con ⏮'] } }); s.i = s.lesson.steps.length - 1; status(); }
+  if (L.session === s && s.gen === gen) { finishLesson(s); post({ type: 'board', board: { title: s.review ? '¡Repaso terminado!' : '¡Clase terminada!', bullets: ['Pregúntame lo que quieras', 'o repite cualquier paso con ⏮'] } }); s.i = s.lesson.steps.length - 1; status(); }
 }
 function quizAsk(s, q) { s.tapUsed = false; return (q.tap ? tapAsk(s, q) : Promise.resolve(undefined)).then(r => r !== undefined ? r : (q.options && q.options.length ? optAsk(s, q) : null)); }
 function optAsk(s, q) { return new Promise(res => { s.quiz = q; status(); const box = s.ui.quiz; box.hidden = false; box.innerHTML = ''; box.classList.remove('tapq');
@@ -211,13 +252,15 @@ function tapAsk(s, q) { return new Promise(res => {
   post({ type: 'tapQuiz', label: q.tap }); }); }
 function go(i) { const s = L.session; if (!s) return; s.i = Math.max(0, Math.min(s.lesson.steps.length - 1, i)); replayScene(s); s.paused = false; s.ui.playB.textContent = '⏸'; s.mode = 'lesson'; if (s.quiz) { s.quiz = null; s.ui.quiz.hidden = true; } s.tapPick = null; s.tapReady = null; stopTalk(); run(s); }
 // Reconstruye el modelo 3D tal como estaría al empezar el paso i (los pasos pueden ir añadiendo piezas).
-function replayScene(s) { post({ type: 'clearScene' }); let base = null, add = [], groups = {}, control = null;
-  for (let k = 0; k < s.i; k++) { const sc = s.lesson.steps[k].scene; if (!sc) continue;
+// Estado del visual 3D tras los pasos [0, upto): para retomar una clase o repasarla con su modelo
+function compositeScene(steps, upto) { let base = null, add = [], groups = {}, control = null;
+  for (let k = 0; k < upto; k++) { const sc = steps[k] && steps[k].scene; if (!sc) continue;
     if (sc.clear) { base = null; add = []; groups = {}; control = null; } if (sc.visual) { base = { visual: sc.visual }; add = []; groups = {}; control = null; } if (sc.items) { base = { items: sc.items }; add = []; groups = {}; control = null; }
     if (sc.add) add.push(...sc.add); if (sc.groups) Object.assign(groups, sc.groups); if (sc.control) control = sc.control; }
-  if (base) post({ type: 'scene', scene: { ...base, add, groups, control, ...(base.items ? { rotate: true } : {}), instant: true } }); }
+  return base ? { ...base, add, groups, control, ...(base.items ? { rotate: true } : {}), instant: true } : null; }
+function replayScene(s) { post({ type: 'clearScene' }); const sc = compositeScene(s.lesson.steps, s.i); if (sc) post({ type: 'scene', scene: sc }); }
 function togglePause(force) { const s = L.session; if (!s) return; s.paused = force != null ? force : !s.paused; s.ui.playB.textContent = s.paused ? '▶' : '⏸'; if (s.cur) s.paused ? s.cur.pause() : s.cur.resume(); status(); }
-export function endLesson() { const s = L.session; if (!s) return; stopTalk(); L.session = null; s.ly.classList.remove('on'); s.ly.innerHTML = ''; document.body.classList.remove('learning'); pushStatus({ state: 'idle' }); }
+export function endLesson() { const s = L.session; if (!s) return; saveProgress(s, true); stopTalk(); L.session = null; s.ly.classList.remove('on'); s.ly.innerHTML = ''; document.body.classList.remove('learning'); pushStatus({ state: 'idle' }); }
 export function lessonControl(cmd, arg) { const s = L.session; if (!s) return 'No hay ninguna clase en marcha.';
   if (cmd === 'pause') togglePause(true); else if (cmd === 'resume') { togglePause(false); if (s.mode === 'answer') go(s.i); } else if (cmd === 'next') go(s.i + 1); else if (cmd === 'prev') go(s.i - 1); else if (cmd === 'repeat') go(s.i); else if (cmd === 'stop') endLesson();
   else if (cmd === 'answer' && s.quizPick) s.quizPick(+arg); return 'Hecho.'; }
@@ -227,7 +270,7 @@ export async function answer(question, { doc } = {}) {
   let s = L.session; if (!s) { await startLesson({ title: 'Preguntas', steps: [] }, { doc }); s = L.session; }
   stopTalk(); const gen = s.gen; s.mode = 'answer'; status(); post({ type: 'pose', name: 'think' });
   const d = doc || s.doc; const st = s.lesson.steps[s.i];
-  const prompt = `Eres el profesor de una clase en vídeo y te acaban de interrumpir con una pregunta. Contesta en español, hablando, en 2 a 5 frases claras (máximo 90 palabras), sin markdown ni listas ni emojis.
+  const prompt = `Eres el profesor de una clase en vídeo y te acaban de interrumpir con una pregunta. ${personaPrompt()} Contesta en español, hablando, en 2 a 5 frases claras (máximo 90 palabras), sin markdown ni listas ni emojis.
 Si ayuda, antes de la respuesta puedes poner una línea «PIZARRA: título | punto 1 | punto 2» y/o una línea «ESCENA: {json}» con un visual 3D en una sola línea, por ejemplo {\"visual\":{\"kind\":\"process|compare|timeline|chart|map\",…datos…}} (process: \"steps\":[{\"label\",\"info\"}] · compare: \"items\":[{\"label\",\"value\",\"info\"}],\"unit\" · timeline: \"events\":[{\"label\",\"year\",\"info\"}] · chart: \"series\":[{\"label\",\"value\"}] · map: \"center\":{\"label\"},\"nodes\":[{\"label\",\"parent\"}]); cada elemento aparece cuando dices su etiqueta, así que nómbrala). Después, la respuesta hablada.
 ${s.lesson.title ? `Clase: «${s.lesson.title}»${st ? `, ahora en: ${(st.board && st.board.title) || ''} — ${st.say}` : ''}.` : ''}
 ${d ? `Material relevante de «${d.title}»:\n<<<\n${relevant(d.text, question + ' ' + ((st && st.say) || ''), 7000)}\n>>>\nSi el material no responde, dilo y contesta con conocimiento general.` : ''}
@@ -255,7 +298,7 @@ let lastStatus = ''; function pushStatus(st) { const b = localBase(); if (!b) re
 export async function explain({ docId, topic, focus, level } = {}) {
   const doc = docId ? await db.get('projects', docId) : null; if (docId && !doc) throw new Error('No encuentro ese documento');
   location.hash = '#learn'; const t = toast(`🎓 Preparando la clase${doc ? ' de «' + doc.title + '»' : ''}…`, 60000);
-  try { const lesson = await makeLesson({ doc, topic: topic || (doc && doc.title), focus, level }); hideToast(); startLesson(lesson, { doc }).catch(e => toast('⚠️ ' + e.message, 6000)); return lesson; }
+  try { const lesson = await makeLesson({ doc, topic: topic || (doc && doc.title), focus, level }); hideToast(); const rec = await saveLessonRec(lesson, { doc, topic: topic || (doc && doc.title), focus, level }).catch(() => null); startLesson(lesson, { doc, rec }).catch(e => toast('⚠️ ' + e.message, 6000)); return lesson; }
   catch (e) { hideToast(); throw e; }
 }
 export async function renderLearn(r) {
@@ -270,8 +313,9 @@ export async function renderLearn(r) {
   r.append(el('section', { class: 'card ln-hero' }, el('div', { class: 'badge prem' }, 'APRENDER'), el('h2', {}, '🎓 Tu profe para cualquier tema'),
     el('p', { class: 'note' }, 'Te da la clase en la tele con pizarra y voz, a partir de tus documentos o de lo que le pidas. Puedes interrumpirle con preguntas en cualquier momento.'),
     topic, focus, el('div', { class: 'lbl' }, 'Nivel'), seg(LEVELS, () => lvl(), v => { s.learn.level = v; saveSettings(s); }),
-    el('div', { class: 'row-btns' }, btn('🎓 Explícamelo', e => go(e.currentTarget), 'b hot'), btn('📄 Subir PDF o documento', () => file.click(), 'b on'), btn('📝 Pegar texto', () => pasteText(r), 'mini-b')), file,
+    el('div', { class: 'row-btns' }, btn('🎓 Explícamelo', e => go(e.currentTarget), 'b hot'), btn('📄 Subir PDF o documento', () => file.click(), 'b on'), btn('📝 Pegar texto', () => pasteText(r), 'mini-b'), btn(`🧑‍🏫 ${teacher().name || 'Tu profe'} y tu aula`, () => openClassroom(), 'mini-b')), file,
     el('p', { class: 'note' }, `🗣 ${vnote}.${eng === 'browser' && !host.claude ? ' Con Plató abierto como aplicación y las voces instaladas suena mucho mejor.' : ''}`)));
+  r.append(await lessonsCard(r));
   const docs = await docsList();
   const lib = el('div', { class: 'ln-lib' }); for (const d of docs) lib.append(el('div', { class: 'ln-doc' }, el('i', {}, d.source === 'movil' ? '📱' : d.source === 'texto' ? '📝' : '📄'), el('div', {}, el('b', {}, d.title), el('small', {}, `${d.pages > 1 ? d.pages + ' páginas · ' : ''}${Math.round(d.chars / 1000)}k caracteres`)),
     btn('🎓 Clase', async e => { unlockAudio(); const b = e.currentTarget; busy(b, 'Preparando…'); try { await explain({ docId: d.id, focus: focus.value.trim() }); } catch (er) { toast('⚠️ ' + er.message, 6000); } busy(b); }, 'b on'),
