@@ -57,6 +57,7 @@ Sube un PDF (o pega un texto, o simplemente di el tema) y un profe low-poly te d
   - **máquina por piezas** (espiras, bobinas, engranajes, imanes, cables, flechas de fuerza…, con grupos que giran juntos).
 
   Empieza a montarlo desde el primer paso, y cada elemento aparece justo cuando el profe lo nombra.
+- Las máquinas se colocan **por relación** («encima del chasis», «rueda en la esquina delantera izquierda», «al lado del motor») en vez de por coordenadas, y un repaso automático apoya en su sitio cualquier pieza que flote, se hunda o quede bajo el suelo. Hay ruedas de verdad (neumático y buje), cuñas y cúpulas para carrocerías.
 - **Cámara de documental**: cuando habla de una parte, la cámara se acerca (primer plano), pone el resto en rayos X o lo corta para ver por dentro, y luego vuelve al plano general.
 - **Pruébalo tú**: el visual puede traer un mando (deslizador o interruptor) que cambia el modelo: más corriente y el rotor gira más rápido, a cero se para, un interruptor invierte el giro…
 - Es **interactivo**: gíralo con el dedo, pellizca para ampliar, toca un elemento para ver qué es, despieza las máquinas. Algunas preguntas de repaso son de **tocar** («toca la pieza que invierte la corriente»): la correcta se ilumina en verde y la cámara se acerca a ella. En el móvil salen las piezas como botones.

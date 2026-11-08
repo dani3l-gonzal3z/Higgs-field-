@@ -143,7 +143,7 @@ const COL = { rojo: '#e5484d', azul: '#3b82f6', verde: '#22c55e', amarillo: '#fa
 const colorOf = c => { const k = String(c || '').toLowerCase().trim(); return COL[k] || (/^#[0-9a-f]{3,8}$/i.test(k) ? k : '#94a3b8'); };
 const stage = new THREE.Group(); scene.add(stage); const stageInner = new THREE.Group(); stage.add(stageInner);
 const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.08, 0.1, 10), M('#3a4358')); pedestal.position.y = -0.05; stage.add(pedestal); stage.visible = false;
-let KIND = 'machine', ITEMS = [], GROUPS = {}, SCENE_ON = false, sceneT = 0, buildStart = 0, EXPLODE = 0, explodeT = 0, userT = 0;
+let KIND = 'machine', KIND_NEXT = 'machine', ITEMS = [], GROUPS = {}, SCENE_ON = false, sceneT = 0, buildStart = 0, EXPLODE = 0, explodeT = 0, userT = 0;
 function labelSprite(text) { const c = document.createElement('canvas'); const x = c.getContext('2d', { willReadFrequently: true }); const fs = 44; x.font = `700 ${fs}px system-ui,sans-serif`; const w = Math.ceil(x.measureText(text).width) + 36; c.width = w; c.height = fs + 26;
   x.font = `700 ${fs}px system-ui,sans-serif`; x.fillStyle = 'rgba(15,18,26,.85)'; x.beginPath(); x.roundRect(0, 0, w, c.height, 16); x.fill(); x.fillStyle = '#ffe28a'; x.textBaseline = 'middle'; x.fillText(text, 18, c.height / 2 + 2);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true })); sp.renderOrder = 10; const h = 0.125; sp.scale.set(h * w / c.height, h, 1); sp.userData.s0 = sp.scale.clone(); return sp; }
@@ -161,6 +161,8 @@ function geomOf(it) { const z = Array.isArray(it.size) ? it.size.map(Number) : [
     case 'loop': case 'frame': { const w = z[0] || 0.8, h = z[1] || 0.5, r = z[2] || 0.035; const pts = [[-w / 2, -h / 2, 0], [w / 2, -h / 2, 0], [w / 2, h / 2, 0], [-w / 2, h / 2, 0]].map(p => new THREE.Vector3(...p)); return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.02), 64, r, 6, true); }
     case 'coil': { const R = z[0] || 0.25, L = z[1] || 0.8, n = Math.max(2, Math.min(30, it.turns || 8)), r = z[2] || 0.025; const pts = []; for (let i = 0; i <= n * 16; i++) { const a = i / 16 * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * R, -L / 2 + L * i / (n * 16), Math.sin(a) * R)); } return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), n * 24, r, 5, false); }
     case 'gear': { const R = z[0] || 0.4, t = z[1] || 0.12, n = Math.max(6, Math.min(40, it.teeth || 12)); const sh = new THREE.Shape(); for (let i = 0; i < n * 2; i++) { const a = i / (n * 2) * Math.PI * 2, rr = i % 2 ? R * 0.82 : R; const a2 = a + Math.PI / (n * 2); if (i === 0) sh.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); else sh.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); sh.lineTo(Math.cos(a2) * rr, Math.sin(a2) * rr); } const hole = new THREE.Path(); hole.absarc(0, 0, R * 0.2, 0, Math.PI * 2, true); sh.holes.push(hole); const g = new THREE.ExtrudeGeometry(sh, { depth: t, bevelEnabled: false }); g.translate(0, 0, -t / 2); return g; }
+    case 'wedge': { const w = z[0] || 0.6, h = z[1] || 0.3, d = z[2] || 0.6; const sh = new THREE.Shape(); sh.moveTo(-d / 2, 0); sh.lineTo(d / 2, 0); sh.lineTo(d / 2, h); sh.lineTo(-d / 2, h * 0.25); sh.closePath(); const g = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: false }); g.rotateY(Math.PI / 2); g.translate(-w / 2, -h / 2, 0); return g; }
+    case 'dome': { const r = z[0] || 0.3; const g = new THREE.SphereGeometry(r, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2); g.translate(0, -r / 2, 0); return g; }
     default: return new THREE.BoxGeometry(z[0] || 0.5, z[1] ?? z[0] ?? 0.5, z[2] ?? z[0] ?? 0.5);
   } }
 function makeItem(it) {
@@ -168,6 +170,9 @@ function makeItem(it) {
   const mat = new THREE.MeshStandardMaterial({ color: colorOf(it.color), flatShading: true, roughness: 0.6, metalness: /cobre|plata|oro|dorado|metal/i.test(it.color || '') ? 0.5 : 0.05, transparent: it.opacity != null, opacity: it.opacity != null ? Math.max(0.15, +it.opacity) : 1, emissive: new THREE.Color('#000') });
   if (it.shape === 'arrow') { const d = new THREE.Vector3(...V(it.dir, [0, 1, 0])); const len = +it.len || d.length() || 0.8; d.normalize(); const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, len * 0.78, 6), mat); shaft.position.y = len * 0.39; const head = new THREE.Mesh(new THREE.ConeGeometry(0.08, len * 0.22, 6), mat); head.position.y = len * 0.89; const a = new THREE.Group(); a.add(shaft, head); a.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d); g.add(a); }
   else if (it.shape === 'text') { const sp = labelSprite(String(it.text || it.label || '')); sp.scale.multiplyScalar(1.6); g.add(sp); }
+  else if (it.shape === 'wheel') { const z = Array.isArray(it.size) ? it.size.map(Number) : []; const r = z[0] || 0.2, w = z[1] || r * 0.55;
+    const tm = new THREE.MeshStandardMaterial({ color: '#23272f', flatShading: true, roughness: 0.9, emissive: new THREE.Color('#000') }), hm = new THREE.MeshStandardMaterial({ color: colorOf(it.color || 'plata'), flatShading: true, roughness: 0.5, emissive: new THREE.Color('#000') });
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 14), tm), hub = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.5, r * 0.5, w * 1.08, 8), hm); tire.rotation.z = hub.rotation.z = Math.PI / 2; g.add(tire, hub); g.userData.mats = [tm, hm]; }
   else if (it.shape === 'magnet') { const z = Array.isArray(it.size) ? it.size.map(Number) : [0.3, 0.6, 0.3]; const w = z[0] || 0.3, h = z[1] || 0.6, d = z[2] || 0.3;
     const n = new THREE.Mesh(new THREE.BoxGeometry(w, h / 2, d), new THREE.MeshStandardMaterial({ color: '#e5484d', flatShading: true, roughness: 0.6, emissive: new THREE.Color('#000') })); n.position.y = h / 4;
     const so = new THREE.Mesh(new THREE.BoxGeometry(w, h / 2, d), new THREE.MeshStandardMaterial({ color: '#3b82f6', flatShading: true, roughness: 0.6, emissive: new THREE.Color('#000') })); so.position.y = -h / 4; g.add(n, so); g.userData.mats = [n.material, so.material]; }
@@ -180,7 +185,7 @@ function setScene(sc) {
   if (!sc || (!sc.items && !sc.add && !sc.highlight && !sc.clear && !sc.visual && !sc.camera && !sc.control && !sc.remove)) return;
   if (sc.visual) { const ex = expandVisual(sc.visual); sc = { ...sc, items: ex.items.concat(sc.add || []), groups: { ...ex.groups, ...(sc.groups || {}) }, rotate: sc.rotate ?? ex.rotate, add: null, kind: ex.kind }; }
   else if (sc.items && sc.add) sc = { ...sc, items: sc.items.concat(sc.add), add: null };
-  const structural = !!(sc.items || sc.add || sc.remove || sc.clear); if (sc.items || sc.clear) { setCam(null); CAM.pending = null; }
+  const structural = !!(sc.items || sc.add || sc.remove || sc.clear); if (sc.items) KIND_NEXT = sc.kind || 'machine'; if (sc.items || sc.clear) { setCam(null); CAM.pending = null; }
   if (sc.clear || sc.items) { for (const it of ITEMS) stageInner.remove(it); ITEMS = []; }
   if (sc.items || sc.clear) { for (const k in GROUPS) stageInner.remove(GROUPS[k]); GROUPS = {}; }
   for (const [name, gs] of Object.entries(sc.groups || {})) { let G = GROUPS[name]; if (!G) { G = GROUPS[name] = new THREE.Group(); stageInner.add(G); } G.position.set(...V(gs.pos)); const r = V(gs.rot).map(d => d * Math.PI / 180); G.rotation.set(r[0], r[1], r[2]); G.userData.spec = gs; }
@@ -194,6 +199,7 @@ function setScene(sc) {
   // Medimos en coordenadas del propio modelo (sin la posición, giro ni escala del escenario)
   const keep = { p: stage.position.clone(), r: stage.rotation.y, rx: stage.rotation.x, s: stage.scale.x }; stage.position.set(0, 0, 0); stage.rotation.set(0, 0, 0); stage.scale.setScalar(1); const gr = {}; for (const k in GROUPS) { gr[k] = GROUPS[k].rotation.clone(); const sp = GROUPS[k].userData.spec || {}; const r0 = V(sp.rot).map(d => d * Math.PI / 180); GROUPS[k].rotation.set(r0[0], r0[1], r0[2]); }
   stageInner.scale.setScalar(1); stageInner.position.set(0, 0, 0); for (const o of ITEMS) { o.scale.setScalar(1); o.position.copy(o.userData.base); } stage.updateMatrixWorld(true);
+  if (KIND_NEXT === 'machine' || KIND_NEXT === 'model') { resolveLayout(); stage.updateMatrixWorld(true); }
   const box = new THREE.Box3(); for (const o of ITEMS) box.expandByObject(o); const size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
   const portrait = innerWidth / innerHeight < 1; const k = Math.min((portrait ? 1.35 : 1.9) / Math.max(size.x, size.z, 0.01), (portrait ? 1.1 : 1.2) / Math.max(size.y, 0.01), 2.5);
   stageInner.scale.setScalar(k); stageInner.position.set(-ctr.x * k, -box.min.y * k + 0.02, -ctr.z * k);
@@ -289,6 +295,35 @@ function fit() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h); 
   else { CAM.base.pos.set(0, 1.75, 6.3); CAM.base.look.set(0, 1.5, 0); camera.fov = w / h > 1.6 ? 35 : 42; }
   if (!CAM.focus) { camera.position.copy(CAM.base.pos); CAM.look.copy(CAM.base.look); camera.lookAt(CAM.look); }
   camera.updateProjectionMatrix(); }
+/* ---------- Colocación robusta de máquinas: relaciones en vez de coordenadas y un repaso que corrige lo que flota o se hunde ---------- */
+const SIDES = { 'front-left': [-1, 1], 'front-right': [1, 1], 'back-left': [-1, -1], 'back-right': [1, -1], left: [-1, 0], right: [1, 0], front: [0, 1], back: [0, -1], top: [0, 0], center: [0, 0] };
+function boxOf(o, b = new THREE.Box3()) { b.makeEmpty(); o.updateMatrixWorld(true); o.traverse(m => { if (m.isMesh) b.expandByObject(m); }); return b; }
+function moveBy(o, d) { o.position.add(d); o.userData.base.copy(o.position); o.updateMatrixWorld(true); }
+function resolveLayout() { const top = ITEMS.filter(o => o.parent === stageInner); const V3 = THREE.Vector3;
+  for (let pass = 0; pass < 3; pass++) for (const o of top) { const sp = o.userData.spec; const rel = sp.on ? 'on' : sp.inside ? 'inside' : sp.beside ? 'beside' : sp.at ? 'at' : null; if (!rel) continue;
+    const par = findItem(sp[rel]); if (!par || par === o) continue; const P = boxOf(par).clone(), B = boxOf(o).clone(); if (P.isEmpty() || B.isEmpty()) continue;
+    const pc = P.getCenter(new V3), bc = B.getCenter(new V3), bs = B.getSize(new V3), ps = P.getSize(new V3); const side = String(sp.side || '').toLowerCase(); const [sx, sz] = SIDES[side] || [0, 0]; const ox = +sp.dx || 0, oz = +sp.dz || 0, wheel = sp.shape === 'wheel';
+    const want = new V3();
+    if (rel === 'on' || side === 'top') want.set(pc.x + ox, P.max.y + bs.y / 2, pc.z + oz);
+    else if (rel === 'inside') want.set(pc.x + ox, pc.y + (+sp.dy || 0), pc.z + oz);
+    else if (rel === 'beside') { const bx = sx || (!sz ? 1 : 0); want.set(bx ? (bx < 0 ? P.min.x - bs.x / 2 : P.max.x + bs.x / 2) : pc.x + ox, P.min.y + bs.y / 2, sz ? (sz > 0 ? P.max.z + bs.z / 2 : P.min.z - bs.z / 2) : pc.z + oz); }
+    else { const corner = sx && sz; // esquina: ruedas por fuera y apoyadas en el suelo; el resto, enrasado por dentro
+      want.x = !sx ? pc.x + ox : wheel ? (sx < 0 ? P.min.x - bs.x / 2 : P.max.x + bs.x / 2) : corner ? (sx < 0 ? P.min.x + bs.x / 2 : P.max.x - bs.x / 2) : (sx < 0 ? P.min.x - bs.x / 2 : P.max.x + bs.x / 2);
+      want.z = !sz ? pc.z + oz : wheel ? (sz > 0 ? P.max.z - Math.min(ps.z * 0.2, bs.z) : P.min.z + Math.min(ps.z * 0.2, bs.z)) : corner ? (sz > 0 ? P.max.z - bs.z / 2 : P.min.z + bs.z / 2) : (sz > 0 ? P.max.z + bs.z / 2 : P.min.z - bs.z / 2);
+      want.y = wheel ? bs.y / 2 : pc.y; }
+    moveBy(o, want.sub(bc)); }
+  // Gravedad: lo que flota suelto baja hasta apoyarse; lo que se hunde en la pieza de debajo sube a su superficie; nada por debajo del suelo.
+  const skip = sp => sp.on || sp.inside || sp.at || sp.beside || sp.anim || sp.float || sp.token || ['arrow', 'tube', 'text', 'ring', 'plane'].includes(sp.shape);
+  const boxes = new Map(top.map(o => [o, boxOf(o).clone()])); const cand = top.filter(o => !skip(o.userData.spec) && !boxes.get(o).isEmpty()).sort((a, b) => boxes.get(a).min.y - boxes.get(b).min.y);
+  for (let gp = 0; gp < 2; gp++) for (const o of cand) { const B = boxes.get(o), cy = (B.min.y + B.max.y) / 2, fp = Math.max(1e-6, (B.max.x - B.min.x) * (B.max.z - B.min.z)); let sup = 0, touching = false;
+    for (const [q, Q] of boxes) { if (q === o || Q.isEmpty() || q.userData.spec.shape === 'arrow' || q.userData.spec.shape === 'text') continue; const e = 0.012;
+      if (B.min.x - e < Q.max.x && B.max.x + e > Q.min.x && B.min.y - e < Q.max.y && B.max.y + e > Q.min.y && B.min.z - e < Q.max.z && B.max.z + e > Q.min.z) touching = true;
+      const ovx = Math.min(B.max.x, Q.max.x) - Math.max(B.min.x, Q.min.x), ovz = Math.min(B.max.z, Q.max.z) - Math.max(B.min.z, Q.min.z), qf = Math.max(1e-6, (Q.max.x - Q.min.x) * (Q.max.z - Q.min.z));
+      // apoyo: lo que queda por debajo de su centro, o una superficie más ancha de la que asoma por arriba (un bote hundido en la mesa)
+      if (ovx > 0 && ovz > 0 && ((ovx * ovz >= 0.25 * Math.min(fp, qf) && Q.max.y <= cy + 1e-3) || (ovx * ovz >= 0.7 * fp && fp <= qf && B.max.y > Q.max.y + 0.01))) sup = Math.max(sup, Q.max.y); }
+    let dy = 0; if (B.min.y < sup - 0.01) dy = sup - B.min.y; else if (B.min.y > sup + 0.03 && !touching) dy = sup - B.min.y;
+    if (dy) { moveBy(o, new THREE.Vector3(0, dy, 0)); B.translate(new THREE.Vector3(0, dy, 0)); } } }
+
 /* ---------- Visuales por plantilla: la IA da los datos y aquí se colocan siempre bien ---------- */
 const PAL = ['#3b82f6', '#f97316', '#22c55e', '#a855f7', '#facc15', '#ec4899', '#14b8a6', '#ef4444', '#84cc16', '#06b6d4'];
 const fmtN = n => { const x = +n; if (!isFinite(x)) return String(n ?? ''); return Math.abs(x) >= 1000 ? x.toLocaleString('es-ES', { maximumFractionDigits: 0 }) : x.toLocaleString('es-ES', { maximumFractionDigits: 2 }); };
