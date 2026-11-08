@@ -8,7 +8,7 @@ import { llmJSON, llmText, llmReady } from './llm.js';
 import { readBook } from './book.js';
 import { host } from './core.js';
 import { guideEvent } from './guide.js';
-import { detectLocal, hasLocalVoice, speakLocal } from './local.js';
+import { detectLocal, hasLocalVoice, speakLocal, localCaps } from './local.js';
 
 const COLORS = ['rojo', 'azul', 'verde', 'amarillo', 'naranja', 'morado', 'rosa', 'blanco', 'negro', 'gris', 'marron', 'granate', 'beige'];
 const LAYOUT = 'studio: plató vacío. city: calles de 12 m a lo largo de z en x=0,±48,±96 y a lo largo de x en z=0,±48,±96; cruce en (0,0) con pasos de cebra en z=±8; carriles a x=±3; aceras a ±7; edificios a partir de 6.5 m del eje; parque en (24,-24). highway: autopista a lo largo de z entre x=-11 y 11, mediana en x=0, carriles x=±3 y ±8. desert: abierto, rocas a partir de 14 m del centro. forest: camino de tierra en x=0 a lo largo de z, árboles desde |x|>4.5. grid: espacio abstracto vacío.';
@@ -178,23 +178,27 @@ async function genAll(pr, o = {}) { const list = shots().filter(x => x.sh.previz
   await pool(list, 3, x => genShot(pr, x.sc, x.sh)); toast('✨ Vídeo final generado', 3500); }
 
 /* ---------- Voces, efectos y música (Muapi) ---------- */
-function voiceEngines() { return [['kokoro', '🏠 Gratis (aparato)'], ['edge', '🌐 Gratis (Edge)'], ['cloud', '☁️ ElevenLabs']]; }
-function voiceEngine(o) { if (o.voiceEngine) return o.voiceEngine; return hasLocalVoice('kokoro') ? 'kokoro' : 'cloud'; }
+function voiceEngines() { return [['voicestudio', '🎙 VoiceStudio'], ['kokoro', '🏠 Gratis (aparato)'], ['edge', '🌐 Gratis (Edge)'], ['cloud', '☁️ ElevenLabs']]; }
+function voiceEngine(o) { if (o.voiceEngine) return o.voiceEngine; return hasLocalVoice('voicestudio') ? 'voicestudio' : hasLocalVoice('kokoro') ? 'kokoro' : 'cloud'; }
 // Voz para cada personaje con el motor gratis elegido (por su descripción: mujer, hombre, niño, mayor).
 function freeVoice(pr, c, engine) { const d = (c && (c.voice || '') + ' ' + (c.desc || '') + ' ' + (c.kind || '')).toLowerCase(); const fem = /female|woman|girl|mujer|niña|señora|abuela|grandma|she/.test(d), old = /old|elder|anciano|abuelo|grandpa|mayor/.test(d); const en = pr.opts.lang === 'en';
+  if (engine === 'voicestudio') { const ps = ((localCaps() || {}).voices || {}).voicestudio || []; const prof = ps.filter(v => v.id !== 'default'); if (prof.length) { pr._vs = (pr._vs || 0) + 1; return prof[(pr._vs - 1) % prof.length].id; } return 'default'; }
   if (engine === 'edge') return en ? (fem ? 'en-US-AriaNeural' : 'en-US-GuyNeural') : fem ? (pr._ef = (pr._ef || 0) + 1) % 2 ? 'es-ES-ElviraNeural' : 'es-MX-DaliaNeural' : (pr._em = (pr._em || 0) + 1) % 2 ? 'es-ES-AlvaroNeural' : 'es-MX-JorgeNeural';
   return en ? (fem ? 'af_heart' : /child|kid|niño/.test(d) ? 'am_puck' : 'am_michael') : fem ? 'ef_dora' : old ? 'em_santa' : 'em_alex'; }
+// VoiceStudio sin perfiles guardados: diseña la voz por atributos (género y edad) a partir de la descripción del personaje.
+function vsInstruct(c) { const d = (c && (c.voice || '') + ' ' + (c.desc || '') + ' ' + (c.kind || '')).toLowerCase(); const fem = /female|woman|girl|mujer|niña|señora|abuela|grandma|she/.test(d);
+  const age = /child|kid|niño|niña/.test(d) ? 'child' : /old|elder|anciano|abuel|grand|mayor/.test(d) ? 'elderly' : /teen|adolescente/.test(d) ? 'teenager' : 'young adult'; return `${fem ? 'female' : 'male'}, ${age}`; }
 async function soundShot(pr, sc, sh) {
   const s = getSettings(); const engine = voiceEngine(pr.opts); const free = engine !== 'cloud';
   if (host.claude) { toast('El audio se genera en la app (fuera de Claude)'); return; }
   if (!free && !s.keys.muapi) { toast('Las voces de ElevenLabs usan Muapi: añade la clave en Ajustes o elige voces gratis'); return; }
-  if (free) { await detectLocal(); if (!hasLocalVoice(engine)) { toast(engine === 'kokoro' ? 'Las voces gratis necesitan Plató abierto como aplicación con las voces instaladas (node mcp/server.mjs --setup-voices)' : 'Las voces de Edge necesitan Plató abierto como aplicación', 6000); return; } }
+  if (free) { await detectLocal(); if (!hasLocalVoice(engine)) { toast(engine === 'voicestudio' ? 'Abre VoiceStudio en este ordenador (y Plató como aplicación) para usar sus voces' : engine === 'kokoro' ? 'Las voces gratis necesitan Plató abierto como aplicación con las voces instaladas (node mcp/server.mjs --setup-voices)' : 'Las voces de Edge necesitan Plató abierto como aplicación', 6000); return; } }
   const reg = s.keys.muapi ? await registry() : []; sh.st.sound = 'run'; refresh(); sh.audio = sh.audio || [];
   try {
     const tasks = [];
     if (free && (sh.dialogue || []).length) { pr.voices = pr.voices || {}; const vk = engine + 'Voices'; pr[vk] = pr[vk] || {}; sh.audio = [];
       for (const [i, d] of sh.dialogue.entries()) { const ch = (pr.plan.characters || []).find(c => c.name === d.who); const voice = pr[vk][d.who] || (pr[vk][d.who] = freeVoice(pr, ch, engine));
-        const r = await speakLocal({ engine, text: d.line, voice }); sh.audio[i] = { id: uid(), blob: r.blob, who: d.who, line: d.line, dur: r.dur, words: r.words, local: engine }; } }
+        const r = await speakLocal({ engine, text: d.line, voice, lang: pr.opts.lang === 'en' ? 'en' : 'es', instruct: engine === 'voicestudio' && voice === 'default' ? vsInstruct(ch) : undefined }); sh.audio[i] = { id: uid(), blob: r.blob, who: d.who, line: d.line, dur: r.dur, words: r.words, local: engine }; } }
     if (pr.opts.sfx && sh.final && sh.sfx) { const mm = reg.find(r => r.id === 'mmaudio-v2-video-to-video'); if (mm) tasks.push(runJob({ provider: 'muapi', endpoint: mm.e, name: mm.n, input: { video_url: sh.final.blob, prompt: sh.sfx }, kind: 'video', label: `${sh.id} · sonido`, meta: { project: pr.id, shot: sh.id, role: 'sfx' } }).promise.then(g => { sh.final = { id: g.id, blob: g.blob }; })); }
     const tts = !free && (reg.find(r => r.id === pr.opts.voiceModel) || reg.find(r => r.id === 'elevenlabs-tts-turbo-2-5'));
     if (tts && (sh.dialogue || []).length) { const voices = await voiceMap(pr, tts); sh.audio = [];

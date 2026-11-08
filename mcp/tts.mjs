@@ -88,10 +88,52 @@ async function edgeSay(text, voice = 'es-ES-ElviraNeural', speed = 1) {
   return { audio, mime: 'audio/mpeg', dur: words.length ? words[words.length - 1].e + 0.2 : null, words };
 }
 
-export async function speak({ engine = 'kokoro', text, voice, speed = 1 }) {
+/* ---------- VoiceStudio (https://github.com/debpalash/VoiceStudio): si lo tienes abierto, Plató lo usa como voz ----------
+   Es una aplicación aparte (AGPL) con su propia API local compatible con OpenAI; Plató solo le habla por HTTP, no la incluye.
+   VOICESTUDIO_URL (por defecto http://localhost:3900) y VOICESTUDIO_KEY si la protegiste con clave. */
+const VS = { url: (process.env.VOICESTUDIO_URL || 'http://localhost:3900').replace(/\/$/, ''), key: process.env.VOICESTUDIO_KEY || '' };
+const vsH = (extra = {}) => ({ ...(VS.key ? { Authorization: 'Bearer ' + VS.key } : {}), ...extra });
+let vsCache = { t: 0, v: null };
+export async function voiceStudioStatus(force = false) {
+  if (!force && vsCache.v && Date.now() - vsCache.t < 15000) return vsCache.v; let v;
+  try { const h = await fetch(VS.url + '/health', { headers: vsH(), signal: AbortSignal.timeout(1500) }); if (!h.ok) throw new Error('HTTP ' + h.status);
+    let voices = [];
+    try { const r = await fetch(VS.url + '/v1/audio/voices', { headers: vsH(), signal: AbortSignal.timeout(4000) }); const j = await r.json();
+      voices = (j.voices || []).map(x => ({ id: x.id || x.voice_id, label: (x.type === 'profile' ? '⭐ ' : '') + (x.name || x.id) + (x.language ? ` (${x.language})` : ''), profile: x.type === 'profile' }))
+        .sort((a, b) => (b.profile ? 1 : 0) - (a.profile ? 1 : 0)); } catch (e) {}
+    v = { ok: true, url: VS.url, voices: [{ id: 'default', label: 'Voz por defecto' }, ...voices.filter(x => x.profile)] };
+  } catch (e) { v = { ok: false, why: `no está abierto en ${VS.url}` }; }
+  vsCache = { t: Date.now(), v }; return v; }
+function wavDur(buf) { try { if (buf.toString('ascii', 0, 4) !== 'RIFF') return null; let p = 12, rate = 0; while (p + 8 <= buf.length) { const id = buf.toString('ascii', p, p + 4), n = buf.readUInt32LE(p + 4);
+  if (id === 'fmt ') rate = buf.readUInt32LE(p + 16); if (id === 'data') return rate ? Math.min(n, buf.length - p - 8) / rate : null; p += 8 + n + (n & 1); } } catch (e) {} return null; }
+// Tiempos de palabra: reparte la duración por letras (con pausas en la puntuación)
+function estWords(text, dur) { const ws = text.split(/\s+/).filter(Boolean); const wt = ws.map(w => Math.max(1.5, w.replace(/[^\p{L}\p{N}]/gu, '').length) + (/[.,;:!?…]$/.test(w) ? 3 : 0.6)); const tot = wt.reduce((a, b) => a + b, 0) || 1; let t = 0.05;
+  const k = Math.max(0.1, (dur || ws.length * 0.38) - 0.1); return ws.map((w, i) => { const d = wt[i] / tot * k; const o = { w, s: +t.toFixed(3), e: +(t + d * 0.9).toFixed(3) }; t += d; return o; }); }
+// Si VoiceStudio tiene un modelo de transcripción, le pedimos dónde empieza cada palabra de su propio audio: subtítulos clavados.
+async function vsAlign(audio, mime, text, dur) {
+  if (process.env.VOICESTUDIO_ALIGN === '0') return null;
+  try { const fd = new FormData(); fd.append('file', new Blob([audio], { type: mime }), 'voz.' + (mime.includes('wav') ? 'wav' : 'mp3')); fd.append('model', 'whisper-1'); fd.append('response_format', 'verbose_json');  fd.append('timestamp_granularities[]', 'word');
+    const r = await fetch(VS.url + '/v1/audio/transcriptions', { method: 'POST', headers: vsH(), body: fd, signal: AbortSignal.timeout(30000) }); if (!r.ok) return null; const j = await r.json();
+    const tw = (j.words || (j.segments || []).flatMap(s => s.words || [])).map(x => ({ w: String(x.word || x.text || '').trim(), s: +x.start, e: +x.end })).filter(x => x.w && isFinite(x.s)); if (tw.length < 2) return null;
+    // casamos por posición relativa en el texto (resiste pequeñas diferencias de transcripción)
+    const ws = text.split(/\s+/).filter(Boolean); const cum = a => { let c = 0; return a.map(x => { const r0 = c; c += x.length + 1; return r0; }); }; const cw = cum(ws), ct = cum(tw.map(x => x.w)); const Cw = cw[cw.length - 1] + ws[ws.length - 1].length || 1, Ct = ct[ct.length - 1] + tw[tw.length - 1].w.length || 1;
+    let k = 0; const S = ws.map((w, i) => { const f = cw[i] / Cw; while (k + 1 < tw.length && ct[k + 1] / Ct <= f + 1e-6) k++; return tw[k].s; });
+    for (let i = 1; i < S.length; i++) if (S[i] < S[i - 1]) S[i] = S[i - 1]; const end = dur || tw[tw.length - 1].e;
+    return ws.map((w, i) => ({ w, s: +S[i].toFixed(3), e: +Math.max(S[i] + 0.1, (i + 1 < ws.length ? S[i + 1] : end) - 0.02).toFixed(3) }));
+  } catch (e) { return null; } }
+async function voiceStudioSay(text, voice = 'default', speed = 1, instruct, lang) {
+  const r = await fetch(VS.url + '/v1/audio/speech', { method: 'POST', headers: vsH({ 'Content-Type': 'application/json' }), body: JSON.stringify({ model: 'tts-1', voice: voice || 'default', input: text, response_format: 'wav', speed, language: lang || 'es', ...(instruct ? { instruct } : {}) }), signal: AbortSignal.timeout(180000) })
+    .catch(e => { throw new Error(`VoiceStudio no responde en ${VS.url} (¿está abierto?)`); });
+  if (!r.ok) { let m = ''; try { m = (await r.text()).slice(0, 200); } catch (e) {} throw new Error(`VoiceStudio: ${r.status} ${m}`); }
+  const audio = Buffer.from(await r.arrayBuffer()); if (audio.length < 100) throw new Error('VoiceStudio no devolvió audio'); const mime = r.headers.get('content-type') || 'audio/wav';
+  const dur = wavDur(audio); const words = (await vsAlign(audio, mime, text, dur)) || estWords(text, dur);
+  return { audio, mime: mime.includes('wav') ? 'audio/wav' : mime, dur, words };
+}
+
+export async function speak({ engine = 'kokoro', text, voice, speed = 1, instruct, lang }) {
   text = String(text || '').trim(); if (!text) throw new Error('Texto vacío'); if (text.length > 5000) throw new Error('Texto demasiado largo (máx. 5000 caracteres por petición)');
   speed = Math.max(0.5, Math.min(2, +speed || 1));
-  return engine === 'edge' ? edgeSay(text, voice, speed) : kokoroSay(text, voice, speed);
+  return engine === 'edge' ? edgeSay(text, voice, speed) : engine === 'voicestudio' ? voiceStudioSay(text, voice, speed, instruct && String(instruct).slice(0, 200), lang) : kokoroSay(text, voice, speed);
 }
 export function stopTTS() { try { K && K.proc && K.proc.kill(); } catch (e) {} }
 

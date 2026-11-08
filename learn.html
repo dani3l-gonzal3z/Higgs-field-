@@ -157,6 +157,7 @@ function geomOf(it) { const z = Array.isArray(it.size) ? it.size.map(Number) : [
     case 'capsule': return new THREE.CapsuleGeometry(z[0] || 0.15, z[1] || 0.5, 3, 8);
     case 'plane': return new THREE.BoxGeometry(z[0] || 1, z[1] || 1, 0.02);
     case 'ring': return new THREE.TorusGeometry(z[0] || 0.5, 0.012, 3, 48);
+    case 'cable': return new THREE.TubeGeometry(new THREE.LineCurve3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.001, 0)), 2, z[0] || 0.02, 5);
     case 'tube': { const pts = (it.points || []).map(p => new THREE.Vector3(...V(p))); if (pts.length < 2) return new THREE.BoxGeometry(0.1, 0.1, 0.1); return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, !!it.closed), 48, z[0] || 0.03, 6, !!it.closed); }
     case 'loop': case 'frame': { const w = z[0] || 0.8, h = z[1] || 0.5, r = z[2] || 0.035; const pts = [[-w / 2, -h / 2, 0], [w / 2, -h / 2, 0], [w / 2, h / 2, 0], [-w / 2, h / 2, 0]].map(p => new THREE.Vector3(...p)); return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.02), 64, r, 6, true); }
     case 'coil': { const R = z[0] || 0.25, L = z[1] || 0.8, n = Math.max(2, Math.min(30, it.turns || 8)), r = z[2] || 0.025; const pts = []; for (let i = 0; i <= n * 16; i++) { const a = i / 16 * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * R, -L / 2 + L * i / (n * 16), Math.sin(a) * R)); } return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), n * 24, r, 5, false); }
@@ -200,7 +201,7 @@ function setScene(sc) {
   const keep = { p: stage.position.clone(), r: stage.rotation.y, rx: stage.rotation.x, s: stage.scale.x }; stage.position.set(0, 0, 0); stage.rotation.set(0, 0, 0); stage.scale.setScalar(1); const gr = {}; for (const k in GROUPS) { gr[k] = GROUPS[k].rotation.clone(); const sp = GROUPS[k].userData.spec || {}; const r0 = V(sp.rot).map(d => d * Math.PI / 180); GROUPS[k].rotation.set(r0[0], r0[1], r0[2]); }
   stageInner.scale.setScalar(1); stageInner.position.set(0, 0, 0); for (const o of ITEMS) { o.scale.setScalar(1); o.position.copy(o.userData.base); } stage.updateMatrixWorld(true);
   if (KIND_NEXT === 'machine' || KIND_NEXT === 'model') { resolveLayout(); stage.updateMatrixWorld(true); }
-  const box = new THREE.Box3(); for (const o of ITEMS) box.expandByObject(o); const size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
+  const box = new THREE.Box3(); for (const o of ITEMS) if (!o.userData.dropped) box.union(boxOf(o)); const size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
   const portrait = innerWidth / innerHeight < 1; const k = Math.min((portrait ? 1.35 : 1.9) / Math.max(size.x, size.z, 0.01), (portrait ? 1.1 : 1.2) / Math.max(size.y, 0.01), 2.5);
   stageInner.scale.setScalar(k); stageInner.position.set(-ctr.x * k, -box.min.y * k + 0.02, -ctr.z * k);
   // Etiquetas del mismo tamaño en pantalla aunque el modelo se amplíe o encoja
@@ -210,7 +211,7 @@ function setScene(sc) {
   for (const o of ITEMS) if (!o.userData.shown) o.scale.setScalar(0.001);
   // Vector de despiece: cada pieza se aleja del centro
   const wp = o => o.userData.base.clone().add(o.parent && o.parent !== stageInner ? o.parent.position : new THREE.Vector3()); const c0 = new THREE.Vector3(); ITEMS.forEach(o => c0.add(wp(o))); c0.multiplyScalar(1 / Math.max(1, ITEMS.length));
-  ITEMS.forEach(o => { const d = wp(o).sub(c0); d.y = Math.max(0, d.y) + (o.parent !== stageInner ? 0.25 : 0); o.userData.ex = d.lengthSq() < 0.0025 ? new THREE.Vector3() : d.normalize().multiplyScalar(0.6); });
+  ITEMS.forEach(o => { if (o.userData.spec.shape === 'cable' || o.userData.spec.shape === 'tube') { o.userData.ex = new THREE.Vector3(); return; } const d = wp(o).sub(c0); d.y = Math.max(0, d.y) + (o.parent !== stageInner ? 0.25 : 0); o.userData.ex = d.lengthSq() < 0.0025 ? new THREE.Vector3() : d.normalize().multiplyScalar(0.6); });
   SCENE_ON = ITEMS.length > 0; if (sc.items) { KIND = sc.kind || 'machine'; stage.userData.spin = sc.rotate !== false; const tilt = { process: 0.42, cycle: 0.42, map: 0.5, concepts: 0.5, timeline: 0.22 }[KIND] || 0; stage.userData.tilt = tilt; stage.rotation.set(tilt, stage.userData.spin ? stage.rotation.y : 0, 0); } buildStart = performance.now(); if (SCENE_ON) { pose = 'point'; poseT = 1.6; } revealPlan(); ui3d();
 }
 // Cada pieza aparece cuando el profe la nombra (si su etiqueta sale en la frase); el resto, repartidas a lo largo de la explicación.
@@ -237,7 +238,7 @@ function animStage(dt, t) {
   for (const o of ITEMS) { const u = o.userData, sp = u.spec;
     // Nombres: con muchas piezas, cada etiqueta se ve unos segundos al aparecer, al brillar o al tocarla (🏷 las muestra todas)
     if (u.label) { if (u.shown > 0 && !u.bornAt) u.bornAt = t; u.label.visible = u.shown > 0.5 && (CAM.focus ? CAM.focus === o : (LABELS === 'all' || sp.keepLabel || nLab <= 6 || u.hl || u.picked || (t - u.bornAt) < 7)); const lb = u.label.userData; if (lb.s0) { lb.f = (lb.f ?? 1) + ((CAM.focus ? 0.4 : 1) - (lb.f ?? 1)) * (1 - Math.exp(-dt * 4)); u.label.scale.copy(lb.s0).multiplyScalar((lb.lf || 1) * lb.f); } }
-    o.visible = u.cv !== false;
+    o.visible = u.cv !== false && !u.dropped;
     if (u.shown > 0 && u.shown < 1) { u.shown = Math.min(1, u.shown + dt * 2.6); const e = 1 - Math.pow(1 - u.shown, 3); o.scale.setScalar(Math.max(0.001, e * (1 + 0.15 * Math.sin(u.shown * Math.PI)))); }
     if (u.shown < 1) continue; const sv = (+sp.speed || 1) * (u.cs ?? 1) * (u.cd ?? 1); u.ph = (u.ph || 0) + dt * sv;
     if (sp.anim !== 'pulse') { const s1 = o.scale.x + ((u.csc ?? 1) - o.scale.x) * (1 - Math.exp(-dt * 6)); o.scale.setScalar(s1); } const p = u.ex ? u.base.clone().add(u.ex.clone().multiplyScalar(explodeT)) : u.base; if (!sp.anim || sp.anim === 'spin' || sp.anim === 'spinx' || sp.anim === 'spinz' || sp.anim === 'pulse') o.position.copy(p);
@@ -313,7 +314,7 @@ function resolveLayout() { const top = ITEMS.filter(o => o.parent === stageInner
       want.y = wheel ? bs.y / 2 : pc.y; }
     moveBy(o, want.sub(bc)); }
   // Gravedad: lo que flota suelto baja hasta apoyarse; lo que se hunde en la pieza de debajo sube a su superficie; nada por debajo del suelo.
-  const skip = sp => sp.on || sp.inside || sp.at || sp.beside || sp.anim || sp.float || sp.token || ['arrow', 'tube', 'text', 'ring', 'plane'].includes(sp.shape);
+  const skip = sp => sp.on || sp.inside || sp.at || sp.beside || sp.anim || sp.float || sp.token || ['arrow', 'tube', 'cable', 'text', 'ring', 'plane'].includes(sp.shape);
   const boxes = new Map(top.map(o => [o, boxOf(o).clone()])); const cand = top.filter(o => !skip(o.userData.spec) && !boxes.get(o).isEmpty()).sort((a, b) => boxes.get(a).min.y - boxes.get(b).min.y);
   for (let gp = 0; gp < 2; gp++) for (const o of cand) { const B = boxes.get(o), cy = (B.min.y + B.max.y) / 2, fp = Math.max(1e-6, (B.max.x - B.min.x) * (B.max.z - B.min.z)); let sup = 0, touching = false;
     for (const [q, Q] of boxes) { if (q === o || Q.isEmpty() || q.userData.spec.shape === 'arrow' || q.userData.spec.shape === 'text') continue; const e = 0.012;
@@ -322,7 +323,19 @@ function resolveLayout() { const top = ITEMS.filter(o => o.parent === stageInner
       // apoyo: lo que queda por debajo de su centro, o una superficie más ancha de la que asoma por arriba (un bote hundido en la mesa)
       if (ovx > 0 && ovz > 0 && ((ovx * ovz >= 0.25 * Math.min(fp, qf) && Q.max.y <= cy + 1e-3) || (ovx * ovz >= 0.7 * fp && fp <= qf && B.max.y > Q.max.y + 0.01))) sup = Math.max(sup, Q.max.y); }
     let dy = 0; if (B.min.y < sup - 0.01) dy = sup - B.min.y; else if (B.min.y > sup + 0.03 && !touching) dy = sup - B.min.y;
-    if (dy) { moveBy(o, new THREE.Vector3(0, dy, 0)); B.translate(new THREE.Vector3(0, dy, 0)); } } }
+    if (dy) { moveBy(o, new THREE.Vector3(0, dy, 0)); B.translate(new THREE.Vector3(0, dy, 0)); } }
+  routeCables(top); }
+// Cables: "from"/"to" entre dos piezas → se tiende solo, de superficie a superficie, colgando un poco. Tubos sueltos: sus puntos no pueden salirse del modelo.
+function routeCables(top) { const V3 = THREE.Vector3; const solid = new THREE.Box3(); for (const o of top) { const sh = o.userData.spec.shape; if (!['cable', 'tube', 'arrow', 'text'].includes(sh)) solid.union(boxOf(o)); } if (solid.isEmpty()) return; const lim = solid.clone().expandByScalar(0.12); lim.min.y = Math.max(lim.min.y, 0.01);
+  const rebuild = (o, pts, r) => { const m = o.children.find(c => c.isMesh); if (!m) return; m.geometry.dispose(); m.geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.3), 64, r, 6, false); o.position.set(0, 0, 0); o.userData.base.set(0, 0, 0);
+    const lb = o.userData.label; if (lb) { const mid = pts[Math.floor(pts.length / 2)]; lb.position.set(mid.x, mid.y + 0.1, mid.z); } };
+  for (const o of top) { const sp = o.userData.spec; const z = Array.isArray(sp.size) ? sp.size.map(Number) : [];
+    if (sp.shape === 'cable' || (sp.shape === 'tube' && sp.from && sp.to)) { const A = findItem(sp.from), Bo = findItem(sp.to); if (!A || !Bo || A === o || Bo === o) continue;
+      const a0 = boxOf(A).clone(), b0 = boxOf(Bo).clone(); const ca = a0.getCenter(new V3), cb = b0.getCenter(new V3); const a = a0.clampPoint(cb, new V3), b = b0.clampPoint(ca, new V3);
+      // sale un poco de cada pieza (por arriba si están a la misma altura) y cuelga entre medias, sin bajar del suelo
+      const d = a.distanceTo(b) || 0.1, up = new V3(0, 0.06, 0); const a1 = a.clone().add(up), b1 = b.clone().add(up); const mid = a1.clone().lerp(b1, 0.5); mid.y = Math.max(0.03, Math.min(a1.y, b1.y) - Math.min(0.25, d * 0.18));
+      rebuild(o, [a, a1, mid, b1, b], z[0] || 0.02); continue; }
+    if (sp.shape === 'tube' && !o.userData.grouped) { const pts = (sp.points || []).map(p => new V3(...V(p)).add(o.position)); if (pts.length < 2) continue; if (pts.every(p => lim.containsPoint(p))) continue; o.userData.dropped = true; } } } // un tubo que se sale del modelo es casi siempre un error: mejor no enseñarlo
 
 /* ---------- Visuales por plantilla: la IA da los datos y aquí se colocan siempre bien ---------- */
 const PAL = ['#3b82f6', '#f97316', '#22c55e', '#a855f7', '#facc15', '#ec4899', '#14b8a6', '#ef4444', '#84cc16', '#06b6d4'];
@@ -402,7 +415,7 @@ function setControl(c) { CTRL = null; ctlEl.innerHTML = ''; document.body.classL
 /* ---------- Preguntas de tocar la pieza ---------- */
 let TAPQ = null;
 function tapQuiz(label) { const o = findItem(label); TAPQ = o ? { label } : null; for (const x of ITEMS) if (x.userData.spec.label && !x.userData.shown) x.userData.shown = 0.0001; pick(null); setCam(null); EXPLODE = 0;
-  parent.postMessage({ type: 'tapReady', ok: !!o, labels: ITEMS.filter(x => x.userData.spec.label && !x.userData.spec.nopick).map(x => x.userData.spec.label) }, '*'); }
+  parent.postMessage({ type: 'tapReady', ok: !!o, labels: ITEMS.filter(x => x.userData.spec.label && !x.userData.spec.nopick && !x.userData.dropped).map(x => x.userData.spec.label) }, '*'); }
 function tapResult(m) { TAPQ = null; const t = clock.elapsedTime; const right = findItem(m.label), got = m.picked ? findItem(m.picked) : null;
   if (got && got !== right) got.userData.tap = { ok: false, until: t + 2.5 }; if (right) { right.userData.tap = { ok: true, until: t + 3.5 }; setCam({ focus: m.label, mode: 'close' }); setTimeout(() => { if (CAM.focus === right) setCam(null); }, 3800); } }
 
@@ -425,7 +438,7 @@ cv.addEventListener('pointermove', e => { if (!touches.has(e.pointerId)) return;
   touches.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (!drag || !SCENE_ON) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY;
   if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 6) drag.moved = true; stage.rotation.y += dx * 0.01; stage.rotation.x = Math.max(-0.7, Math.min(0.7, stage.rotation.x + dy * 0.006)); userT = 8; });
 const up = e => { touches.delete(e.pointerId); if (drag && !drag.moved && SCENE_ON) { const r = cv.getBoundingClientRect(); ndc.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, camera);
-  const hits = ray.intersectObjects(ITEMS.filter(o => o.userData.shown >= 1 && !o.userData.spec.nopick && o.visible), true).filter(h => !h.object.isSprite); if (hits.length) { let o = hits[0].object; while (o && !ITEMS.includes(o)) o = o.parent; pick(o); userT = 10; } else pick(null); } drag = null; };
+  const hits = ray.intersectObjects(ITEMS.filter(o => o.userData.shown >= 1 && !o.userData.spec.nopick && o.visible && !o.userData.dropped), true).filter(h => !h.object.isSprite); if (hits.length) { let o = hits[0].object; while (o && !ITEMS.includes(o)) o = o.parent; pick(o); userT = 10; } else pick(null); } drag = null; };
 cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
 cv.addEventListener('wheel', e => { if (!SCENE_ON) return; e.preventDefault(); zoom = Math.max(0.6, Math.min(2.6, zoom * (e.deltaY < 0 ? 1.1 : 0.9))); userT = 8; }, { passive: false });
 window.__plato3d = { get ITEMS() { return ITEMS; }, get GROUPS() { return GROUPS; }, stage, camera, renderer, THREE, pick, CAM, get CTRL() { return CTRL; }, expandVisual };

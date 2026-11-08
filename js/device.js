@@ -15,15 +15,16 @@ function fill(box) {
     const k = c.tts.kokoro || {};
     box.append(line(c.ffmpeg.ok, 'Montaje rápido (FFmpeg)', c.ffmpeg.ok ? `FFmpeg ${c.ffmpeg.version} · ${c.ffmpeg.encoder === 'libx264' ? 'procesador' : 'aceleración por hardware (' + c.ffmpeg.encoder + ')'}${c.ffmpeg.subtitles ? '' : ' · sin subtítulos (falta libass)'}` : 'No encuentro FFmpeg. Instálalo (Linux: sudo apt install ffmpeg · Mac: brew install ffmpeg · Windows: winget install ffmpeg) y reinicia Plató.'),
       line(k.ok, 'Voces gratis sin internet (Kokoro)', k.ok ? `${k.voices.length} voces · español: Dora, Álex y Santa` : `Sin instalar. En una terminal, dentro de la carpeta de Plató: node mcp/server.mjs --setup-voices${k.why && k.why !== 'sin instalar' ? ' · ' + k.why : ''}`),
+      line(c.tts.voicestudio && c.tts.voicestudio.ok, 'VoiceStudio', c.tts.voicestudio && c.tts.voicestudio.ok ? `Conectado (${c.tts.voicestudio.url}) · ${Math.max(0, (c.voices.voicestudio || []).length - 1)} voces guardadas. Plató lo usa como voz principal.` : 'Opcional: si instalas y abres VoiceStudio (github.com/debpalash/VoiceStudio) en este ordenador, Plató usa sus voces (más naturales; necesita buena gráfica o paciencia). Si está en otra dirección: VOICESTUDIO_URL.'),
       line(c.tts.edge && c.tts.edge.ok, 'Voces de Edge (en línea)', 'Gratis pero no oficiales: Microsoft puede cortarlas en cualquier momento. Útiles como reserva.'),
       line(true, 'Proxy local', 'Higgsfield, Muapi y Replicate funcionan sin el mini-proxy de Cloudflare mientras uses Plató como aplicación.'));
     // Probar una voz
-    const eng = { v: k.ok ? 'kokoro' : 'edge' }; const voices = () => (c.voices[eng.v] || []);
+    const eng = { v: c.tts.voicestudio && c.tts.voicestudio.ok ? 'voicestudio' : k.ok ? 'kokoro' : 'edge' }; const voices = () => (c.voices[eng.v] || []);
     const sel = el('select', { class: 'txt' }); const fillSel = () => { sel.innerHTML = ''; for (const v of voices()) sel.append(el('option', { value: v.id, selected: v.id === (s.voice && s.voice[eng.v]) }, v.label)); };
     sel.addEventListener('change', () => { s.voice = { ...(s.voice || {}), [eng.v]: sel.value }; save(); });
     const txt = el('input', { class: 'txt', value: 'Hola, soy tu profe de hoy. ¿Empezamos?' }); const out = el('div', { class: 'devplay' });
     fillSel();
-    box.append(el('div', { class: 'lbl' }, 'Probar una voz'), seg([['kokoro', '🏠 Kokoro'], ['edge', '🌐 Edge']], () => eng.v, v => { eng.v = v; fillSel(); }), el('div', { class: 'gap' }), sel, el('div', { class: 'gap' }),
+    box.append(el('div', { class: 'lbl' }, 'Probar una voz'), seg([...(c.tts.voicestudio && c.tts.voicestudio.ok ? [['voicestudio', '🎙 VoiceStudio']] : []), ['kokoro', '🏠 Kokoro'], ['edge', '🌐 Edge']], () => eng.v, v => { eng.v = v; fillSel(); }), el('div', { class: 'gap' }), sel, el('div', { class: 'gap' }),
       el('div', { class: 'inrow' }, txt, btn('▶', async e => { const b = e.currentTarget; b.textContent = '⏳'; try { const t0 = performance.now(); const r = await speakLocal({ engine: eng.v, text: txt.value, voice: sel.value });
         out.innerHTML = ''; const a = el('audio', { src: blobURL(r.blob), controls: true, autoplay: true }); out.append(a, el('small', {}, `${(r.dur || 0).toFixed(1)} s de voz en ${((performance.now() - t0) / 1000).toFixed(1)} s`)); } catch (er) { toast('⚠️ ' + er.message, 6000); } b.textContent = '▶'; }, 'b on')), out);
   }

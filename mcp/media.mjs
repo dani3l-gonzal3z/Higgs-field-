@@ -6,7 +6,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { Readable } from 'node:stream';
-import { speak, kokoroStatus, kokoroFiles, KOKORO_VOICES, EDGE_VOICES } from './tts.mjs';
+import { speak, kokoroStatus, kokoroFiles, KOKORO_VOICES, EDGE_VOICES, voiceStudioStatus } from './tts.mjs';
 import { deviceRoute, pairKey } from './inbox.mjs';
 
 const CONF = path.join(os.homedir(), '.plato-studio');
@@ -133,8 +133,8 @@ export function mediaHandler({ ORIGINS, isLocal, OUT, log }) {
     const p = url.pathname;
     try {
       if (await deviceRoute(req, res, url)) return true;
-      if (p === '/api/caps') { const ff = ffmpegInfo(); const k = kokoroFiles() ? await kokoroStatus() : { ok: false, why: 'sin instalar' };
-        return json(res, 200, { proxy: true, pair: pairKey(), ffmpeg: ff.ok ? { ok: true, version: ff.version, encoder: ff.encoder, subtitles: ff.ass } : { ok: false }, tts: { kokoro: k, edge: { ok: typeof WebSocket !== 'undefined', experimental: true } }, voices: { kokoro: KOKORO_VOICES, edge: EDGE_VOICES } }), true; }
+      if (p === '/api/caps') { const ff = ffmpegInfo(); const k = kokoroFiles() ? await kokoroStatus() : { ok: false, why: 'sin instalar' }; const vs = await voiceStudioStatus(new URL(req.url, 'http://x').searchParams.has('fresh'));
+        return json(res, 200, { proxy: true, pair: pairKey(), ffmpeg: ff.ok ? { ok: true, version: ff.version, encoder: ff.encoder, subtitles: ff.ass } : { ok: false }, tts: { kokoro: k, edge: { ok: typeof WebSocket !== 'undefined', experimental: true }, voicestudio: { ok: vs.ok, why: vs.why, url: vs.url } }, voices: { kokoro: KOKORO_VOICES, edge: EDGE_VOICES, voicestudio: vs.voices || [] } }), true; }
       if (p.startsWith('/api/proxy/')) { await proxy(req, res, req.url.slice('/api/proxy/'.length)); return true; }
       if (p === '/api/media/have' && req.method === 'POST') { const { keys = [] } = await readJSON(req); return json(res, 200, { missing: keys.filter(k => !keyOk(k) || !fs.existsSync(mediaPath(k))) }), true; }
       if (p.startsWith('/api/media/') && req.method === 'PUT') { const k = decodeURIComponent(p.slice('/api/media/'.length)); if (!keyOk(k)) return json(res, 400, { error: 'clave no válida' }), true;

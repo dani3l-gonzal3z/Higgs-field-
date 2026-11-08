@@ -39,9 +39,9 @@ export async function renderLocal(spec, onProgress) {
     const blob = await r.blob(); return { blob, secs: +r.headers.get('x-render-secs') || null, encoder: r.headers.get('x-encoder'), savedTo: r.headers.get('x-saved-to') ? decodeURIComponent(r.headers.get('x-saved-to')) : null };
   } finally { done = true; }
 }
-export async function speakLocal({ engine = 'kokoro', text, voice, speed = 1 }) {
+export async function speakLocal({ engine = 'kokoro', text, voice, speed = 1, instruct, lang }) {
   if (!BASE) await detectLocal(); if (!BASE) throw new Error('Las voces gratis necesitan Plató abierto como aplicación (plato.sh / Plato.cmd)');
-  const r = await fetch(BASE + '/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ engine, text, voice, speed }) });
+  const r = await fetch(BASE + '/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ engine, text, voice, speed, instruct, lang }) });
   const j = await r.json(); if (!r.ok || j.error) throw new Error(j.error || 'Error de voz');
   const bin = Uint8Array.from(atob(j.audio), c => c.charCodeAt(0)); return { blob: new Blob([bin], { type: j.mime }), dur: j.dur, words: j.words || [] };
 }
