@@ -112,8 +112,8 @@ function speechChunks(words) { const out = []; let cur = [];
 // Misma estimación que usa el profe para mover la boca (segundos a velocidad 1).
 function estDur(ws) { let t = 0; for (const w of ws) t += Math.max(0.18, w.replace(/[^\p{L}\p{N}]/gu, '').length * 0.075) + (/[.,;:!?…]$/.test(w) ? 0.28 : 0.05); return t; }
 // Autoajuste: compara lo que tarda de verdad la voz con lo estimado y corrige la velocidad de boca y subtítulos.
-const RATE = { f: (() => { try { return Math.min(2, Math.max(0.5, +localStorage.getItem('plato.speechRate') || 1)); } catch (e) { return 1; } })() };
-function calib(ws, real) { if (ws.length < 4 || !(real > 0.4)) return; const m = Math.min(2, Math.max(0.5, real / estDur(ws))); RATE.f = RATE.f * 0.6 + m * 0.4; try { localStorage.setItem('plato.speechRate', RATE.f.toFixed(3)); } catch (e) {} }
+const RATE = { f: (() => { try { return Math.min(2, Math.max(0.5, +localStorage.getItem('plato.speechRate2') || 1)); } catch (e) { return 1; } })() };
+function calib(ws, real) { if (ws.length < 4 || !(real > 0.4)) return; const m = Math.min(2, Math.max(0.5, real / estDur(ws))); RATE.f = RATE.f * 0.6 + m * 0.4; try { localStorage.setItem('plato.speechRate2', RATE.f.toFixed(3)); } catch (e) {} }
 function playSpeech(text, a) { const s = L.session; const id = uid();
   return new Promise(res => {
     let done = false, raf = 0, t0 = performance.now(), pausedAt = 0, pausedTotal = 0; const words = text.split(/\s+/).filter(Boolean);
@@ -123,25 +123,26 @@ function playSpeech(text, a) { const s = L.session; const id = uid();
     const tick = () => { if (done) return; post({ type: 'clock', id, t: clock(), paused: !!(s.cur && s.cur.isPaused && s.cur.isPaused()) }); raf = requestAnimationFrame(tick); };
     const browser = () => {
       if (!('speechSynthesis' in window)) { guardT = setTimeout(() => fin(true), (text.length / 14 + 0.6) * 1000); s.cur = { id, pause() { pausedAt = performance.now(); }, resume() { if (pausedAt) { pausedTotal += performance.now() - pausedAt; pausedAt = 0; } }, stop() { fin(false); }, isPaused: () => !!pausedAt }; tick(); return; }
-      // Frase a frase: Chrome corta en silencio las locuciones largas (~15 s) sin avisar del final, y Safari/Chrome pueden
-      // tirar el objeto de la voz a la basura y no avisar nunca. Con frases cortas, guardadas en una referencia fuerte,
-      // el final llega siempre (la clase sigue sola) y en cada frase re-sincronizamos boca y subtítulos.
-      const chunks = speechChunks(words); const v = pickVoice(); let ci = 0, chunkT = 0, stopped = false;
-      const keep = s.utters = [];
-      const next = () => { if (done || stopped) return; if (ci >= chunks.length) return fin(true);
-        const ch = chunks[ci], txt = ch.map(k => words[k]).join(' '); const u = new SpeechSynthesisUtterance(txt); keep.push(u); window.__platoUtter = u;
+      // Frase a frase, pero todas encoladas de golpe: Chrome corta en silencio las locuciones largas (~15 s) y en el móvil
+      // hablar desde el aviso de fin de la frase anterior puede quedarse mudo. Encolando todas, el navegador las encadena solo;
+      // cada inicio de frase re-sincroniza boca y subtítulos. Referencias fuertes para que no se pierdan los avisos.
+      const chunks = speechChunks(words); const v = pickVoice(); let last = -1, ended = 0, stopped = false;
+      const keep = s.utters = []; window.__platoUtters = keep; const est = estDur(words) * RATE.f + 3;
+      const t1 = []; // inicio real de cada frase (para el autoajuste)
+      chunks.forEach((ch, ci) => {
+        const txt = ch.map(k => words[k]).join(' '); const u = new SpeechSynthesisUtterance(txt); keep.push(u);
         if (v) u.voice = v; u.lang = (v && v.lang) || 'es-ES';
         const st = []; let pos = 0; for (const k of ch) { const i = txt.indexOf(words[k], pos); st.push(i < 0 ? pos : i); pos = (i < 0 ? pos : i) + words[k].length; }
-        let ended = false; const end = () => { if (ended) return; ended = true; clearTimeout(cg); calib(ch.map(k => words[k]), (performance.now() - chunkT - pausedTotal + pt0) / 1000); ci++; next(); };
-        let pt0 = pausedTotal;
-        u.onstart = () => { chunkT = performance.now(); pt0 = pausedTotal; if (ci === 0) t0 = performance.now(); post({ type: 'word', id, k: ch[0] }); };
-        u.onboundary = e => { if (e.name && e.name !== 'word') return; let j = 0; while (j + 1 < st.length && st[j + 1] <= e.charIndex) j++; post({ type: 'word', id, k: ch[j] }); };
+        u.onstart = () => { if (done) return; last = ci; t1[ci] = performance.now() - pausedTotal; if (ci === 0) t0 = performance.now(); post({ type: 'word', id, k: ch[0] }); };
+        u.onboundary = e => { if (done || (e.name && e.name !== 'word')) return; let j = 0; while (j + 1 < st.length && st[j + 1] <= e.charIndex) j++; post({ type: 'word', id, k: ch[j] }); };
+        const end = () => { if (done || stopped || u._end) return; u._end = true; ended++; if (t1[ci]) calib(ch.map(k => words[k]), (performance.now() - pausedTotal - t1[ci]) / 1000); if (ci === chunks.length - 1 || ended >= chunks.length) fin(true); };
         u.onend = end; u.onerror = e => { if (e && (e.error === 'interrupted' || e.error === 'canceled')) return; end(); };
-        // Red de seguridad por frase: si el navegador no avisa, seguimos igual.
-        const est = estDur(ch.map(k => words[k])) * RATE.f + 2.5; const cg0 = () => { if (done || ended) return; if (pausedAt) { cg = setTimeout(cg0, 500); return; } if (speechSynthesis.speaking && (performance.now() - chunkT) / 1000 < est * 1.6) { cg = setTimeout(cg0, 500); return; } end(); }; let cg = setTimeout(cg0, est * 1000);
-        speechSynthesis.speak(u); };
+      });
       s.cur = { id, pause() { pausedAt = performance.now(); try { speechSynthesis.pause(); } catch (e) {} }, resume() { if (pausedAt) { pausedTotal += performance.now() - pausedAt; pausedAt = 0; } try { speechSynthesis.resume(); } catch (e) {} }, stop() { stopped = true; try { speechSynthesis.cancel(); } catch (e) {} fin(false); }, isPaused: () => !!pausedAt };
-      try { speechSynthesis.cancel(); } catch (e) {} setTimeout(next, 60); tick(); };
+      // Red de seguridad: si el navegador no avisa del final, seguimos igual (sin cortar si todavía está hablando).
+      const guard = () => { if (done) return; if (pausedAt || (speechSynthesis.speaking && clock() < est * 1.8)) guardT = setTimeout(guard, 700); else fin(true); }; guardT = setTimeout(guard, est * 1000);
+      try { speechSynthesis.cancel(); } catch (e) {}
+      setTimeout(() => { if (done || stopped) return; for (const u of keep) speechSynthesis.speak(u); try { speechSynthesis.resume(); } catch (e) {} }, 80); tick(); };
     if (a && a.blob) { const el = AUD.el || (AUD.el = new Audio()); el.setAttribute('playsinline', ''); el.src = URL.createObjectURL(a.blob); clock = () => el.currentTime;
       el.onended = () => fin(true); el.onerror = () => fin(false);
       s.cur = { id, pause() { el.pause(); }, resume() { el.play().catch(() => {}); }, stop() { el.pause(); fin(false); }, isPaused: () => el.paused && !el.ended };
