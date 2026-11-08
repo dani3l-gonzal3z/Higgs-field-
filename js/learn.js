@@ -60,7 +60,7 @@ Reglas:
 - "say": 2 a 4 frases habladas y naturales, sin markdown, sin emojis, sin listas; no leas la pizarra literalmente.
 - "board": lo que escribirías: título corto, hasta 5 viñetas de menos de 9 palabras, "formula" para números, ecuaciones o reglas clave (o vacío), "note" opcional.
 - Cada 2 o 3 pasos pon en "check" una pregunta de repaso: {"q":"...","options":["...","...","..."],"answer":0,"explain":"por qué, en una frase"}. En el resto, "check": null.
-- Si el material no basta, dilo en el primer paso y completa con conocimiento general fiable, sin inventar datos del documento.`;
+${doc ? '- Si el material no basta, dilo en el primer paso y completa con conocimiento general fiable, sin inventar datos del documento.' : '- No menciones documentos ni material de apoyo: explica directamente con conocimiento general fiable.'}`;
   const j = await llmJSON(prompt, { maxTokens: 6000 }); if (!j || !Array.isArray(j.steps) || !j.steps.length) throw new Error('La clase no ha salido bien; prueba otra vez');
   j.steps = j.steps.filter(s => s && s.say).slice(0, 14); return { id: 'lesson-' + uid(), docId: doc && doc.id, topic, focus, level, ...j };
 }

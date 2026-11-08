@@ -8,7 +8,8 @@
 <style>
   html,body{margin:0;height:100%;background:#0d1016;overflow:hidden;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
   canvas{display:block}
-  #sub{position:absolute;left:50%;bottom:max(96px,12%);transform:translateX(-50%);max-width:86%;padding:10px 18px;border-radius:14px;background:rgba(0,0,0,.62);color:#fff;font:600 clamp(16px,2.6vw,30px)/1.35 system-ui,sans-serif;text-align:center;opacity:0;transition:opacity .2s}
+  #sub{position:absolute;left:50%;bottom:max(96px,12%);transform:translateX(-50%);width:max-content;max-width:min(88%,900px);padding:8px 16px;border-radius:12px;background:rgba(0,0,0,.6);color:#fff;font:600 clamp(15px,2.1vw,26px)/1.35 system-ui,sans-serif;text-align:center;opacity:0;transition:opacity .2s;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  @media (max-aspect-ratio:1/1){#sub{bottom:max(140px,18%);font-size:clamp(15px,4.2vw,20px);max-width:92%}}
   #sub.on{opacity:1}#sub b{color:#ffd23a;font-weight:800}#sub span.d{color:rgba(255,255,255,.62)}
 </style>
 </head>
@@ -97,7 +98,13 @@ function buildTimeline(text, words, rate = 1) {
 const subEl = document.getElementById('sub');
 let S = null; // { id, tl, words, clock(), done, audio, utter }
 const target = { o: 0.04, w: 0.85, r: 0 }, cur = { o: 0.04, w: 0.85, r: 0 };
-function showSub(words, idx) { if (!words) { subEl.classList.remove('on'); return; } subEl.innerHTML = words.map((x, i) => i === idx ? `<b>${esc(x.w)}</b>` : i < idx ? esc(x.w) : `<span class="d">${esc(x.w)}</span>`).join(' '); subEl.classList.add('on'); }
+// Subtítulos por trozos: solo la frase que está sonando (cabe en dos líneas), no la intervención entera.
+function chunkWords(words) { const max = innerWidth / innerHeight < 1 ? 42 : 70; const out = []; let cur = [], len = 0;
+  words.forEach((x, i) => { cur.push(i); len += x.w.length + 1; const end = /[.!?…:;]$/.test(x.w) || (/,$/.test(x.w) && len > max * 0.55) || len > max; if (end) { out.push(cur); cur = []; len = 0; } }); if (cur.length) out.push(cur); return out; }
+function showSub(words, idx) { if (!words) { subEl.classList.remove('on'); return; }
+  if (!S || S._chunks === undefined || S._cw !== words) { if (S) { S._chunks = chunkWords(words); S._cw = words; } }
+  const chunks = (S && S._chunks) || [words.map((_, i) => i)]; const ch = chunks.find(c => c.includes(Math.max(0, idx))) || chunks[0];
+  subEl.innerHTML = ch.map(i => i === idx ? `<b>${esc(words[i].w)}</b>` : i < idx ? esc(words[i].w) : `<span class="d">${esc(words[i].w)}</span>`).join(' '); subEl.classList.add('on'); }
 const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
 function finish(ok = true) { if (!S) return; const s = S; S = null; try { s.audio && (s.audio.pause(), URL.revokeObjectURL(s.audio.src)); } catch (e) {} try { if (s.utter) speechSynthesis.cancel(); } catch (e) {} showSub(null); target.o = 0.04; target.w = 0.85; target.r = 0; parent.postMessage({ type: 'spoken', id: s.id, ok }, '*'); }
 function pickVoice(lang) { const vs = speechSynthesis.getVoices(); const l = (lang || 'es').toLowerCase(); return vs.find(v => v.lang && v.lang.toLowerCase().startsWith(l) && /natural|neural|google|online/i.test(v.name)) || vs.find(v => v.lang && v.lang.toLowerCase().startsWith(l)) || null; }
