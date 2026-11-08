@@ -53,17 +53,29 @@ export async function makeLesson({ doc, topic, focus, level = lvl() }) {
   const mat = material(doc, focus);
   const prompt = `Eres un profesor excelente que da clases en vídeo, de pie junto a una pizarra, para un adulto curioso. Prepara una clase en español${doc ? ` basada en el material de «${doc.title}»` : ` sobre: ${topic}`}.${focus ? ` Céntrate en: ${focus}.` : ''} ${lv}
 ${mat ? `MATERIAL:\n<<<\n${mat}\n>>>\n` : ''}
-Tienes libertad para explicar como mejor se entienda: con la pizarra, con un modelo 3D low-poly o con ambos. Primero introduce la idea con teoría y, cuando ayude a VER algo (piezas de una máquina, un proceso, una molécula, un planeta, un circuito, una estructura, proporciones, un recorrido…), construye un modelo en "scene": se irá montando pieza a pieza mientras hablas, así que ordena las piezas en el orden en que las nombras.
+Tienes libertad para explicar como mejor se entienda: con la pizarra, con un modelo 3D low-poly o con ambos. Si el tema tiene algo que se pueda VER (una máquina y sus piezas, un proceso, una molécula, un sistema planetario, un circuito, una estructura, un recorrido…), monta un modelo 3D que quien aprende podrá girar, ampliar, tocar pieza a pieza y despiezar.
+Cómo construir bien el modelo:
+- Empieza a montarlo YA en el paso 1 o 2, mientras das la teoría inicial: en "scene" del primer paso pon la base o el esqueleto, y en los pasos siguientes ve añadiendo piezas con "add" a medida que las explicas. No lo dejes todo para el final.
+- Cada pieza aparece en el momento exacto en que dices su "label" en voz alta, así que NOMBRA en "say" cada pieza con la misma palabra de su etiqueta ("el imán norte", "la espira", "el eje").
+- Cada pieza lleva "label" (1 a 3 palabras) e "info" (una frase que explica para qué sirve; se muestra al tocarla).
+- Antes de escribir coordenadas, piensa el plano: dónde va cada pieza respecto a las demás, que se toquen donde deben tocarse y que no se atraviesen sin querer. Usa medidas realistas entre sí. Todo el modelo cabe en unas 2 unidades, suelo en y=0, y hacia arriba.
+- Prefiere pocas piezas bien colocadas (5 a 14) a muchas mal colocadas. Usa colores con sentido (cobre para cables, rojo/azul para polos, etc.).
+- Las piezas que se mueven juntas van en un grupo: "groups":{"Rotor":{"pos":[x,y,z],"anim":"spinz"}} y cada pieza con "group":"Rotor" usa coordenadas relativas al grupo.
 Devuelve SOLO un JSON con esta forma:
 {"title":"título corto","summary":"una frase","steps":[{"say":"lo que dices en voz alta","board":{"title":"...","bullets":["..."],"formula":"","note":""},"scene":null,"check":null}]}
 Formato de "scene" (o null para no tocar el modelo):
-{"items":[pieza,...],"rotate":true} crea un modelo nuevo · {"add":[pieza,...]} añade piezas al anterior · {"highlight":["etiqueta"]} hace brillar partes · {"clear":true} lo quita.
-pieza = {"shape":"box|sphere|cylinder|cone|torus|capsule|plane|ring|tube|arrow|text","pos":[x,y,z],"size":[...],"rot":[gradosX,gradosY,gradosZ],"color":"rojo|azul|verde|amarillo|naranja|morado|rosa|cian|gris|negro|blanco|marrón|cobre|plata|oro|agua|fuego|#hex","label":"nombre corto","anim":"spin|spinx|spinz|orbit|bob|pulse|flow","speed":1}
-Medidas: y hacia arriba, suelo en y=0, el modelo cabe en unas 2 unidades. box [ancho,alto,fondo] · sphere [radio] · cylinder [radio,alto] · cone [radio,alto] · torus [radio,grosor] · capsule [radio,largo] · plane [ancho,alto] · ring [radio] (órbitas) · tube con "points":[[x,y,z],...] (cables, trayectorias) · arrow desde pos con "dir":[x,y,z] y "len" · text con "text". "orbit" gira alrededor del centro a la distancia de su pos; "flow" va en bucle de pos a "to":[x,y,z] (corriente, agua, partículas).
-Si el tema lo permite, usa el 3D en 2 a 5 pasos, con 3 a 16 piezas y etiquetas en las partes importantes; en los pasos siguientes puedes añadir piezas o hacer brillar partes mientras lo explicas.
+{"items":[pieza,...],"groups":{...}} crea un modelo nuevo · {"add":[pieza,...],"groups":{...}} añade piezas (y grupos) al anterior · {"highlight":["etiqueta"]} hace brillar partes · {"remove":["etiqueta"]} quita piezas · {"clear":true} lo quita todo.
+pieza = {"shape":"...","pos":[x,y,z],"size":[...],"rot":[gradosX,gradosY,gradosZ],"color":"rojo|azul|verde|amarillo|naranja|morado|rosa|cian|gris|negro|blanco|marrón|cobre|plata|oro|agua|fuego|#hex","label":"nombre","info":"para qué sirve","group":"opcional","anim":"spin|spinx|spinz|orbit|bob|pulse|flow","speed":1}
+Formas y "size": box [ancho,alto,fondo] · sphere [radio] · cylinder [radio,alto] (de pie, eje vertical; tumbado con "rot":[90,0,0] o [0,0,90]) · cone [radio,alto] · torus [radio,grosor] · capsule [radio,largo] · plane [ancho,alto] · ring [radio] (órbitas) · loop [ancho,alto,grosor] (espira o marco rectangular de cable, en el plano XY) · coil [radio,largo,grosor] con "turns" (bobina o muelle, eje vertical) · gear [radio,grosor] con "teeth" (engranaje, en el plano XY) · magnet [ancho,alto,fondo] (imán con polo norte rojo arriba y sur azul abajo) · tube con "points":[[x,y,z],...] (cables, tuberías, trayectorias) · arrow desde pos con "dir":[x,y,z] y "len" (fuerzas, campos, sentidos) · text con "text". "orbit" gira alrededor del centro a la distancia de su pos; "flow" recorre en bucle de pos a "to":[x,y,z] (corriente, agua, partículas).
+Ejemplo de modelo bien hecho (motor eléctrico; adáptalo a tu tema, no lo copies):
+paso 1 "scene": {"items":[{"shape":"box","pos":[0,0.05,0],"size":[2,0.1,1.2],"color":"gris","label":"Base","info":"Sujeta todo el motor."},{"shape":"box","pos":[-0.75,0.55,0],"size":[0.3,0.8,0.8],"color":"rojo","label":"Imán norte","info":"Uno de los dos polos que crean el campo magnético."},{"shape":"box","pos":[0.75,0.55,0],"size":[0.3,0.8,0.8],"color":"azul","label":"Imán sur","info":"El polo opuesto; el campo va del norte al sur."},{"shape":"arrow","pos":[-0.55,0.3,0.5],"dir":[1,0,0],"len":1.1,"color":"cian","label":"Campo magnético","info":"Las líneas de fuerza que empujan al cable con corriente."}]}
+paso 2 "scene": {"groups":{"Rotor":{"pos":[0,0.55,0],"anim":"spinz"}},"add":[{"shape":"cylinder","group":"Rotor","pos":[0,0,0],"size":[0.04,1.6],"rot":[90,0,0],"color":"plata","label":"Eje","info":"Gira y transmite el movimiento hacia fuera."},{"shape":"loop","group":"Rotor","pos":[0,0,0],"size":[0.8,0.6,0.035],"rot":[0,90,0],"color":"cobre","label":"Espira","info":"El cable por el que pasa la corriente; el campo la empuja y gira."}]}
+paso 3 "scene": {"add":[{"shape":"cylinder","group":"Rotor","pos":[0,0,0.6],"size":[0.08,0.14],"rot":[90,0,0],"color":"oro","label":"Conmutador","info":"Invierte la corriente cada media vuelta para que el giro no se pare."},{"shape":"box","pos":[0.13,0.55,0.6],"size":[0.06,0.1,0.08],"color":"negro","label":"Escobillas","info":"Rozan el conmutador y le llevan la corriente de la pila."}]}
+paso 4 "scene": {"highlight":["Espira","Campo magnético"]}
 Reglas:
 - Entre 6 y 10 pasos. Empieza enganchando con por qué importa. Un concepto por paso, con ejemplos concretos. Termina con un resumen.
-- "say": 2 a 4 frases habladas y naturales, sin markdown, sin emojis, sin listas; no leas la pizarra literalmente.
+- No despaches la teoría de los primeros pasos en una frase: explícala con calma y con un ejemplo, mientras el modelo se va montando.
+- "say": 3 a 5 frases habladas y naturales, sin markdown, sin emojis, sin listas; no leas la pizarra literalmente.
 - "board": lo que escribirías: título corto, hasta 5 viñetas de menos de 9 palabras, "formula" para números, ecuaciones o reglas clave (o vacío), "note" opcional.
 - Cada 2 o 3 pasos pon en "check" una pregunta de repaso: {"q":"...","options":["...","...","..."],"answer":0,"explain":"por qué, en una frase"}. En el resto, "check": null.
 ${doc ? '- Si el material no basta, dilo en el primer paso y completa con conocimiento general fiable, sin inventar datos del documento.' : '- No menciones documentos ni material de apoyo: explica directamente con conocimiento general fiable.'}`;
@@ -94,24 +106,42 @@ export function unlockAudio() {
 }
 addEventListener('pointerdown', unlockAudio, { once: true, capture: true });
 function pickVoice() { try { const vs = speechSynthesis.getVoices(); return vs.find(v => /^es/i.test(v.lang) && /natural|neural|google|online|premium|enhanced/i.test(v.name)) || vs.find(v => /^es/i.test(v.lang)) || null; } catch (e) { return null; } }
+// Trozos para la voz del navegador: frases, y las largas partidas por comas (máx. ~22 palabras).
+function speechChunks(words) { const out = []; let cur = [];
+  words.forEach((w, i) => { cur.push(i); if (/[.!?…;:]$/.test(w) || (cur.length >= 14 && /,$/.test(w)) || cur.length >= 22) { out.push(cur); cur = []; } }); if (cur.length) out.push(cur); return out; }
+// Misma estimación que usa el profe para mover la boca (segundos a velocidad 1).
+function estDur(ws) { let t = 0; for (const w of ws) t += Math.max(0.18, w.replace(/[^\p{L}\p{N}]/gu, '').length * 0.075) + (/[.,;:!?…]$/.test(w) ? 0.28 : 0.05); return t; }
+// Autoajuste: compara lo que tarda de verdad la voz con lo estimado y corrige la velocidad de boca y subtítulos.
+const RATE = { f: (() => { try { return Math.min(2, Math.max(0.5, +localStorage.getItem('plato.speechRate') || 1)); } catch (e) { return 1; } })() };
+function calib(ws, real) { if (ws.length < 4 || !(real > 0.4)) return; const m = Math.min(2, Math.max(0.5, real / estDur(ws))); RATE.f = RATE.f * 0.6 + m * 0.4; try { localStorage.setItem('plato.speechRate', RATE.f.toFixed(3)); } catch (e) {} }
 function playSpeech(text, a) { const s = L.session; const id = uid();
   return new Promise(res => {
     let done = false, raf = 0, t0 = performance.now(), pausedAt = 0, pausedTotal = 0; const words = text.split(/\s+/).filter(Boolean);
     const fin = ok => { if (done) return; done = true; cancelAnimationFrame(raf); clearTimeout(guardT); post({ type: 'end', id }); if (s.cur && s.cur.id === id) s.cur = null; res(ok); };
-    post({ type: 'speak', id, text, words: a && a.words, external: true });
+    post({ type: 'speak', id, text, words: a && a.words, external: true, rate: 1 / RATE.f });
     let clock = () => (performance.now() - t0 - pausedTotal - (pausedAt ? performance.now() - pausedAt : 0)) / 1000, guardT = 0;
     const tick = () => { if (done) return; post({ type: 'clock', id, t: clock(), paused: !!(s.cur && s.cur.isPaused && s.cur.isPaused()) }); raf = requestAnimationFrame(tick); };
     const browser = () => {
       if (!('speechSynthesis' in window)) { guardT = setTimeout(() => fin(true), (text.length / 14 + 0.6) * 1000); s.cur = { id, pause() { pausedAt = performance.now(); }, resume() { if (pausedAt) { pausedTotal += performance.now() - pausedAt; pausedAt = 0; } }, stop() { fin(false); }, isPaused: () => !!pausedAt }; tick(); return; }
-      const u = new SpeechSynthesisUtterance(text); const v = pickVoice(); if (v) u.voice = v; u.lang = (v && v.lang) || 'es-ES';
-      const starts = []; let pos = 0; for (const w of words) { const i = text.indexOf(w, pos); starts.push(i < 0 ? pos : i); pos = (i < 0 ? pos : i) + w.length; }
-      u.onstart = () => { t0 = performance.now(); };
-      u.onboundary = e => { if (e.name && e.name !== 'word') return; let k = 0; while (k + 1 < starts.length && starts[k + 1] <= e.charIndex) k++; post({ type: 'word', id, k }); };
-      u.onend = () => fin(true); u.onerror = () => fin(false);
-      s.cur = { id, pause() { pausedAt = performance.now(); try { speechSynthesis.pause(); } catch (e) {} }, resume() { if (pausedAt) { pausedTotal += performance.now() - pausedAt; pausedAt = 0; } try { speechSynthesis.resume(); } catch (e) {} }, stop() { try { speechSynthesis.cancel(); } catch (e) {} fin(false); }, isPaused: () => !!pausedAt };
-      // Red de seguridad: hay navegadores que no avisan al terminar (o no tienen voces).
-      const est = text.length / 12 + 3; const guard = () => { if (done) return; if (pausedAt || (speechSynthesis.speaking && clock() < est * 2)) guardT = setTimeout(guard, 1000); else fin(true); }; guardT = setTimeout(guard, est * 1000);
-      try { speechSynthesis.cancel(); } catch (e) {} speechSynthesis.speak(u); tick(); };
+      // Frase a frase: Chrome corta en silencio las locuciones largas (~15 s) sin avisar del final, y Safari/Chrome pueden
+      // tirar el objeto de la voz a la basura y no avisar nunca. Con frases cortas, guardadas en una referencia fuerte,
+      // el final llega siempre (la clase sigue sola) y en cada frase re-sincronizamos boca y subtítulos.
+      const chunks = speechChunks(words); const v = pickVoice(); let ci = 0, chunkT = 0, stopped = false;
+      const keep = s.utters = [];
+      const next = () => { if (done || stopped) return; if (ci >= chunks.length) return fin(true);
+        const ch = chunks[ci], txt = ch.map(k => words[k]).join(' '); const u = new SpeechSynthesisUtterance(txt); keep.push(u); window.__platoUtter = u;
+        if (v) u.voice = v; u.lang = (v && v.lang) || 'es-ES';
+        const st = []; let pos = 0; for (const k of ch) { const i = txt.indexOf(words[k], pos); st.push(i < 0 ? pos : i); pos = (i < 0 ? pos : i) + words[k].length; }
+        let ended = false; const end = () => { if (ended) return; ended = true; clearTimeout(cg); calib(ch.map(k => words[k]), (performance.now() - chunkT - pausedTotal + pt0) / 1000); ci++; next(); };
+        let pt0 = pausedTotal;
+        u.onstart = () => { chunkT = performance.now(); pt0 = pausedTotal; if (ci === 0) t0 = performance.now(); post({ type: 'word', id, k: ch[0] }); };
+        u.onboundary = e => { if (e.name && e.name !== 'word') return; let j = 0; while (j + 1 < st.length && st[j + 1] <= e.charIndex) j++; post({ type: 'word', id, k: ch[j] }); };
+        u.onend = end; u.onerror = e => { if (e && (e.error === 'interrupted' || e.error === 'canceled')) return; end(); };
+        // Red de seguridad por frase: si el navegador no avisa, seguimos igual.
+        const est = estDur(ch.map(k => words[k])) * RATE.f + 2.5; const cg0 = () => { if (done || ended) return; if (pausedAt) { cg = setTimeout(cg0, 500); return; } if (speechSynthesis.speaking && (performance.now() - chunkT) / 1000 < est * 1.6) { cg = setTimeout(cg0, 500); return; } end(); }; let cg = setTimeout(cg0, est * 1000);
+        speechSynthesis.speak(u); };
+      s.cur = { id, pause() { pausedAt = performance.now(); try { speechSynthesis.pause(); } catch (e) {} }, resume() { if (pausedAt) { pausedTotal += performance.now() - pausedAt; pausedAt = 0; } try { speechSynthesis.resume(); } catch (e) {} }, stop() { stopped = true; try { speechSynthesis.cancel(); } catch (e) {} fin(false); }, isPaused: () => !!pausedAt };
+      try { speechSynthesis.cancel(); } catch (e) {} setTimeout(next, 60); tick(); };
     if (a && a.blob) { const el = AUD.el || (AUD.el = new Audio()); el.setAttribute('playsinline', ''); el.src = URL.createObjectURL(a.blob); clock = () => el.currentTime;
       el.onended = () => fin(true); el.onerror = () => fin(false);
       s.cur = { id, pause() { el.pause(); }, resume() { el.play().catch(() => {}); }, stop() { el.pause(); fin(false); }, isPaused: () => el.paused && !el.ended };
@@ -157,9 +187,9 @@ function quizAsk(s, q) { return new Promise(res => { s.quiz = q; status(); const
   function pick(k) { if (s.quiz !== q) return; s.quiz = null; s.quizPick = null; box.hidden = true; status(); res(k === q.answer); } }); }
 function go(i) { const s = L.session; if (!s) return; s.i = Math.max(0, Math.min(s.lesson.steps.length - 1, i)); replayScene(s); s.paused = false; s.ui.playB.textContent = '⏸'; s.mode = 'lesson'; if (s.quiz) { s.quiz = null; s.ui.quiz.hidden = true; } stopTalk(); run(s); }
 // Reconstruye el modelo 3D tal como estaría al empezar el paso i (los pasos pueden ir añadiendo piezas).
-function replayScene(s) { post({ type: 'clearScene' }); const items = []; let any = false;
-  for (let k = 0; k < s.i; k++) { const sc = s.lesson.steps[k].scene; if (!sc) continue; if (sc.clear) { items.length = 0; } if (sc.items) { items.length = 0; items.push(...sc.items); any = true; } if (sc.add) { items.push(...sc.add); any = true; } }
-  if (any && items.length) post({ type: 'scene', scene: { items, rotate: true } }); }
+function replayScene(s) { post({ type: 'clearScene' }); const items = []; let groups = {}, any = false;
+  for (let k = 0; k < s.i; k++) { const sc = s.lesson.steps[k].scene; if (!sc) continue; if (sc.clear) { items.length = 0; groups = {}; } if (sc.items) { items.length = 0; groups = {}; items.push(...sc.items); any = true; } if (sc.add) { items.push(...sc.add); any = true; } if (sc.groups) Object.assign(groups, sc.groups); }
+  if (any && items.length) post({ type: 'scene', scene: { items, groups, rotate: true, instant: true } }); }
 function togglePause(force) { const s = L.session; if (!s) return; s.paused = force != null ? force : !s.paused; s.ui.playB.textContent = s.paused ? '▶' : '⏸'; if (s.cur) s.paused ? s.cur.pause() : s.cur.resume(); status(); }
 export function endLesson() { const s = L.session; if (!s) return; stopTalk(); L.session = null; s.ly.classList.remove('on'); s.ly.innerHTML = ''; document.body.classList.remove('learning'); pushStatus({ state: 'idle' }); }
 export function lessonControl(cmd, arg) { const s = L.session; if (!s) return 'No hay ninguna clase en marcha.';
@@ -172,7 +202,7 @@ export async function answer(question, { doc } = {}) {
   stopTalk(); const gen = s.gen; s.mode = 'answer'; status(); post({ type: 'pose', name: 'think' });
   const d = doc || s.doc; const st = s.lesson.steps[s.i];
   const prompt = `Eres el profesor de una clase en vídeo y te acaban de interrumpir con una pregunta. Contesta en español, hablando, en 2 a 5 frases claras (máximo 90 palabras), sin markdown ni listas ni emojis.
-Si ayuda, antes de la respuesta puedes poner una línea «PIZARRA: título | punto 1 | punto 2» y/o una línea «ESCENA: {json}» con un modelo 3D low-poly para verlo (mismo formato que en la clase: {\"items\":[{\"shape\":\"box|sphere|cylinder|cone|torus|arrow|tube|text\",\"pos\":[x,y,z],\"size\":[...],\"color\":\"...\",\"label\":\"...\",\"anim\":\"spin|orbit|flow|pulse\"}]}, en una sola línea). Después, la respuesta hablada.
+Si ayuda, antes de la respuesta puedes poner una línea «PIZARRA: título | punto 1 | punto 2» y/o una línea «ESCENA: {json}» con un modelo 3D low-poly para verlo (mismo formato que en la clase: {\"items\":[{\"shape\":\"box|sphere|cylinder|cone|torus|loop|coil|gear|magnet|arrow|tube|text\",\"pos\":[x,y,z],\"size\":[...],\"color\":\"...\",\"label\":\"...\",\"info\":\"para qué sirve\",\"anim\":\"spin|orbit|flow|pulse\"}]}, en una sola línea; suelo en y=0, cabe en 2 unidades, piezas que se toquen donde deben; cada pieza aparece cuando dices su etiqueta, así que nómbrala). Después, la respuesta hablada.
 ${s.lesson.title ? `Clase: «${s.lesson.title}»${st ? `, ahora en: ${(st.board && st.board.title) || ''} — ${st.say}` : ''}.` : ''}
 ${d ? `Material relevante de «${d.title}»:\n<<<\n${relevant(d.text, question + ' ' + ((st && st.say) || ''), 7000)}\n>>>\nSi el material no responde, dilo y contesta con conocimiento general.` : ''}
 PREGUNTA: ${question}`;

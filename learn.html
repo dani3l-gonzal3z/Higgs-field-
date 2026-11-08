@@ -10,6 +10,8 @@
   canvas{display:block}
   #sub{position:absolute;left:50%;bottom:max(96px,12%);transform:translateX(-50%);width:max-content;max-width:min(88%,900px);padding:8px 16px;border-radius:12px;background:rgba(0,0,0,.6);color:#fff;font:600 clamp(15px,2.1vw,26px)/1.35 system-ui,sans-serif;text-align:center;opacity:0;transition:opacity .2s;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   @media (max-aspect-ratio:1/1){#sub{bottom:max(140px,18%);font-size:clamp(15px,4.2vw,20px);max-width:92%}}
+  #ui3d{position:absolute;right:12px;top:72px;display:none;flex-direction:column;gap:6px;z-index:3}#ui3d.on{display:flex}#ui3d button.sel{background:rgba(255,226,138,.9);color:#111}#ui3d button{border:0;border-radius:12px;padding:8px 10px;background:rgba(15,18,26,.75);color:#fff;font:600 13px system-ui,sans-serif;backdrop-filter:blur(6px)}
+  #card3d{position:absolute;left:50%;top:72px;transform:translateX(-50%);max-width:min(420px,80%);padding:10px 14px;border-radius:14px;background:rgba(15,18,26,.88);color:#fff;font:14px/1.45 system-ui,sans-serif;display:none;z-index:3;border:1px solid rgba(255,226,138,.4)}#card3d.on{display:block}#card3d b{color:#ffe28a}#card3d p{margin:4px 0 0}
   #sub.on{opacity:1}#sub b{color:#ffd23a;font-weight:800}#sub span.d{color:rgba(255,255,255,.62)}
 </style>
 </head>
@@ -106,12 +108,13 @@ function showSub(words, idx) { if (!words) { subEl.classList.remove('on'); retur
   const chunks = (S && S._chunks) || [words.map((_, i) => i)]; const ch = chunks.find(c => c.includes(Math.max(0, idx))) || chunks[0];
   subEl.innerHTML = ch.map(i => i === idx ? `<b>${esc(words[i].w)}</b>` : i < idx ? esc(words[i].w) : `<span class="d">${esc(words[i].w)}</span>`).join(' '); subEl.classList.add('on'); }
 const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
-function finish(ok = true) { if (!S) return; const s = S; S = null; if (s.ext) { showSub(null); target.o = 0.04; target.w = 0.85; target.r = 0; return; } try { s.audio && (s.audio.pause(), URL.revokeObjectURL(s.audio.src)); } catch (e) {} try { if (s.utter) speechSynthesis.cancel(); } catch (e) {} showSub(null); target.o = 0.04; target.w = 0.85; target.r = 0; parent.postMessage({ type: 'spoken', id: s.id, ok }, '*'); }
+function finish(ok = true) { if (!S) return; const s = S; S = null; for (const o of ITEMS) if (!o.userData.shown) o.userData.shown = 0.0001; if (s.ext) { showSub(null); target.o = 0.04; target.w = 0.85; target.r = 0; return; } try { s.audio && (s.audio.pause(), URL.revokeObjectURL(s.audio.src)); } catch (e) {} try { if (s.utter) speechSynthesis.cancel(); } catch (e) {} showSub(null); target.o = 0.04; target.w = 0.85; target.r = 0; parent.postMessage({ type: 'spoken', id: s.id, ok }, '*'); }
 function pickVoice(lang) { const vs = speechSynthesis.getVoices(); const l = (lang || 'es').toLowerCase(); return vs.find(v => v.lang && v.lang.toLowerCase().startsWith(l) && /natural|neural|google|online/i.test(v.name)) || vs.find(v => v.lang && v.lang.toLowerCase().startsWith(l)) || null; }
 // Voz en la página principal (allí el navegador sí deja sonar tras el primer clic): aquí solo seguimos su reloj.
 let EXT = { t: 0, at: 0, off: 0 };
-function speakExternal(m) { finish(false); const { tl, words } = buildTimeline(m.text, m.words, 1); EXT = { t: 0, at: performance.now(), off: 0, running: true };
-  S = { id: m.id, tl, words, ext: true, clock: () => EXT.t + (EXT.running ? (performance.now() - EXT.at) / 1000 : 0) + EXT.off }; S.total = words.length ? words[words.length - 1].e : 1; }
+function speakExternal(m) { finish(false); const { tl, words } = buildTimeline(m.text, m.words, m.words ? 1 : (m.rate || 1)); EXT = { t: 0, at: performance.now(), off: 0, running: true };
+  S = { id: m.id, tl, words, ext: true, clock: () => EXT.t + (EXT.running ? (performance.now() - EXT.at) / 1000 : 0) + EXT.off }; S.total = words.length ? words[words.length - 1].e : 1;
+  parent.postMessage({ type: 'est', id: m.id, total: S.total * (m.words ? 1 : (m.rate || 1)) }, '*'); revealPlan(); }
 async function speak(m) {
   if (m.external) return speakExternal(m);
   finish(false); const rate = m.rate || 1;
@@ -138,10 +141,10 @@ const COL = { rojo: '#e5484d', azul: '#3b82f6', verde: '#22c55e', amarillo: '#fa
 const colorOf = c => { const k = String(c || '').toLowerCase().trim(); return COL[k] || (/^#[0-9a-f]{3,8}$/i.test(k) ? k : '#94a3b8'); };
 const stage = new THREE.Group(); scene.add(stage); const stageInner = new THREE.Group(); stage.add(stageInner);
 const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.08, 0.1, 10), M('#3a4358')); pedestal.position.y = -0.05; stage.add(pedestal); stage.visible = false;
-let ITEMS = [], SCENE_ON = false, sceneT = 0, buildStart = 0;
+let ITEMS = [], GROUPS = {}, SCENE_ON = false, sceneT = 0, buildStart = 0, EXPLODE = 0, explodeT = 0, userT = 0;
 function labelSprite(text) { const c = document.createElement('canvas'); const x = c.getContext('2d', { willReadFrequently: true }); const fs = 44; x.font = `700 ${fs}px system-ui,sans-serif`; const w = Math.ceil(x.measureText(text).width) + 36; c.width = w; c.height = fs + 26;
   x.font = `700 ${fs}px system-ui,sans-serif`; x.fillStyle = 'rgba(15,18,26,.85)'; x.beginPath(); x.roundRect(0, 0, w, c.height, 16); x.fill(); x.fillStyle = '#ffe28a'; x.textBaseline = 'middle'; x.fillText(text, 18, c.height / 2 + 2);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true })); sp.renderOrder = 10; const h = 0.16; sp.scale.set(h * w / c.height, h, 1); return sp; }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true })); sp.renderOrder = 10; const h = 0.125; sp.scale.set(h * w / c.height, h, 1); sp.userData.s0 = sp.scale.clone(); return sp; }
 const V = (a, d = [0, 0, 0]) => Array.isArray(a) ? [+a[0] || 0, +a[1] || 0, +a[2] || 0] : d;
 function geomOf(it) { const z = Array.isArray(it.size) ? it.size.map(Number) : [Number(it.size) || 0.5];
   switch (it.shape) {
@@ -153,6 +156,9 @@ function geomOf(it) { const z = Array.isArray(it.size) ? it.size.map(Number) : [
     case 'plane': return new THREE.BoxGeometry(z[0] || 1, z[1] || 1, 0.02);
     case 'ring': return new THREE.TorusGeometry(z[0] || 0.5, 0.012, 3, 48);
     case 'tube': { const pts = (it.points || []).map(p => new THREE.Vector3(...V(p))); if (pts.length < 2) return new THREE.BoxGeometry(0.1, 0.1, 0.1); return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, !!it.closed), 48, z[0] || 0.03, 6, !!it.closed); }
+    case 'loop': case 'frame': { const w = z[0] || 0.8, h = z[1] || 0.5, r = z[2] || 0.035; const pts = [[-w / 2, -h / 2, 0], [w / 2, -h / 2, 0], [w / 2, h / 2, 0], [-w / 2, h / 2, 0]].map(p => new THREE.Vector3(...p)); return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.02), 64, r, 6, true); }
+    case 'coil': { const R = z[0] || 0.25, L = z[1] || 0.8, n = Math.max(2, Math.min(30, it.turns || 8)), r = z[2] || 0.025; const pts = []; for (let i = 0; i <= n * 16; i++) { const a = i / 16 * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * R, -L / 2 + L * i / (n * 16), Math.sin(a) * R)); } return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), n * 24, r, 5, false); }
+    case 'gear': { const R = z[0] || 0.4, t = z[1] || 0.12, n = Math.max(6, Math.min(40, it.teeth || 12)); const sh = new THREE.Shape(); for (let i = 0; i < n * 2; i++) { const a = i / (n * 2) * Math.PI * 2, rr = i % 2 ? R * 0.82 : R; const a2 = a + Math.PI / (n * 2); if (i === 0) sh.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); else sh.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); sh.lineTo(Math.cos(a2) * rr, Math.sin(a2) * rr); } const hole = new THREE.Path(); hole.absarc(0, 0, R * 0.2, 0, Math.PI * 2, true); sh.holes.push(hole); const g = new THREE.ExtrudeGeometry(sh, { depth: t, bevelEnabled: false }); g.translate(0, 0, -t / 2); return g; }
     default: return new THREE.BoxGeometry(z[0] || 0.5, z[1] ?? z[0] ?? 0.5, z[2] ?? z[0] ?? 0.5);
   } }
 function makeItem(it) {
@@ -160,6 +166,9 @@ function makeItem(it) {
   const mat = new THREE.MeshStandardMaterial({ color: colorOf(it.color), flatShading: true, roughness: 0.6, metalness: /cobre|plata|oro|dorado|metal/i.test(it.color || '') ? 0.5 : 0.05, transparent: it.opacity != null, opacity: it.opacity != null ? Math.max(0.15, +it.opacity) : 1, emissive: new THREE.Color('#000') });
   if (it.shape === 'arrow') { const d = new THREE.Vector3(...V(it.dir, [0, 1, 0])); const len = +it.len || d.length() || 0.8; d.normalize(); const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, len * 0.78, 6), mat); shaft.position.y = len * 0.39; const head = new THREE.Mesh(new THREE.ConeGeometry(0.08, len * 0.22, 6), mat); head.position.y = len * 0.89; const a = new THREE.Group(); a.add(shaft, head); a.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d); g.add(a); }
   else if (it.shape === 'text') { const sp = labelSprite(String(it.text || it.label || '')); sp.scale.multiplyScalar(1.6); g.add(sp); }
+  else if (it.shape === 'magnet') { const z = Array.isArray(it.size) ? it.size.map(Number) : [0.3, 0.6, 0.3]; const w = z[0] || 0.3, h = z[1] || 0.6, d = z[2] || 0.3;
+    const n = new THREE.Mesh(new THREE.BoxGeometry(w, h / 2, d), new THREE.MeshStandardMaterial({ color: '#e5484d', flatShading: true, roughness: 0.6, emissive: new THREE.Color('#000') })); n.position.y = h / 4;
+    const so = new THREE.Mesh(new THREE.BoxGeometry(w, h / 2, d), new THREE.MeshStandardMaterial({ color: '#3b82f6', flatShading: true, roughness: 0.6, emissive: new THREE.Color('#000') })); so.position.y = -h / 4; g.add(n, so); g.userData.mats = [n.material, so.material]; }
   else { const m = new THREE.Mesh(geomOf(it), mat); g.add(m); if (it.shape === 'plane') m.rotation.x = 0; }
   if (it.label && it.shape !== 'text') { const sp = labelSprite(String(it.label)); const box = new THREE.Box3().setFromObject(g); sp.position.set(0, (box.max.y - g.position.y) + 0.14, 0); g.add(sp); g.userData.label = sp; }
   g.userData.mat = mat; g.userData.base = g.position.clone(); g.userData.phase = Math.random() * 6; g.scale.setScalar(0.001); g.userData.shown = 0; return g;
@@ -167,30 +176,51 @@ function makeItem(it) {
 function setScene(sc) {
   if (!sc || (!sc.items && !sc.add && !sc.highlight && !sc.clear)) return;
   if (sc.clear || sc.items) { for (const it of ITEMS) stageInner.remove(it); ITEMS = []; }
-  for (const it of (sc.items || sc.add || []).slice(0, 40)) { const o = makeItem(it); ITEMS.push(o); stageInner.add(o); }
+  if (sc.items || sc.clear) { for (const k in GROUPS) stageInner.remove(GROUPS[k]); GROUPS = {}; }
+  for (const [name, gs] of Object.entries(sc.groups || {})) { let G = GROUPS[name]; if (!G) { G = GROUPS[name] = new THREE.Group(); stageInner.add(G); } G.position.set(...V(gs.pos)); const r = V(gs.rot).map(d => d * Math.PI / 180); G.rotation.set(r[0], r[1], r[2]); G.userData.spec = gs; }
+  for (const it of (sc.items || sc.add || []).slice(0, 48)) { const o = makeItem(it); ITEMS.push(o); (it.group && (GROUPS[it.group] || (GROUPS[it.group] = Object.assign(new THREE.Group(), { userData: { spec: {} } }), stageInner.add(GROUPS[it.group]), GROUPS[it.group])) || stageInner).add(o); }
   for (const o of ITEMS) o.userData.hl = (sc.highlight || []).includes(o.userData.spec.label);
-  if (sc.remove) for (const lab of sc.remove) { const i = ITEMS.findIndex(o => o.userData.spec.label === lab); if (i >= 0) { stageInner.remove(ITEMS[i]); ITEMS.splice(i, 1); } }
+  if (sc.remove) for (const lab of sc.remove) { const i = ITEMS.findIndex(o => o.userData.spec.label === lab); if (i >= 0) { ITEMS[i].parent && ITEMS[i].parent.remove(ITEMS[i]); ITEMS.splice(i, 1); } }
   // Encaja el modelo en el pedestal
   // Medimos en coordenadas del propio modelo (sin la posición, giro ni escala del escenario)
-  const keep = { p: stage.position.clone(), r: stage.rotation.y, s: stage.scale.x }; stage.position.set(0, 0, 0); stage.rotation.y = 0; stage.scale.setScalar(1);
+  const keep = { p: stage.position.clone(), r: stage.rotation.y, rx: stage.rotation.x, s: stage.scale.x }; stage.position.set(0, 0, 0); stage.rotation.set(0, 0, 0); stage.scale.setScalar(1); const gr = {}; for (const k in GROUPS) { gr[k] = GROUPS[k].rotation.clone(); const sp = GROUPS[k].userData.spec || {}; const r0 = V(sp.rot).map(d => d * Math.PI / 180); GROUPS[k].rotation.set(r0[0], r0[1], r0[2]); }
   stageInner.scale.setScalar(1); stageInner.position.set(0, 0, 0); for (const o of ITEMS) { o.scale.setScalar(1); o.position.copy(o.userData.base); } stage.updateMatrixWorld(true);
   const box = new THREE.Box3(); for (const o of ITEMS) box.expandByObject(o); const size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
   const portrait = innerWidth / innerHeight < 1; const k = Math.min((portrait ? 1.35 : 1.9) / Math.max(size.x, size.z, 0.01), (portrait ? 1.1 : 1.2) / Math.max(size.y, 0.01), 2.5);
   stageInner.scale.setScalar(k); stageInner.position.set(-ctr.x * k, -box.min.y * k + 0.02, -ctr.z * k);
-  stage.position.copy(keep.p); stage.rotation.y = keep.r; stage.scale.setScalar(keep.s);
+  // Etiquetas del mismo tamaño en pantalla aunque el modelo se amplíe o encoja
+  const lf = Math.max(0.45, Math.min(1.1, 0.95 / k)); for (const o of ITEMS) { const sp = o.userData.label; if (sp && sp.userData.s0) sp.scale.copy(sp.userData.s0).multiplyScalar(lf); }
+  stage.position.copy(keep.p); stage.rotation.set(keep.rx, keep.r, 0); stage.scale.setScalar(keep.s); for (const k in gr) GROUPS[k].rotation.copy(gr[k]);
+  if (sc.instant) for (const o of ITEMS) if (!o.userData.shown) o.userData.shown = 0.0001;
   for (const o of ITEMS) if (!o.userData.shown) o.scale.setScalar(0.001);
-  SCENE_ON = ITEMS.length > 0; stage.userData.spin = sc.rotate !== false; buildStart = performance.now(); if (SCENE_ON) { pose = 'point'; poseT = 1.6; }
+  // Vector de despiece: cada pieza se aleja del centro
+  const wp = o => o.userData.base.clone().add(o.parent && o.parent !== stageInner ? o.parent.position : new THREE.Vector3()); const c0 = new THREE.Vector3(); ITEMS.forEach(o => c0.add(wp(o))); c0.multiplyScalar(1 / Math.max(1, ITEMS.length));
+  ITEMS.forEach(o => { const d = wp(o).sub(c0); d.y = Math.max(0, d.y) + (o.parent !== stageInner ? 0.25 : 0); o.userData.ex = d.lengthSq() < 0.0025 ? new THREE.Vector3() : d.normalize().multiplyScalar(0.6); });
+  SCENE_ON = ITEMS.length > 0; stage.userData.spin = sc.rotate !== false; buildStart = performance.now(); if (SCENE_ON) { pose = 'point'; poseT = 1.6; } revealPlan(); ui3d();
 }
+// Cada pieza aparece cuando el profe la nombra (si su etiqueta sale en la frase); el resto, repartidas a lo largo de la explicación.
+const normW = w => String(w).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9ñ]/g, '');
+function revealPlan() { if (!S || !S.words) return; const ws = S.words.map(x => normW(x.w)); const pend = ITEMS.filter(o => !o.userData.shown); if (!pend.length) return; const tot = S.total || 1;
+  const stem = t => t.slice(0, Math.max(4, t.length - 2)), hit = (w, t) => w.startsWith(stem(t));
+  pend.forEach((o, i) => { const lab = String(o.userData.spec.label || o.userData.spec.say || '').split(/\s+/).map(normW).filter(t => t.length >= 3); let at = null;
+    // Primero la etiqueta entera en orden («imán norte» ≠ «imán sur»); si no, su palabra más larga.
+    if (lab.length) for (let k = 0; k < ws.length && at == null; k++) { if (!hit(ws[k], lab[0])) continue; let p = k, ok = true; for (const t of lab.slice(1)) { let q = -1; for (let d = 1; d <= 3; d++) if (ws[p + d] && hit(ws[p + d], t)) { q = p + d; break; } if (q < 0) { ok = false; break; } p = q; } if (ok) at = S.words[k].s; }
+    if (at == null && lab.length) { const t = [...lab].sort((a, b) => b.length - a.length)[0]; const k = ws.findIndex(w => hit(w, t)); if (k >= 0) at = S.words[k].s; }
+    o.userData.at = at != null ? at : tot * 0.85 * (i + 1) / (pend.length + 1); }); }
 function animStage(dt, t) {
   sceneT += ((SCENE_ON ? 1 : 0) - sceneT) * (1 - Math.exp(-dt * 4)); stage.visible = sceneT > 0.02;
-  if (!stage.visible) return; stage.scale.setScalar(0.3 + 0.7 * sceneT); if (stage.userData.spin) stage.rotation.y += dt * 0.22;
+  if (!stage.visible) return; stage.scale.setScalar((0.3 + 0.7 * sceneT) * zoom * LAY.sscale); userT = Math.max(0, userT - dt); if (stage.userData.spin && userT === 0 && !drag) stage.rotation.y += dt * 0.22;
   // Aparición progresiva: las piezas salen a medida que avanza la explicación (o cada medio segundo si no hay voz)
   const prog = S && S.total ? Math.min(1, S.clock() / (S.total * 0.85)) : Math.min(1, (performance.now() - buildStart) / (Math.max(1, ITEMS.length) * 500));
-  const nShow = Math.max(1, Math.ceil(prog * ITEMS.length));
-  ITEMS.forEach((o, i) => { if (!o.userData.shown && i < nShow && (i === 0 || ITEMS[i - 1].userData.shown > 0.4)) o.userData.shown = 0.0001; });
+  const nShow = Math.max(1, Math.ceil(prog * ITEMS.length)); const now = S && S.clock ? S.clock() : 1e9;
+  ITEMS.forEach((o, i) => { const u = o.userData; if (u.shown) return; const ok = u.at != null && S ? now >= u.at : i < nShow; if (ok) u.shown = 0.0001; });
+  for (const G of Object.values(GROUPS)) { const a = G.userData.spec && G.userData.spec.anim, sv = +(G.userData.spec && G.userData.spec.speed) || 1; if (a === 'spin') G.rotation.y += dt * 1.6 * sv; else if (a === 'spinx') G.rotation.x += dt * 1.6 * sv; else if (a === 'spinz') G.rotation.z += dt * 1.6 * sv; }
+  explodeT += (EXPLODE - explodeT) * (1 - Math.exp(-dt * 5));
   for (const o of ITEMS) { const u = o.userData, sp = u.spec;
+    // Nombres: con muchas piezas, cada etiqueta se ve unos segundos al aparecer, al brillar o al tocarla (🏷 las muestra todas)
+    if (u.label) { if (u.shown > 0 && !u.bornAt) u.bornAt = t; u.label.visible = u.shown > 0.5 && (LABELS === 'all' || ITEMS.length <= 6 || u.hl || u.picked || (t - u.bornAt) < 7); }
     if (u.shown > 0 && u.shown < 1) { u.shown = Math.min(1, u.shown + dt * 2.6); const e = 1 - Math.pow(1 - u.shown, 3); o.scale.setScalar(Math.max(0.001, e * (1 + 0.15 * Math.sin(u.shown * Math.PI)))); }
-    if (u.shown < 1) continue; const sv = +sp.speed || 1; const p = u.base;
+    if (u.shown < 1) continue; const sv = +sp.speed || 1; const p = u.ex ? u.base.clone().add(u.ex.clone().multiplyScalar(explodeT)) : u.base; if (!sp.anim || sp.anim === 'spin' || sp.anim === 'spinx' || sp.anim === 'spinz' || sp.anim === 'pulse') o.position.copy(p);
     switch (sp.anim) {
       case 'spin': o.rotation.y += dt * 1.6 * sv; break;
       case 'spinx': o.rotation.x += dt * 1.6 * sv; break;
@@ -200,7 +230,7 @@ function animStage(dt, t) {
       case 'pulse': o.scale.setScalar(1 + Math.sin(t * 3 * sv) * 0.12); break;
       case 'flow': { const to = new THREE.Vector3(...V(sp.to, [p.x, p.y + 1, p.z])); const f = ((t * 0.4 * sv) + u.phase) % 1; o.position.lerpVectors(p, to, f); break; }
     }
-    if (u.mat) u.mat.emissive.setRGB(u.hl ? 0.35 + 0.25 * Math.sin(t * 5) : 0, u.hl ? 0.25 + 0.2 * Math.sin(t * 5) : 0, 0);
+    const glow = u.hl || u.picked; for (const mm of (u.mats || [u.mat])) if (mm) mm.emissive.setRGB(glow ? 0.35 + 0.25 * Math.sin(t * 5) : 0, glow ? 0.25 + 0.2 * Math.sin(t * 5) : 0, 0);
   }
 }
 
@@ -229,15 +259,38 @@ function animate() {
   renderer.render(scene, camera);
 }
 // Dos disposiciones: solo pizarra, o modelo 3D en el centro y la pizarra arriba más pequeña.
-const LAY = { board: new THREE.Vector3(), bscale: 1, stage: new THREE.Vector3() };
+const LAY = { board: new THREE.Vector3(), bscale: 1, stage: new THREE.Vector3(), sscale: 1 };
 function layoutTargets() { const w = innerWidth, h = innerHeight, portrait = w / h < 1, sc = sceneT > 0.5 || SCENE_ON;
-  if (portrait) { P.position.x = sc ? -1.05 : 0; P.rotation.y = sc ? 0.3 : 0; LAY.board.set(0, sc ? 4.1 : 3.15, -0.8); LAY.bscale = sc ? 0.72 : 1; LAY.stage.set(0.72, 0.85, 0.7); }
-  else { P.position.x = -1.75; P.rotation.y = 0.35; LAY.board.set(sc ? 1.95 : 1.15, sc ? 2.62 : 1.75, -0.9); LAY.bscale = sc ? 0.62 : 1; LAY.stage.set(0.7, 1.02, 0.5); } }
+  if (portrait) { P.position.x = sc ? -1.05 : 0; P.rotation.y = sc ? 0.3 : 0; LAY.board.set(0, sc ? 4.1 : 3.15, -0.8); LAY.bscale = sc ? 0.72 : 1; LAY.stage.set(0.78, 1.3, 0.85); LAY.sscale = 1.5; }
+  else { P.position.x = -1.75; P.rotation.y = 0.35; LAY.board.set(sc ? 1.95 : 1.15, sc ? 2.62 : 1.75, -0.9); LAY.bscale = sc ? 0.62 : 1; LAY.stage.set(0.7, 1.02, 0.5); LAY.sscale = 1.12; } }
 function layoutLerp(dt) { layoutTargets(); const k = 1 - Math.exp(-dt * 4); board.position.lerp(LAY.board, k); board.scale.setScalar(board.scale.x + (LAY.bscale - board.scale.x) * k); stage.position.lerp(LAY.stage, k); }
 function fit() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h); camera.aspect = w / h; layoutTargets(); board.position.copy(LAY.board); board.scale.setScalar(LAY.bscale); stage.position.copy(LAY.stage);
   const portrait = w / h < 1; if (portrait) { camera.position.set(0, 2.75, 8.2); camera.lookAt(0, 2.55, 0); camera.fov = 54; }
   else { camera.position.set(0, 1.75, 6.3); camera.lookAt(0, 1.5, 0); camera.fov = w / h > 1.6 ? 35 : 42; }
   camera.updateProjectionMatrix(); }
+/* ---------- 3D interactivo: girar con el dedo, pellizcar para ampliar, tocar una pieza para saber qué es, despiezar ---------- */
+const ui = document.createElement('div'); ui.id = 'ui3d'; ui.innerHTML = '<button data-a="explode">💥 Despiezar</button><button data-a="reset">↺ Centrar</button><button data-a="labels">🏷 Nombres</button>'; document.body.append(ui);
+const card = document.createElement('div'); card.id = 'card3d'; document.body.append(card);
+let LABELS = 'auto', drag = null, zoom = 1; const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function ui3d() { ui.classList.toggle('on', SCENE_ON); }
+ui.addEventListener('click', e => { const bt = e.target.closest('button'); const a = bt && bt.dataset.a; if (!a) return; userT = 8;
+  if (a === 'explode') { EXPLODE = EXPLODE ? 0 : 1; bt.textContent = EXPLODE ? '🧩 Montar' : '💥 Despiezar'; }
+  if (a === 'reset') { zoom = 1; stage.rotation.set(0, 0, 0); EXPLODE = 0; ui.querySelector('[data-a=explode]').textContent = '💥 Despiezar'; pick(null); userT = 0; }
+  if (a === 'labels') { LABELS = LABELS === 'all' ? 'auto' : 'all'; bt.classList.toggle('sel', LABELS === 'all'); } });
+function pick(o) { for (const x of ITEMS) x.userData.picked = false; if (!o) { card.classList.remove('on'); return; } o.userData.picked = true; const sp = o.userData.spec;
+  card.innerHTML = `<b>${esc(sp.label || 'Pieza')}</b>${sp.info ? `<p>${esc(sp.info)}</p>` : ''}`; card.classList.add('on'); parent.postMessage({ type: 'part', label: sp.label || '', info: sp.info || '' }, '*'); }
+const cv = renderer.domElement; cv.style.touchAction = 'none'; const touches = new Map();
+cv.addEventListener('pointerdown', e => { touches.set(e.pointerId, { x: e.clientX, y: e.clientY }); drag = touches.size === 1 ? { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, moved: false } : null; try { cv.setPointerCapture(e.pointerId); } catch (er) {} });
+cv.addEventListener('pointermove', e => { if (!touches.has(e.pointerId)) return;
+  if (touches.size === 2) { const a = [...touches.values()]; const d0 = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); touches.set(e.pointerId, { x: e.clientX, y: e.clientY }); const q = [...touches.values()]; const d1 = Math.hypot(q[0].x - q[1].x, q[0].y - q[1].y); if (d0 > 0) zoom = Math.max(0.6, Math.min(2.6, zoom * d1 / d0)); userT = 8; return; }
+  touches.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (!drag || !SCENE_ON) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY;
+  if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 6) drag.moved = true; stage.rotation.y += dx * 0.01; stage.rotation.x = Math.max(-0.7, Math.min(0.7, stage.rotation.x + dy * 0.006)); userT = 8; });
+const up = e => { touches.delete(e.pointerId); if (drag && !drag.moved && SCENE_ON) { const r = cv.getBoundingClientRect(); ndc.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, camera);
+  const hits = ray.intersectObjects(ITEMS.filter(o => o.userData.shown >= 1), true).filter(h => !h.object.isSprite); if (hits.length) { let o = hits[0].object; while (o && !ITEMS.includes(o)) o = o.parent; pick(o); userT = 10; } else pick(null); } drag = null; };
+cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+cv.addEventListener('wheel', e => { if (!SCENE_ON) return; e.preventDefault(); zoom = Math.max(0.6, Math.min(2.6, zoom * (e.deltaY < 0 ? 1.1 : 0.9))); userT = 8; }, { passive: false });
+window.__plato3d = { get ITEMS() { return ITEMS; }, get GROUPS() { return GROUPS; }, stage, camera, renderer, THREE, pick };
+
 addEventListener('resize', fit); fit(); animate();
 
 addEventListener('message', e => { const m = e.data || {}; if (e.source !== parent) return;
@@ -247,7 +300,7 @@ addEventListener('message', e => { const m = e.data || {}; if (e.source !== pare
   else if (m.type === 'word') { if (S && S.ext && S.id === m.id && S.words[m.k]) EXT.off = S.words[m.k].s - (EXT.t + (performance.now() - EXT.at) / 1000); }
   else if (m.type === 'end') { if (S && S.ext && S.id === m.id) finish(true); }
   else if (m.type === 'scene') setScene(m.scene);
-  else if (m.type === 'clearScene') { setScene({ clear: true, items: [] }); SCENE_ON = false; }
+  else if (m.type === 'clearScene') { setScene({ clear: true, items: [] }); SCENE_ON = false; ui3d(); pick(null); }
   else if (m.type === 'pause') { if (S && S.audio) S.audio.pause(); else try { speechSynthesis.pause(); } catch (er) {} }
   else if (m.type === 'resume') { if (S && S.audio) S.audio.play().catch(() => {}); else try { speechSynthesis.resume(); } catch (er) {} }
   else if (m.type === 'board') { drawBoard(m.board || {}); if (m.board && (m.board.title || m.board.formula)) { pose = 'point'; poseT = 1.6; } }
