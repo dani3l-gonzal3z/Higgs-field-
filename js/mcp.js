@@ -81,6 +81,8 @@ async function approve(est, label) {
 
 /* ---------- Herramientas ---------- */
 const sceneLite = s => ({ entities: s.entities, env: s.env, camera: s.camera, rig: s.rig, take: { exists: s.take.exists, duration: s.take.duration, orders: s.take.orders } });
+// Las mismas herramientas que usa una IA externa, para el asistente del móvil.
+export async function runTool(name, args = {}) { if (!H[name]) throw new Error('Herramienta desconocida: ' + name); return await H[name](args); }
 const H = {
   async studio_status() { const s = getSettings(); let st = null; try { st = await platoReady(); } catch (e) {}
     return { text: 'Plató Studio conectado.' + (host.claude ? ' (Vista previa dentro de Claude: no puede generar.)' : ''), app_version: VERSION, providers_with_key: Object.keys(s.keys).filter(k => s.keys[k]), llm_ready: llmReady(),

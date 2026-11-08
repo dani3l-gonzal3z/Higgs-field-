@@ -175,3 +175,10 @@ export async function gamesSave({ id, code, note }) { const res = await testGame
   g.code = code; g.t = Date.now(); g.title = metaOf(code).title; g.versions = [...(g.versions || []), { t: Date.now(), code, note: note || 'IA externa' }].slice(-20); await db.put('projects', g); guideEvent('game-create'); if (root && location.hash === '#games') renderGames(root); return { ok: true, id: g.id, title: g.title }; }
 export async function gamesPlay(id) { const g = (await library()).find(x => x.id === id); if (!g) throw new Error('No existe el juego ' + id); location.hash = '#games'; await startSession(g); return { room: G.session.room, phones: G.session.lan ? `http://${G.session.lan.ips[0]}:${G.session.lan.port}/play.html?room=${G.session.room}` : null }; }
 export const GAME_API = API;
+// Crear un juego sin pantalla de por medio (lo usa el asistente del móvil).
+export async function gamesCreate(desc) {
+  if (!llmReady()) throw new Error('Configura la IA en Ajustes');
+  const { code, fixed } = await buildAndTest(`${API}\n\n${await examplesBlock()}\n\nPETICIÓN DEL JUGADOR: ${desc}\nCrea un juego NUEVO para esta petición (no copies los ejemplos salvo que encajen). Devuelve SOLO el módulo en un bloque \`\`\`js.`, () => {});
+  const m = metaOf(code); const g = { id: 'game-' + uid(), kind: 'game', t: Date.now(), title: m.title, prompt: desc, code, versions: [{ t: Date.now(), code, note: 'Primera versión' }] };
+  await db.put('projects', g); guideEvent('game-create'); return { id: g.id, title: m.title, description: m.description, fixed };
+}

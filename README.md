@@ -40,9 +40,28 @@ Con una clave gratuita de [Pexels](https://www.pexels.com/api/) o [Pixabay](http
 
 ## Inicio y guía
 
-La pantalla de inicio tiene cuatro modos grandes —🎓 Aprender (pronto), 🎬 Contar historias, 🎮 Jugar y 🎨 Crear escenas— y debajo el Estudio Pro (Estudio IA, Lab, Galería, Montaje, Personajes). Se maneja con ratón, táctil, flechas del teclado o un mando de consola.
+La pantalla de inicio tiene cuatro modos grandes —🎓 Aprender, 🎬 Contar historias, 🎮 Jugar y 🎨 Crear escenas— y debajo el Estudio Pro (Estudio IA, Lab, Galería, Montaje, Personajes). Se maneja con ratón, táctil, flechas del teclado o un mando de consola.
 
 La primera vez que entras en cada parte, una guía te señala lo importante paso a paso; mientras usas el plató van saliendo trucos cuando descubres cosas nuevas, y hay 10 misiones para aprender jugando. El botón **?** repite la guía de la pantalla en la que estés; en Ajustes puedes apagarla o reiniciarla.
+
+## 🎓 Aprender: tu profe para cualquier tema
+
+Sube un PDF (o pega un texto, o simplemente di el tema) y un profe low-poly te da la clase en la tele: habla con la boca sincronizada, escribe en la pizarra y cada pocos pasos te hace una pregunta de repaso. Puedes **interrumpirle en cualquier momento**: corta, piensa con tu documento y empieza a contestar con la primera frase, sin esperar a tener la respuesta entera. Tres niveles: lo básico, normal y a fondo.
+
+- La boca se anima a partir del texto: cada vocal tiene su forma, la m, la b y la p cierran los labios, la f y la v los muerden… con los tiempos de cada palabra que da la voz. No necesita GPU.
+- Voz: la del aparato (Kokoro, gratis y sin internet) si está instalada; si no, Edge o la del navegador.
+- Los PDF se leen con [pdf.js](https://github.com/mozilla/pdf.js) (Apache-2.0, en `vendor/pdfjs`). Los escaneados (solo imagen) todavía no.
+
+## 📱 Plató en el móvil: chatea con el aparato
+
+En 🎓 Aprender aparece un QR (con Plató abierto como aplicación). Escanéalo con el móvil en la misma wifi y tendrás un chat con el aparato, siempre que esté encendido:
+
+- Pregúntale lo que quieras o pídele cosas: «explícame este PDF en la tele», «resúmemelo aquí», «crea un juego de…», «prepara un capítulo sobre…», «pausa la clase», «pon el plató de noche».
+- Mándale archivos con 📎: PDF y textos van a tus documentos, fotos y vídeos a la galería.
+- Durante una clase, el móvil hace de mando (pausa, siguiente, repetir) y puedes contestar las preguntas de repaso desde él.
+- Añádelo a la pantalla de inicio para tenerlo como una app. El enlace lleva un código de emparejamiento (se puede cambiar desde Aprender).
+
+Para dictar en vez de escribir, usa el micro del teclado del móvil.
 
 ## 🎮 Jugar: crea el juego que quieras
 
@@ -144,6 +163,12 @@ js/guide.js         guía, trucos y misiones
 js/games.js         Jugar: crear, mejorar y lanzar partidas
 js/qr.js            generador de códigos QR
 js/local.js         servicios del aparato (FFmpeg, voces, proxy)
+js/learn.js         Aprender: documentos, clases, preguntas en directo
+js/assistant.js     asistente que atiende al móvil (chat, archivos, órdenes)
+learn.html          el profe low-poly y la pizarra
+movil.html          la app del móvil (chat con el aparato)
+mcp/inbox.mjs       buzón móvil ↔ aparato con código de emparejamiento
+vendor/pdfjs/       pdf.js 5.4 (Apache-2.0)
 js/subs.js          subtítulos palabra a palabra (lienzo y .ass)
 js/stock.js         vídeos de stock (Pexels, Pixabay)
 js/device.js        tarjeta «Este aparato» en Ajustes
@@ -180,6 +205,9 @@ sw.js               uso sin conexión
 No necesita compilación: son archivos estáticos.
 
 ## Créditos
+
+El flujo de conversación en directo (respuesta frase a frase y cortar al interrumpir) está inspirado en [Vivora](https://github.com/sur950/vivora) (MIT). Lectura de PDF con [pdf.js](https://github.com/mozilla/pdf.js) (Apache-2.0).
+
 
 Ideas de montaje y voces inspiradas en [MoneyPrinterTurbo](https://github.com/harry0703/MoneyPrinterTurbo) (MIT). Voces locales con [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0) y los archivos ONNX de [kokoro-onnx](https://github.com/thewh1teagle/kokoro-onnx) (MIT); `mcp/kokoro_vocab.json` procede de ese proyecto. Fonemas con [eSpeak NG](https://github.com/espeak-ng/espeak-ng) (GPL-3.0, se usa como programa aparte, no se incluye).
 

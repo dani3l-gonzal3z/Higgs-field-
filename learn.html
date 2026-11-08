@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plató · Profe</title>
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js"}}</script>
+<style>
+  html,body{margin:0;height:100%;background:#0d1016;overflow:hidden;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+  canvas{display:block}
+  #sub{position:absolute;left:50%;bottom:max(96px,12%);transform:translateX(-50%);max-width:86%;padding:10px 18px;border-radius:14px;background:rgba(0,0,0,.62);color:#fff;font:600 clamp(16px,2.6vw,30px)/1.35 system-ui,sans-serif;text-align:center;opacity:0;transition:opacity .2s}
+  #sub.on{opacity:1}#sub b{color:#ffd23a;font-weight:800}#sub span.d{color:rgba(255,255,255,.62)}
+</style>
+</head>
+<body>
+<div id="sub"></div>
+<script type="module">
+// 🎓 El profe low-poly: habla con la boca sincronizada al texto (vocales y cierres), gesticula y escribe en la pizarra.
+import * as THREE from 'three';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2)); document.body.append(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#1a2130'); scene.fog = new THREE.Fog('#1a2130', 12, 26);
+const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 60);
+scene.add(new THREE.HemisphereLight('#dfe8ff', '#30261c', 1.1)); const key = new THREE.DirectionalLight('#fff3e2', 1.6); key.position.set(-3, 6, 6); scene.add(key);
+const M = c => new THREE.MeshStandardMaterial({ color: c, flatShading: true, roughness: 0.85 });
+const floor = new THREE.Mesh(new THREE.CircleGeometry(14, 8), M('#2a3142')); floor.rotation.x = -Math.PI / 2; scene.add(floor);
+
+/* ---------- Pizarra ---------- */
+const BW = 1600, BH = 950, bc = document.createElement('canvas'); bc.width = BW; bc.height = BH; const bx = bc.getContext('2d', { willReadFrequently: true });
+const btex = new THREE.CanvasTexture(bc); btex.colorSpace = THREE.SRGBColorSpace; btex.anisotropy = 4;
+const board = new THREE.Group(); board.position.set(1.15, 1.75, -0.6);
+const frame = new THREE.Mesh(new THREE.BoxGeometry(3.5, 2.12, 0.08), M('#6b4a2b')); const face = new THREE.Mesh(new THREE.PlaneGeometry(3.32, 1.97), new THREE.MeshBasicMaterial({ map: btex })); face.position.z = 0.045;
+board.add(frame, face); scene.add(board);
+function wrap(t, maxW) { const words = String(t).split(/\s+/); const lines = []; let cur = ''; for (const w of words) { const s = cur ? cur + ' ' + w : w; if (bx.measureText(s).width > maxW && cur) { lines.push(cur); cur = w; } else cur = s; } if (cur) lines.push(cur); return lines; }
+function drawBoard(b = {}) {
+  bx.fillStyle = '#1f3a32'; bx.fillRect(0, 0, BW, BH); bx.fillStyle = 'rgba(255,255,255,.03)'; for (let i = 0; i < 40; i++) bx.fillRect(Math.random() * BW, Math.random() * BH, 200, 2);
+  let y = 90; const L = 80, maxW = BW - 2 * L;
+  if (b.title) { bx.fillStyle = '#ffe28a'; bx.font = '800 72px system-ui,sans-serif'; for (const l of wrap(b.title, maxW).slice(0, 2)) { bx.fillText(l, L, y + 10); y += 86; } bx.fillStyle = 'rgba(255,226,138,.45)'; bx.fillRect(L, y - 30, Math.min(maxW, 520), 5); y += 40; }
+  if (b.formula) { bx.fillStyle = '#ffffff'; bx.font = '700 104px "Cambria Math","STIX Two Math",Georgia,serif'; const lines = wrap(b.formula, maxW); for (const l of lines.slice(0, 2)) { const w = bx.measureText(l).width; bx.fillText(l, Math.max(L, BW / 2 - w / 2), y + 70); y += 130; } y += 20; }
+  if (b.bullets && b.bullets.length) { bx.font = '600 52px system-ui,sans-serif'; for (const it of b.bullets.slice(0, 6)) { const lines = wrap(it, maxW - 60); if (y + lines.length * 62 > BH - 40) break; bx.fillStyle = '#7fe0b4'; bx.fillText('•', L, y + 40); bx.fillStyle = '#f2f5f3'; for (const l of lines) { bx.fillText(l, L + 50, y + 40); y += 62; } y += 14; } }
+  if (b.note) { bx.font = 'italic 500 42px system-ui,sans-serif'; bx.fillStyle = 'rgba(255,255,255,.7)'; for (const l of wrap(b.note, maxW).slice(0, 3)) { if (y > BH - 60) break; bx.fillText(l, L, y + 40); y += 54; } }
+  if (!b.title && !b.formula && !(b.bullets || []).length && !b.note) { bx.fillStyle = 'rgba(255,255,255,.25)'; bx.font = '600 56px system-ui,sans-serif'; bx.fillText('Plató · Aprender', L, BH / 2); }
+  btex.needsUpdate = true;
+}
+drawBoard();
+
+/* ---------- Profe ---------- */
+const P = new THREE.Group(); P.position.set(-1.55, 0, 0.35); P.rotation.y = 0.35; scene.add(P);
+let LOOK = { skin: '#e9b48f', hair: '#3b2a20', shirt: '#3d7fd6', pants: '#2b3348' };
+const mats = { skin: M(LOOK.skin), hair: M(LOOK.hair), shirt: M(LOOK.shirt), pants: M(LOOK.pants), white: M('#f5f5f0'), dark: new THREE.MeshBasicMaterial({ color: '#2a0f12' }), lips: M('#b0594f'), teeth: M('#fbfbf5') };
+const legs = new THREE.Group(); P.add(legs);
+for (const sx of [-0.13, 0.13]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.09, 0.85, 6), mats.pants); l.position.set(sx, 0.43, 0); legs.add(l); const sh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, 0.28), M('#1d1d22')); sh.position.set(sx, 0.04, 0.05); legs.add(sh); }
+const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.26, 0.75, 7), mats.shirt); torso.position.y = 1.22; P.add(torso);
+const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.12, 6), mats.skin); neck.position.y = 1.64; P.add(neck);
+function arm(side) { const g = new THREE.Group(); g.position.set(side * 0.36, 1.52, 0); const up = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.07, 0.42, 6), mats.shirt); up.position.y = -0.21; g.add(up);
+  const el = new THREE.Group(); el.position.y = -0.42; g.add(el); const fo = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.06, 0.38, 6), mats.skin); fo.position.y = -0.19; el.add(fo); const ha = new THREE.Mesh(new THREE.IcosahedronGeometry(0.07, 0), mats.skin); ha.position.y = -0.4; el.add(ha); g.userData.el = el; P.add(g); return g; }
+const armL = arm(-1), armR = arm(1);
+const head = new THREE.Group(); head.position.y = 1.98; P.add(head);
+const skull = new THREE.Mesh(new THREE.IcosahedronGeometry(0.3, 1), mats.skin); skull.scale.set(1, 1.08, 0.98); head.add(skull);
+const hair = new THREE.Mesh(new THREE.IcosahedronGeometry(0.315, 1, ), mats.hair); hair.scale.set(1.02, 0.75, 1.02); hair.position.set(0, 0.11, -0.03); head.add(hair);
+const nose = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.09, 4), mats.skin); nose.rotation.x = Math.PI / 2; nose.position.set(0, -0.01, 0.31); head.add(nose);
+const eyes = []; for (const sx of [-0.105, 0.105]) { const e = new THREE.Group(); e.position.set(sx, 0.06, 0.255); const w = new THREE.Mesh(new THREE.SphereGeometry(0.052, 8, 6), mats.white); const pu = new THREE.Mesh(new THREE.SphereGeometry(0.026, 6, 5), new THREE.MeshBasicMaterial({ color: '#1b1b22' })); pu.position.z = 0.035; e.add(w, pu); head.add(e); eyes.push(e);
+  const br = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.018, 0.02), mats.hair); br.position.set(sx, 0.15, 0.285); br.rotation.z = sx > 0 ? -0.08 : 0.08; head.add(br); e.userData.brow = br; }
+// Boca: hueco oscuro + dientes + labios (anillo). Tres parámetros: apertura, anchura y redondez.
+const mouth = new THREE.Group(); mouth.position.set(0, -0.135, 0.268); mouth.rotation.x = -0.12; head.add(mouth);
+const hole = new THREE.Mesh(new THREE.CircleGeometry(1, 10), mats.dark); mouth.add(hole);
+const teeth = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.32), mats.teeth); teeth.position.set(0, 0.62, 0.004); hole.add(teeth);
+const lips = new THREE.Mesh(new THREE.TorusGeometry(1, 0.22, 4, 12), mats.lips); lips.position.z = 0.008; mouth.add(lips);
+const chin = new THREE.Mesh(new THREE.IcosahedronGeometry(0.07, 0), mats.skin); chin.position.set(0, -0.255, 0.21); head.add(chin);
+
+/* ---------- Formas de la boca (visemas) a partir del texto ---------- */
+const SH = { rest: [0.04, 0.85, 0], A: [1, 1.0, 0], E: [0.55, 1.25, 0], I: [0.32, 1.35, 0], O: [0.78, 0.72, 0.65], U: [0.32, 0.5, 1], M: [0, 0.92, 0], F: [0.14, 1.05, 0], C: [0.26, 1.0, 0.1] };
+const VOW = { a: 'A', á: 'A', à: 'A', e: 'E', é: 'E', è: 'E', i: 'I', í: 'I', y: 'I', o: 'O', ó: 'O', ò: 'O', u: 'U', ú: 'U', ü: 'U', w: 'U' };
+function letterShapes(word) { // letras -> [forma, peso]
+  const w = word.toLowerCase(); const out = [];
+  for (let i = 0; i < w.length; i++) { const c = w[i], n = w[i + 1] || '';
+    if (c === 'h' && w[i - 1] !== 'c') continue; // la h no suena
+    if (c === 'u' && (w[i - 1] === 'q' || (w[i - 1] === 'g' && /[eéií]/.test(n)))) continue; // que, qui, gue, gui
+    if (VOW[c]) { out.push([VOW[c], 1.7]); continue; }
+    if (/[mbp]/.test(c)) { out.push(['M', 0.9]); continue; }
+    if (/[fv]/.test(c)) { out.push(['F', 0.8]); continue; }
+    if (/[\p{L}\p{N}]/u.test(c)) out.push(['C', 0.7]);
+  }
+  return out;
+}
+// Línea de tiempo [{t, s}] para un texto con tiempos por palabra (s, e en segundos) o estimados.
+function buildTimeline(text, words, rate = 1) {
+  const toks = String(text).split(/\s+/).filter(Boolean); let ws = words && words.length ? words : null;
+  if (ws && ws.length !== toks.length) ws = null;
+  if (!ws) { let t = 0.05; ws = toks.map(w => { const d = Math.max(0.18, w.replace(/[^\p{L}\p{N}]/gu, '').length * 0.075) / rate; const o = { w, s: t, e: t + d }; t = o.e + (/[.,;:!?…]$/.test(w) ? 0.28 / rate : 0.05 / rate); return o; }); }
+  const tl = []; ws.forEach((x, i) => { const sh = letterShapes(x.w || toks[i] || ''); const tot = sh.reduce((a, b) => a + b[1], 0) || 1; let t = x.s; const k = (x.e - x.s) / tot;
+    for (const [s, wt] of sh) { tl.push({ t, s }); t += wt * k; } tl.push({ t: x.e, s: 'rest' }); });
+  return { tl, words: ws.map((x, i) => ({ ...x, w: toks[i] || x.w })) };
+}
+
+/* ---------- Habla ---------- */
+const subEl = document.getElementById('sub');
+let S = null; // { id, tl, words, clock(), done, audio, utter }
+const target = { o: 0.04, w: 0.85, r: 0 }, cur = { o: 0.04, w: 0.85, r: 0 };
+function showSub(words, idx) { if (!words) { subEl.classList.remove('on'); return; } subEl.innerHTML = words.map((x, i) => i === idx ? `<b>${esc(x.w)}</b>` : i < idx ? esc(x.w) : `<span class="d">${esc(x.w)}</span>`).join(' '); subEl.classList.add('on'); }
+const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+function finish(ok = true) { if (!S) return; const s = S; S = null; try { s.audio && (s.audio.pause(), URL.revokeObjectURL(s.audio.src)); } catch (e) {} try { if (s.utter) speechSynthesis.cancel(); } catch (e) {} showSub(null); target.o = 0.04; target.w = 0.85; target.r = 0; parent.postMessage({ type: 'spoken', id: s.id, ok }, '*'); }
+function pickVoice(lang) { const vs = speechSynthesis.getVoices(); const l = (lang || 'es').toLowerCase(); return vs.find(v => v.lang && v.lang.toLowerCase().startsWith(l) && /natural|neural|google|online/i.test(v.name)) || vs.find(v => v.lang && v.lang.toLowerCase().startsWith(l)) || null; }
+async function speak(m) {
+  finish(false); const rate = m.rate || 1;
+  if (m.audio) { // audio ya generado (voz del aparato o de la nube): la boca sigue al reloj del audio
+    const a = new Audio(URL.createObjectURL(m.audio)); a.playbackRate = 1; const { tl, words } = buildTimeline(m.text, m.words, 1);
+    S = { id: m.id, tl, words, audio: a, clock: () => a.currentTime }; a.onended = () => finish(true); a.onerror = () => finish(false);
+    try { await a.play(); } catch (e) { finish(false); } return; }
+  if (!('speechSynthesis' in window)) { // sin voz: la boca se mueve igual y el subtítulo guía
+    const { tl, words } = buildTimeline(m.text, null, rate); const t0 = performance.now(); const end = words.length ? words[words.length - 1].e + 0.2 : 1;
+    S = { id: m.id, tl, words, clock: () => (performance.now() - t0) / 1000 }; S.timer = setTimeout(() => finish(true), end * 1000); return; }
+  // Voz del navegador: estimamos los tiempos y nos re-sincronizamos con cada palabra que anuncia.
+  const { tl, words } = buildTimeline(m.text, null, rate); const u = new SpeechSynthesisUtterance(m.text); const v = pickVoice(m.lang); if (v) u.voice = v; u.lang = (v && v.lang) || (m.lang === 'en' ? 'en-US' : 'es-ES'); u.rate = rate;
+  let t0 = performance.now(), off = 0; const starts = []; let pos = 0; for (const x of words) { const i = m.text.indexOf(x.w, pos); starts.push(i < 0 ? pos : i); pos = (i < 0 ? pos : i) + x.w.length; }
+  S = { id: m.id, tl, words, utter: u, clock: () => (performance.now() - t0) / 1000 + off };
+  u.onboundary = e => { if (!S || S.utter !== u || e.name && e.name !== 'word') return; let k = 0; while (k + 1 < starts.length && starts[k + 1] <= e.charIndex) k++; const want = words[k].s; const now = (performance.now() - t0) / 1000; off = want - now; };
+  u.onend = () => { if (S && S.utter === u) finish(true); }; u.onerror = () => { if (S && S.utter === u) finish(false); };
+  // Red de seguridad: algunos navegadores no avisan del final (o no tienen voces); seguimos al acabar el tiempo estimado.
+  const est = (words.length ? words[words.length - 1].e : 1) + 4; const guard = () => { if (S && S.utter === u) { if (speechSynthesis.speaking && S.clock() < est * 2) setTimeout(guard, 1000); else finish(true); } }; setTimeout(guard, est * 1000);
+  speechSynthesis.cancel(); speechSynthesis.speak(u);
+}
+
+/* ---------- Gestos ---------- */
+let pose = 'idle', poseT = 0; const clock = new THREE.Clock(); let blinkT = 2;
+function animate() {
+  requestAnimationFrame(animate); const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
+  let talking = false, wi = -1;
+  if (S) { const c = S.clock(); talking = true; let sh = 'rest'; for (let i = S.tl.length - 1; i >= 0; i--) if (S.tl[i].t <= c) { sh = S.tl[i].s; break; }
+    const p = SH[sh] || SH.rest; target.o = p[0]; target.w = p[1]; target.r = p[2];
+    for (let i = 0; i < S.words.length; i++) if (S.words[i].s <= c + 0.02) wi = i; if (wi !== S.wi) { S.wi = wi; showSub(S.words, wi); } }
+  const k = 1 - Math.exp(-dt * 22); cur.o += (target.o - cur.o) * k; cur.w += (target.w - cur.w) * k; cur.r += (target.r - cur.r) * k;
+  const W = 0.072 * cur.w * (1 - 0.3 * cur.r), H = 0.008 + 0.062 * cur.o; hole.scale.set(W, H, 1); teeth.visible = cur.o > 0.2 && cur.r < 0.5;
+  lips.scale.set(W + 0.012 + 0.01 * cur.r, H + 0.012 + 0.012 * cur.r, 0.05 + 0.03 * cur.r); chin.position.y = -0.255 - 0.035 * cur.o;
+  // Cabeza viva, parpadeo y brazos que acompañan
+  head.rotation.y = Math.sin(t * 0.6) * 0.08 + (pose === 'point' ? 0.35 : 0); head.rotation.x = Math.sin(t * 0.9) * 0.03 + (talking ? Math.sin(t * 7) * 0.012 : 0) + (pose === 'think' ? -0.12 : 0); head.rotation.z = pose === 'think' ? 0.12 : 0;
+  blinkT -= dt; const bl = blinkT < 0.12 ? 0.15 : 1; if (blinkT < 0) blinkT = 2.5 + Math.random() * 3; for (const e of eyes) { e.scale.y = bl; e.userData.brow.position.y = 0.15 + (talking ? Math.max(0, Math.sin(t * 2.3)) * 0.015 : 0); }
+  P.position.y = Math.sin(t * 1.4) * 0.006; torso.rotation.y = Math.sin(t * 0.5) * 0.04;
+  poseT = Math.max(0, poseT - dt); if (poseT === 0 && pose === 'point') pose = 'idle';
+  const g = talking ? 1 : 0.25;
+  if (pose === 'point') { armR.rotation.set(0, 0, -1.25); armR.userData.el.rotation.z = -0.3; armL.rotation.set(0.05, 0, 0.1); armL.userData.el.rotation.x = -0.2; }
+  else if (pose === 'think') { armR.rotation.set(-0.6, 0, -0.25); armR.userData.el.rotation.set(-1.9, 0, 0); armL.rotation.set(-0.3, 0, 0.35); armL.userData.el.rotation.set(-1.4, 0, 0); }
+  else { armR.rotation.set(-0.25 - g * 0.25 * (0.5 + Math.sin(t * 2.1)), 0, -0.12 - g * 0.1 * Math.sin(t * 1.7)); armR.userData.el.rotation.set(-0.5 - g * 0.5 * (0.5 + Math.sin(t * 2.6)), 0, 0);
+    armL.rotation.set(-0.15 - g * 0.2 * (0.5 + Math.sin(t * 1.8 + 1)), 0, 0.12 + g * 0.08 * Math.sin(t * 1.3)); armL.userData.el.rotation.set(-0.35 - g * 0.4 * (0.5 + Math.sin(t * 2.2 + 2)), 0, 0); }
+  renderer.render(scene, camera);
+}
+function fit() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h); camera.aspect = w / h;
+  const portrait = w / h < 1; if (portrait) { board.position.set(0, 3.15, -0.6); P.position.x = 0; P.rotation.y = 0; camera.position.set(0, 2.55, 7.6); camera.lookAt(0, 2.35, 0); camera.fov = 52; }
+  else { board.position.set(1.15, 1.75, -0.6); P.position.x = -1.55; P.rotation.y = 0.35; camera.position.set(0, 1.75, 6.3); camera.lookAt(0, 1.55, 0); camera.fov = w / h > 1.6 ? 33 : 40; }
+  camera.updateProjectionMatrix(); }
+addEventListener('resize', fit); fit(); animate();
+
+addEventListener('message', e => { const m = e.data || {}; if (e.source !== parent) return;
+  if (m.type === 'speak') speak(m);
+  else if (m.type === 'stop') finish(false);
+  else if (m.type === 'pause') { if (S && S.audio) S.audio.pause(); else try { speechSynthesis.pause(); } catch (er) {} }
+  else if (m.type === 'resume') { if (S && S.audio) S.audio.play().catch(() => {}); else try { speechSynthesis.resume(); } catch (er) {} }
+  else if (m.type === 'board') { drawBoard(m.board || {}); if (m.board && (m.board.title || m.board.formula)) { pose = 'point'; poseT = 1.6; } }
+  else if (m.type === 'pose') { pose = m.name || 'idle'; poseT = m.name === 'point' ? 1.6 : 0; }
+  else if (m.type === 'look') { const L = { ...LOOK, ...(m.look || {}) }; mats.skin.color.set(L.skin); mats.hair.color.set(L.hair); mats.shirt.color.set(L.shirt); mats.pants.color.set(L.pants); LOOK = L; }
+});
+try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => {}; } catch (e) {}
+parent.postMessage({ type: 'learn-ready' }, '*');
+</script>
+</body>
+</html>

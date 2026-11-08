@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#0b0c0e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Plató">
+<link rel="manifest" href="movil.webmanifest">
+<link rel="icon" href="icons/icon.svg">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>Plató · Móvil</title>
+<style>
+  :root{--bg:#0b0c0e;--bg1:#15171b;--bg2:#1e2126;--tx:#f1efe9;--mut:#9a9890;--ac:#ffb43c;--ac2:#ff5434;--bd:rgba(255,255,255,.08)}
+  *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+  body{display:flex;flex-direction:column;height:100dvh}
+  header{display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top) + 10px) 14px 10px;border-bottom:1px solid var(--bd);background:rgba(11,12,14,.92)}
+  header i{width:10px;height:10px;border-radius:50%;background:#666;flex:none}header i.on{background:#4ade80;box-shadow:0 0 10px #4ade80}header b{letter-spacing:.18em}header small{color:var(--mut);margin-left:auto}
+  #log{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+  .m{max-width:86%;padding:10px 13px;border-radius:18px;white-space:pre-wrap;word-wrap:break-word}
+  .m.u{align-self:flex-end;background:linear-gradient(135deg,var(--ac2),var(--ac));color:#1b0a00;border-bottom-right-radius:6px}
+  .m.a{align-self:flex-start;background:var(--bg2);border-bottom-left-radius:6px}
+  .m.sys{align-self:center;background:none;color:var(--mut);font-size:13px;text-align:center}
+  .acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.acts button{border:1px solid rgba(255,180,60,.4);background:rgba(255,180,60,.1);color:var(--ac);border-radius:12px;padding:7px 10px;font:inherit;font-size:14px}
+  .typing{align-self:flex-start;color:var(--mut);font-size:14px;padding:4px 8px}
+  #ctl{display:none;gap:6px;padding:8px 12px;border-top:1px solid var(--bd);overflow-x:auto;align-items:center}#ctl.on{display:flex}
+  #ctl span{color:var(--mut);font-size:13px;white-space:nowrap;margin-right:auto}
+  #ctl button,#quiz button{border:0;background:var(--bg2);color:var(--tx);border-radius:12px;padding:9px 12px;font:inherit;flex:none}
+  #quiz{display:none;flex-direction:column;gap:6px;padding:10px 12px;border-top:1px solid var(--bd)}#quiz.on{display:flex}#quiz b{font-size:15px}#quiz button{text-align:left}
+  form{display:flex;gap:8px;padding:10px 12px calc(env(safe-area-inset-bottom) + 10px);border-top:1px solid var(--bd);background:var(--bg1)}
+  textarea{flex:1;resize:none;max-height:140px;min-height:44px;border-radius:14px;border:1px solid var(--bd);background:var(--bg2);color:var(--tx);padding:11px 12px;font:inherit}
+  form button{flex:none;width:46px;height:46px;border-radius:50%;border:0;font-size:20px;background:var(--bg2);color:var(--tx)}form button.send{background:linear-gradient(135deg,var(--ac2),var(--ac));color:#1b0a00}
+  #pair[hidden]{display:none}#pair{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:30px;gap:12px;color:var(--mut)}#pair b{color:var(--tx);font-size:20px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 10px}.chips button{border:1px solid var(--bd);background:var(--bg1);color:var(--tx);border-radius:14px;padding:7px 11px;font:inherit;font-size:14px}
+</style>
+</head>
+<body>
+<header><i id="dot"></i><b>PLATÓ</b><small id="st">conectando…</small></header>
+<div id="pair" hidden><div style="font-size:48px">📺</div><b>Empareja este móvil</b><p>En el aparato abre <b>🎓 Aprender</b> y escanea el QR de «Habla con Plató desde el móvil» con la cámara. Tienes que estar en la misma wifi.</p></div>
+<div id="log"></div>
+<div class="chips" id="chips"></div>
+<div id="quiz"></div>
+<div id="ctl"><span id="ctlt"></span><button data-c="prev">⏮</button><button data-c="pause" id="pp">⏸</button><button data-c="next">⏭</button><button data-c="repeat">🔁</button><button data-c="stop">⏹</button></div>
+<form id="f"><button type="button" id="att" title="Mandar un archivo">📎</button><textarea id="t" rows="1" placeholder="Escribe o dicta con el micro del teclado…" enterkeyhint="send"></textarea><button class="send" title="Enviar">➤</button></form>
+<input type="file" id="file" accept=".pdf,.txt,.md,.html,application/pdf,text/*,image/*,video/*" hidden multiple>
+<script>
+// Chat con el aparato por la wifi de casa. Lo que escribes lo recibe Plató, que contesta y actúa (clases, juegos, capítulos…).
+const $ = s => document.querySelector(s);
+const hk = new URLSearchParams(location.hash.slice(1)).get('k'); if (hk) { localStorage.setItem('plato_key', hk); history.replaceState(null, '', location.pathname); }
+const KEY = localStorage.getItem('plato_key'); const H = { 'X-Plato-Key': KEY || '' };
+let since = +(sessionStorage.getItem('plato_since') || 0), waiting = 0, lastStatus = null, failures = 0;
+const log = $('#log');
+function add(role, text, card) {
+  const d = document.createElement('div'); d.className = 'm ' + (role === 'user' ? 'u' : role === 'sys' ? 'sys' : 'a'); d.textContent = text;
+  if (card && card.actions) { const a = document.createElement('div'); a.className = 'acts'; for (const x of card.actions) { const b = document.createElement('button'); b.textContent = x.label; b.onclick = () => { if (x.cmd) cmd(x.cmd, x.arg); else if (x.chat) send(x.chat); }; a.append(b); } d.append(a); }
+  log.append(d); log.scrollTop = log.scrollHeight; }
+function typing(on) { let t = $('.typing'); if (on && !t) { t = document.createElement('div'); t.className = 'typing'; t.textContent = 'Plató está pensando…'; log.append(t); log.scrollTop = log.scrollHeight; } if (!on && t) t.remove(); }
+async function api(path, opt = {}) { const r = await fetch(path, { ...opt, headers: { ...H, ...(opt.headers || {}) } }); if (r.status === 401) { localStorage.removeItem('plato_key'); showPair(); throw new Error('sin emparejar'); } if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error ' + r.status); return r.json(); }
+async function send(text) { text = String(text || '').trim(); if (!text) return; try { await api('/inbox/msg', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'chat', text }) }); waiting++; typing(true); } catch (e) { add('sys', '⚠️ ' + e.message); } }
+async function cmd(c, arg) { try { await api('/inbox/msg', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'cmd', cmd: c, arg }) }); if (c === 'explain' || c === 'play') { waiting++; typing(true); } } catch (e) { add('sys', '⚠️ ' + e.message); } }
+async function upload(f) { add('sys', `Enviando ${f.name}…`); try { const r = await fetch('/inbox/file?name=' + encodeURIComponent(f.name), { method: 'PUT', headers: { ...H, 'content-type': f.type || 'application/octet-stream' }, body: f }); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error ' + r.status); waiting++; typing(true); } catch (e) { add('sys', '⚠️ No se pudo enviar: ' + e.message); } }
+function showStatus(s) { lastStatus = s; const live = s && ['lesson', 'paused', 'answer'].includes(s.state);
+  $('#ctl').classList.toggle('on', !!live); if (live) { $('#ctlt').textContent = `🎓 ${s.title || 'Clase'}${s.total ? ` · ${s.step}/${s.total}` : ''}`; $('#pp').textContent = s.state === 'paused' ? '▶' : '⏸'; $('#pp').dataset.c = s.state === 'paused' ? 'resume' : 'pause'; }
+  const q = $('#quiz'); if (s && s.quiz) { q.innerHTML = ''; const b = document.createElement('b'); b.textContent = '❓ ' + s.quiz.q; q.append(b); s.quiz.options.forEach((o, k) => { const x = document.createElement('button'); x.textContent = o; x.onclick = () => cmd('answer', k); q.append(x); }); q.classList.add('on'); } else q.classList.remove('on'); }
+async function poll() {
+  try { const j = await api('/outbox?since=' + since); failures = 0; $('#dot').classList.add('on'); $('#st').textContent = 'conectado';
+    for (const it of j.items) { since = Math.max(since, it.n); if (it.role === 'assistant') { if (waiting) waiting--; typing(waiting > 0); add('a', it.text, it.card); } else if (it.role === 'user' && !document.querySelector(`[data-n="${it.n}"]`)) { add('user', it.text); log.lastChild.dataset.n = it.n; } }
+    sessionStorage.setItem('plato_since', since); showStatus(j.status);
+  } catch (e) { if (e.message === 'sin emparejar') return; failures++; $('#dot').classList.remove('on'); $('#st').textContent = failures > 2 ? 'sin conexión con el aparato' : 'conectando…'; }
+  setTimeout(poll, document.hidden ? 4000 : 1200);
+}
+function showPair() { $('#pair').hidden = false; log.hidden = true; $('#f').style.display = 'none'; $('#chips').hidden = true; $('#st').textContent = 'sin emparejar'; }
+$('#f').onsubmit = e => { e.preventDefault(); const t = $('#t').value; $('#t').value = ''; $('#t').style.height = ''; send(t); };
+$('#t').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && matchMedia('(pointer:fine)').matches) { e.preventDefault(); $('#f').requestSubmit(); } });
+$('#t').addEventListener('input', e => { e.target.style.height = ''; e.target.style.height = Math.min(140, e.target.scrollHeight) + 'px'; });
+$('#att').onclick = () => $('#file').click(); $('#file').onchange = e => { for (const f of e.target.files) upload(f); e.target.value = ''; };
+document.querySelectorAll('#ctl button').forEach(b => b.onclick = () => cmd(b.dataset.c));
+for (const [l, t] of [['🎓 Explícame algo', 'Explícame en la tele '], ['🎮 Crea un juego', 'Crea un juego de '], ['🎬 Hazme un capítulo', 'Prepara un capítulo sobre '], ['📄 Mis documentos', '¿Qué documentos tienes?']]) { const b = document.createElement('button'); b.textContent = l; b.onclick = () => { if (t.endsWith(' ')) { $('#t').value = t; $('#t').focus(); } else send(t); }; $('#chips').append(b); }
+if (!KEY) showPair(); else { add('sys', 'Escríbele a Plató lo que quieras: preguntas, «explícame este PDF», «crea un juego de…», «pausa la clase»… También puedes mandarle archivos con 📎.'); poll(); }
+</script>
+</body>
+</html>

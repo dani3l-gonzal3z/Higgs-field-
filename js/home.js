@@ -3,9 +3,9 @@ import { el, btn, db, blobURL, host, toast, modal } from './core.js';
 import { missionsCard, startTour } from './guide.js';
 
 export const MODES = [
-  { v: 'learn', ic: '🎓', t: 'Aprender', d: 'Clases en directo con un personaje que explica, dibuja y responde.', badge: 'Pronto', grad: 'linear-gradient(135deg,#3a7bd5,#7f5bd6)' },
+  { v: 'learn', ic: '🎓', t: 'Aprender', d: 'Tu profe para cualquier tema o PDF: explica en la pizarra y responde tus preguntas.', badge: 'Nuevo', grad: 'linear-gradient(135deg,#3a7bd5,#7f5bd6)' },
   { v: 'director', ic: '🎬', t: 'Contar historias', d: 'Pide un capítulo o pásale un libro: guion, rodaje, voces, música y montaje.', grad: 'linear-gradient(135deg,#ff5434,#ffb43c)' },
-  { v: 'games', ic: '🎮', t: 'Jugar', d: 'Describe cualquier juego y juégalo en la tele con los móviles como mando.', badge: 'Nuevo', grad: 'linear-gradient(135deg,#11998e,#57e389)' },
+  { v: 'games', ic: '🎮', t: 'Jugar', d: 'Describe cualquier juego y juégalo en la tele con los móviles como mando.', grad: 'linear-gradient(135deg,#11998e,#57e389)' },
   { v: 'plato', ic: '🎨', t: 'Crear escenas', d: 'El plató 3D: decorados, personajes, cámaras y acción con tus palabras.', grad: 'linear-gradient(135deg,#e86aa8,#ff9a5a)' },
 ];
 export const PRO = [['studio', '✨', 'Estudio IA'], ['lab', '🧪', 'Laboratorio'], ['gallery', '🖼', 'Galería'], ['edit', '🎞', 'Montaje'], ['chars', '👤', 'Personajes']];
@@ -36,13 +36,7 @@ export async function renderHome(r) {
     !/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && !host.claude ? el('span', { class: 'note' }, '💡 Instala Plató en tu ordenador (plato.sh o Plato.cmd) para su ventana propia y para jugar con los móviles.') : null));
 }
 
-export function renderLearn(r) {
-  r.innerHTML = '';
-  r.append(el('section', { class: 'card hero' }, el('div', { class: 'badge prem' }, 'PRÓXIMAMENTE'), el('h2', {}, '🎓 Aprender'),
-    el('p', {}, 'Por la mañana le cuentas a Plató qué les cuesta a tus hijos y prepara un plan para la semana. Por la tarde, un personaje que ellos eligen les da la clase en la tele: reparte una pizza en octavos mientras la pizarra escribe 3/8, monta la Roma de los césares delante de ellos y responde a sus preguntas.'),
-    el('div', { class: 'note' }, 'Está en la fase 1 del plan: personaje que habla con la boca sincronizada y clases interpretadas en directo. Mientras tanto puedes usar el Director para crear capítulos educativos.'),
-    el('div', { class: 'row-btns' }, el('a', { class: 'b on', href: '#director' }, '🎬 Crear un capítulo educativo'), btn('Avisarme cuando esté', () => toast('👍 Te lo enseñaré en Inicio en cuanto llegue'), 'mini-b'))));
-}
+export { renderLearn } from './learn.js';
 
 /* ---------- Navegación con teclado y mando ---------- */
 export function setupSpatialNav() {

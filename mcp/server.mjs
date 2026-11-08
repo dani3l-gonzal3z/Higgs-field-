@@ -12,6 +12,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { mediaHandler } from './media.mjs';
+import { phoneRoute, cleanupInbox } from './inbox.mjs';
 import { setupVoices, stopTTS, speak } from './tts.mjs';
 
 const VERSION = '1.0.0';
@@ -260,10 +261,11 @@ function serveStatic(req, res) {
   res.writeHead(200, { 'content-type': { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.txt': 'text/plain; charset=utf-8', '.ico': 'image/x-icon' }[ext], 'cache-control': 'no-cache' }); fs.createReadStream(p).pipe(res);
 }
 function readBody(req) { return new Promise((res, rej) => { const c = []; let n = 0; req.on('data', d => { n += d.length; if (n > 400 * 1024 * 1024) { rej(new Error('too big')); req.destroy(); } else c.push(d); }); req.on('end', () => res(Buffer.concat(c).toString('utf8'))); req.on('error', rej); }); }
-let api = null;
+let api = null; cleanupInbox();
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname.startsWith('/api/')) { api = api || mediaHandler({ ORIGINS, isLocal, OUT, log }); await api(req, res, url); return; }
+  if (url.pathname.startsWith('/inbox') || url.pathname.startsWith('/outbox')) { if (await phoneRoute(req, res, url, { log })) return; }
   if (url.pathname === '/health') { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ app: 'plato-studio-mcp', version: VERSION, connected: !!app })); return; }
   if (url.pathname === '/lan') { res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify({ lan: LAN, ips: LAN ? lanIPs() : [], port: PORT })); return; }
   if (url.pathname === '/mcp') {
