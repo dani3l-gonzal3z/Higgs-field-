@@ -41,7 +41,7 @@ export const COLORIN = {
 /* ---------- Datos ---------- */
 const L = { cur: null, tab: 'marca', spot: 0, shot: 0, frame: null, frameReady: null };
 export async function brandsList() { const all = (await db.all('projects')).filter(p => p.kind === 'brand').sort((a, b) => b.t - a.t); if (!all.some(b => b.id === COLORIN.id)) { const c = { ...structuredClone(COLORIN), t: 0, created: Date.now() }; await db.put('projects', c); all.push(c); } return all; }
-export async function brandGet(id) { const b = await db.get('projects', id); if (!b) throw new Error('No encuentro esa marca: ' + id); return b; }
+export async function brandGet(id) { let b = await db.get('projects', id); if (!b && id === COLORIN.id) { await brandsList(); b = await db.get('projects', id); } if (!b) throw new Error('No encuentro esa marca: ' + id); return b; }
 export async function brandSave(b) { b.t = Date.now(); await db.put('projects', b); emit('brands'); return b; }
 const spotOf = b => ((b.campaign || {}).spots || [])[L.spot] || ((b.campaign || {}).spots || [])[0];
 
