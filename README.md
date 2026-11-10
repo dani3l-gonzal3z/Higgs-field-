@@ -10,7 +10,7 @@ Necesitas [Node.js 18+](https://nodejs.org) y Chrome, Edge, Chromium o Brave ins
 
 | Sistema | Cómo |
 |---|---|
-| Windows | doble clic en `Plato.cmd` |
+| Windows | en PowerShell: `irm https://raw.githubusercontent.com/dani3l-gonzal3z/Higgs-field-/main/scripts/instalar-windows.ps1 \| iex` (instala Node y FFmpeg si faltan, descarga Plató en `%USERPROFILE%\Plato` y deja un acceso directo en el escritorio; para actualizar, vuelve a ejecutarlo). O doble clic en `Plato.cmd` |
 | macOS | doble clic en `Plato.command` |
 | Linux | `./plato.sh` |
 
