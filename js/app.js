@@ -12,11 +12,12 @@ import { detectLocal, localBase } from './local.js';
 import { startAssistant } from './assistant.js';
 
 import { renderGames } from './games.js';
+import { renderBrands } from './brands.js';
 import { renderHome, renderLearn, PRO, setupSpatialNav } from './home.js';
 import { maybeTour, startTour, onGuide, missionsDone, MISSIONS } from './guide.js';
 
-const VIEWS = { home: ['🏠', 'Inicio'], learn: ['🎓', 'Aprender'], director: ['🎬', 'Contar historias'], games: ['🎮', 'Jugar'], plato: ['🎨', 'Crear escenas'], studio: ['✨', 'Estudio IA', 'pro'], lab: ['🧪', 'Laboratorio', 'pro'], gallery: ['🖼', 'Galería', 'pro'], edit: ['🎞', 'Montaje', 'pro'], chars: ['👤', 'Personajes', 'pro'], settings: ['⚙️', 'Ajustes'] };
-const RENDER = { home: renderHome, learn: renderLearn, games: renderGames, director: renderDirector, lab: renderLab, studio: renderStudio, gallery: renderGallery, edit: renderEditor, chars: renderChars, settings: renderSettings };
+const VIEWS = { home: ['🏠', 'Inicio'], learn: ['🎓', 'Aprender'], director: ['🎬', 'Contar historias'], games: ['🎮', 'Jugar'], brands: ['🏷', 'Marcas'], plato: ['🎨', 'Crear escenas'], studio: ['✨', 'Estudio IA', 'pro'], lab: ['🧪', 'Laboratorio', 'pro'], gallery: ['🖼', 'Galería', 'pro'], edit: ['🎞', 'Montaje', 'pro'], chars: ['👤', 'Personajes', 'pro'], settings: ['⚙️', 'Ajustes'] };
+const RENDER = { brands: renderBrands, home: renderHome, learn: renderLearn, games: renderGames, director: renderDirector, lab: renderLab, studio: renderStudio, gallery: renderGallery, edit: renderEditor, chars: renderChars, settings: renderSettings };
 const view = $('#view'), frame = $('#plato');
 
 function buildNav(v = 'home') { const t = $('#tabs'); t.innerHTML = ''; const [ic, lb, grp] = VIEWS[v];

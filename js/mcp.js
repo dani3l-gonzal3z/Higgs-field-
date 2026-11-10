@@ -151,6 +151,28 @@ const H = {
     throw new Error('Acción desconocida: ' + action); },
   async montage({ action }) { const E = await import('./editor.js'); if (action === 'get') return await E.montageInfo();
     const r = await E.exportMontage(); return { text: `Montaje exportado (${r.dur.toFixed(1)} s) y guardado en la galería como gallery:${r.id}.`, gallery_id: r.id, files: [{ name: `montaje.${extOf(r.blob)}`, blob: r.blob }] }; },
+  async brand({ action, id, brief, name, kit, campaign, shot_patch, spot, shots, tab }) { const B = await import('./brands.js');
+    if (action === 'list') return { brands: (await B.brandsList()).map(b => B.brandSummary(b)) };
+    if (action === 'vocabulary') return { sets: B.SETS, cameras: B.CAMERAS, actions: B.ACTIONS, note: 'Cada toma: {id,title,dur:5,set,camera,action,flavor:"<product id>|all",vo,onscreen,prompt(EN)}' };
+    if (action === 'create') { if (!brief) throw new Error('Pasa "brief": qué producto, para quién y con qué tono'); const b = await B.brandCreate({ brief, name }); B.brandOpen(b.id); return { text: `Marca «${b.kit.name}» creada con ${b.kit.products.length} productos y su primer anuncio. Revísala con action=get y saca fotogramas con action=keyframes.`, ...B.brandSummary(b, true) }; }
+    if (!id) throw new Error('Falta "id" de la marca (míralo con action=list)');
+    if (action === 'get') return B.brandSummary(await B.brandGet(id), true);
+    if (action === 'update') { const b = await B.brandUpdate(id, { kit, campaign, shot_patch }); return { text: 'Marca actualizada.', ...B.brandSummary(b) }; }
+    if (action === 'keyframes') { const r = await B.brandKeyframes(id, { spot, shots }); return { text: `${r.length} fotogramas clave del plató de anuncios (guardados en la marca). Úsalos como imagen inicial al darles vida.`, files: r.map(x => ({ name: `${id}-${x.shot.id}.png`, label: x.shot.title, blob: x.blob })), images: r.slice(0, 6).map(x => ({ blob: x.blob, max: 768 })) }; }
+    if (action === 'prompts') return { text: 'Prompts listos para un modelo imagen→vídeo (5 s cada uno). Usa el fotograma clave de cada toma como start image.', shots: B.brandPrompts(await B.brandGet(id), spot) };
+    if (action === 'export') { const b = await B.brandGet(id); const slug = String(b.kit.name || 'marca').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '-'); return { text: 'Guía de marca y logotipo exportados.', files: [{ name: slug + '-guia.md', blob: new Blob([B.brandGuide(b)], { type: 'text/markdown' }) }, { name: slug + '-logo.svg', blob: new Blob([B.logoSVG(b.kit)], { type: 'image/svg+xml' }) }] }; }
+    if (action === 'open') { B.brandOpen(id, tab); return { text: `Abierta en la app (pestaña ${tab || 'marca'}).` }; }
+    throw new Error('Acción desconocida: ' + action); },
+  async learn({ action, topic, focus, level, doc_id, text, title, lesson_id, question, command, restart }) { const Lr = await import('./learn.js');
+    if (action === 'docs') return { docs: (await Lr.docsList()).map(d => ({ id: d.id, title: d.title, chars: d.chars, source: d.source })) };
+    if (action === 'add_text') { if (!text) throw new Error('Pasa "text"'); const d = await Lr.addTextDoc(text, title || 'Notas'); return { text: 'Material guardado.', doc_id: d.id }; }
+    if (action === 'list') return { lessons: (await Lr.lessonsList()).map(r => ({ id: r.id, title: r.title || (r.lesson || {}).title, steps: ((r.lesson || {}).steps || []).length, at: (r.progress || {}).i || 0, done: !!(r.progress || {}).done, updated: new Date(r.t).toISOString() })) };
+    if (action === 'explain') { if (!topic && !doc_id) throw new Error('Pasa "topic" o "doc_id"'); await Lr.explain({ docId: doc_id, topic, focus, level }); return { text: 'Clase en marcha en la pantalla de la app.' }; }
+    if (action === 'open') { if (!lesson_id) throw new Error('Pasa "lesson_id"'); await Lr.openLesson(lesson_id, { restart: !!restart }); return { text: restart ? 'Clase empezada desde el principio.' : 'Clase retomada donde se quedó.' }; }
+    if (action === 'review') { if (!lesson_id) throw new Error('Pasa "lesson_id"'); await Lr.reviewLesson(lesson_id); return { text: 'Repaso en marcha.' }; }
+    if (action === 'ask') { if (!question) throw new Error('Pasa "question"'); return { text: await Lr.answer(question) }; }
+    if (action === 'control') return { text: Lr.lessonControl(command || 'pause') };
+    throw new Error('Acción desconocida: ' + action); },
 };
 
 /* ---------- Indicador en la cabecera ---------- */

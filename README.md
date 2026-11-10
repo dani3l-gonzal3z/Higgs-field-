@@ -67,6 +67,17 @@ Sube un PDF (o pega un texto, o simplemente di el tema) y un profe low-poly te d
 - Voz: la del aparato (Kokoro, gratis y sin internet) si está instalada; si no, Edge o la del navegador.
 - Los PDF se leen con [pdf.js](https://github.com/mozilla/pdf.js) (Apache-2.0, en `vendor/pdfjs`). Los escaneados (solo imagen) todavía no.
 
+## 🏷 Marcas y anuncios
+
+Un proyecto de marca reúne todo lo que hace falta para un anuncio: identidad (nombre, eslogan, historia, tono, paleta, tipografías, logotipo), productos con su envase y una campaña de spots en tomas de 5 s. Cuéntale la idea en una frase y la IA te propone la marca entera, o edítala a mano.
+
+- **Marca**: logotipo en SVG/PNG y guía de marca en Markdown.
+- **Productos**: los envases en 3D con sus etiquetas, generadas a partir del kit.
+- **Anuncio**: el spot en el plató low-poly (decorados, cámaras y acciones de anuncio), con voz en off y fotogramas clave.
+- **Dar vida**: cada toma con un modelo imagen→vídeo (Higgsfield con tu clave, o con tu conector de Higgsfield si abres Plató dentro de Claude). Antes de gastar te dice cuántos créditos cuesta.
+
+Viene con un ejemplo, **Colorín**: snacks crujientes de seis verduras, cada color un sabor.
+
 ## 📱 Plató en el móvil: chatea con el aparato
 
 En 🎓 Aprender aparece un QR (con Plató abierto como aplicación). Escanéalo con el móvil en la misma wifi y tendrás un chat con el aparato, siempre que esté encendido:
@@ -108,7 +119,9 @@ Describe cualquier juego —un Monopoly de tu pueblo, carreras en la Luna, un tr
 
 ## Usarla desde cualquier IA (MCP)
 
-`mcp/server.mjs` es un servidor MCP sin dependencias (Node 18+) que conecta Claude Desktop, Claude Code, Cursor o cualquier cliente MCP con la app abierta en tu navegador. La IA puede cargar decorados, colocar personajes, coreografiar la acción, mirar la escena (recibe imágenes), montar el rig multicámara, grabar las tomas, dirigir capítulos o libros enteros y generar con tus claves.
+`mcp/server.mjs` es un servidor MCP sin dependencias (Node 18+) que conecta Claude Desktop, Claude Code, Cursor o cualquier cliente MCP con la app abierta en tu navegador. La IA puede cargar decorados, colocar personajes, coreografiar la acción, mirar la escena (recibe imágenes), montar el rig multicámara, grabar las tomas, dirigir capítulos o libros enteros, crear marcas y anuncios, dar clases y generar con tus claves.
+
+La guía para la IA está en [`docs/AGENTS.md`](docs/AGENTS.md); el servidor la sirve con la herramienta `guide`, como recurso `plato://guide` y con prompts listos (`anuncio`, `clase`, `escena`, `juego`). Todas las herramientas llevan anotaciones (solo lectura, destructiva, cuesta dinero) para que el cliente sepa cuáles pedir confirmación.
 
 **Claude Desktop** (`claude_desktop_config.json`):
 
@@ -179,6 +192,10 @@ js/games.js         Jugar: crear, mejorar y lanzar partidas
 js/qr.js            generador de códigos QR
 js/local.js         servicios del aparato (FFmpeg, voces, proxy)
 js/learn.js         Aprender: documentos, clases, preguntas en directo
+js/brands.js        Marcas y anuncios: kit, productos, campaña, dar vida
+js/brandart.js      dibujo de marca: logotipos, etiquetas, cierre
+ads.html            el plató de anuncios low-poly
+docs/AGENTS.md      guía para cualquier IA que use el MCP
 js/assistant.js     asistente que atiende al móvil (chat, archivos, órdenes)
 learn.html          el profe low-poly y la pizarra
 movil.html          la app del móvil (chat con el aparato)

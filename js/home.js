@@ -5,6 +5,7 @@ import { missionsCard, startTour } from './guide.js';
 export const MODES = [
   { v: 'learn', ic: '🎓', t: 'Aprender', d: 'Tu profe para cualquier tema o PDF: explica en la pizarra y responde tus preguntas.', badge: 'Nuevo', grad: 'linear-gradient(135deg,#3a7bd5,#7f5bd6)' },
   { v: 'director', ic: '🎬', t: 'Contar historias', d: 'Pide un capítulo o pásale un libro: guion, rodaje, voces, música y montaje.', grad: 'linear-gradient(135deg,#ff5434,#ffb43c)' },
+  { v: 'brands', ic: '🏷', t: 'Marcas y anuncios', d: 'De una idea a su branding, sus envases y su anuncio: en low-poly y con vida gracias a la IA.', badge: 'Nuevo', grad: 'linear-gradient(135deg,#e8433a,#f2b705)' },
   { v: 'games', ic: '🎮', t: 'Jugar', d: 'Describe cualquier juego y juégalo en la tele con los móviles como mando.', grad: 'linear-gradient(135deg,#11998e,#57e389)' },
   { v: 'plato', ic: '🎨', t: 'Crear escenas', d: 'El plató 3D: decorados, personajes, cámaras y acción con tus palabras.', grad: 'linear-gradient(135deg,#e86aa8,#ff9a5a)' },
 ];

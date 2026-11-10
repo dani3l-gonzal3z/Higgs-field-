@@ -15,7 +15,7 @@ import { mediaHandler } from './media.mjs';
 import { phoneRoute, cleanupInbox } from './inbox.mjs';
 import { setupVoices, stopTTS, speak } from './tts.mjs';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
 const flag = n => argv.includes('--' + n);
@@ -79,11 +79,60 @@ const TOOLS = [
   { name: 'speak', description: 'Free text-to-speech on this computer (no app needed): engine "kokoro" (offline, voices ef_dora, em_alex, em_santa for Spanish; af_heart, am_michael… for English) or "edge" (online, unofficial; voices like es-ES-ElviraNeural). Saves a WAV/MP3 in the output folder and returns its path, duration and word timings (for karaoke subtitles). Use file:<path> to put it in the montage.', inputSchema: { type: 'object', properties: { text: { type: 'string' }, voice: { type: 'string' }, engine: { type: 'string', enum: ['kokoro', 'edge'] }, speed: { type: 'number', description: '0.5–2' } }, required: ['text'] } },
   { name: 'games', description: 'Plató games: any game (board, cards, racing, shooter, trivia, invented…) as a JS module on the Plató Game Kit, played on the TV with phones as controllers. action=api returns the full kit reference to write one; list; get (code); save (pass full module code: the app runs an automatic play-test and returns errors to fix); play (opens the lobby with a QR for phones).', inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['api', 'list', 'get', 'save', 'play'] }, id: { type: 'string' }, code: { type: 'string' }, note: { type: 'string' } }, required: ['action'] } },
   { name: 'montage', description: 'The app\'s editor timeline: get (clips, audio tracks, subtitles) or export (renders the final video in real time; returns the file).', inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['get', 'export'] } }, required: ['action'] } },
+  { name: 'brand', description: 'Brands and ads: a brand = kit (name, tagline, story, tone, palette by role, fonts, logo, packaging, products) + campaign of spots made of 5-second shots, rendered in the low-poly ad stage and brought to life with an image-to-video model. action=list | get {id} | vocabulary (valid sets/cameras/actions) | create {brief, name?} (the app LLM designs an ORIGINAL brand + first spot) | update {id, kit? (merged), campaign? (replaced), shot_patch? {id, spot?, set?, camera?, action?, flavor?, vo?, onscreen?, prompt?, title?}} | keyframes {id, spot?, shots?:[ids]} (free stills from the ad stage — look at them) | prompts {id, spot?} (English i2v prompts with packaging + VO per shot) | export {id} (brand guide .md + logo .svg) | open {id, tab?}. Never copy real brands. Recipe: guide topic "marcas".', inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'get', 'vocabulary', 'create', 'update', 'keyframes', 'prompts', 'export', 'open'] }, id: { type: 'string', description: 'brand id, e.g. "brand-colorin"' }, brief: { type: 'string' }, name: { type: 'string' }, kit: { type: 'object' }, campaign: { type: 'object' }, shot_patch: { type: 'object' }, spot: { type: 'string' }, shots: { type: 'array', items: { type: 'string' } }, tab: { type: 'string', enum: ['marca', 'productos', 'anuncio', 'vida'] } }, required: ['action'] } },
+  { name: 'learn', description: 'Video lessons with a 3D teacher, whiteboard, 3D visuals and quizzes, shown on the app screen. action=docs (user material) | add_text {text, title?} | explain {topic? | doc_id?, focus?, level?} (prepare and start a lesson) | list (saved lessons with progress) | open {lesson_id, restart?} | review {lesson_id} (quiz review) | ask {question} (interrupt the teacher; returns the answer) | control {command: pause|resume|next|prev|repeat|stop}.', inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['docs', 'add_text', 'explain', 'list', 'open', 'review', 'ask', 'control'] }, topic: { type: 'string' }, focus: { type: 'string' }, level: { type: 'string', enum: ['básico', 'medio', 'avanzado'] }, doc_id: { type: 'string' }, text: { type: 'string' }, title: { type: 'string' }, lesson_id: { type: 'string' }, restart: { type: 'boolean' }, question: { type: 'string' }, command: { type: 'string', enum: ['pause', 'resume', 'next', 'prev', 'repeat', 'stop'] } }, required: ['action'] } },
+  { name: 'guide', description: 'Read the Plató guide for AI agents (works even if the app is not open). No topic: the index and the golden rules. Topics: ' + 'inicio, flujo, plato, camaras, director, marcas, dar-vida, aprender, juegos, voces, archivos, errores' + '. Read "inicio" once per session and the topic you are about to work on.', inputSchema: { type: 'object', properties: { topic: { type: 'string' } } } },
   { name: 'task_result', description: 'Get the result of a long operation that returned a task_id. Waits up to wait_seconds (default 40).', inputSchema: { type: 'object', properties: { task_id: { type: 'string' }, wait_seconds: { type: 'number' } }, required: ['task_id'] } },
 ];
-const INSTRUCTIONS = `Plató Studio: a 3D previsualisation stage + AI video studio running in the user's browser (their own API keys, pay per use).
-Typical flow: studio_status → stock_list → stock_load_set (or scene_dsl to build) → take_control new → scene_dsl with action commands (use "delay" to choreograph) → scene_view to check → cameras_rig coverage (several angles of the SAME take) → take_record (cameras "all" or program) → generate with a v2v model and inputs.video="last_take" to turn the grey previz into a real-looking shot.
-For whole chapters/books use director (you can write the plan yourself) or book_load. Files are saved under ${OUT}. Generations cost the user money: say what you are going to spend.`;
+const INSTRUCTIONS = `Plató Studio: a creation studio running in the user's browser — 3D low-poly previz stage, AI video studio (the user's own API keys, pay per use), AI Director, video lessons, TV games, and Brands & Ads (brand kit → ad spot in the low-poly ad stage → brought to life with image-to-video).
+Start every session with studio_status (studio_open if the app is not connected), then read guide (no topic) once: it has the golden rules and the recipes. Use guide {"topic":"marcas"|"plato"|"aprender"|"dar-vida"|…} before working in an area.
+Golden rules: free things first (3D stage, keyframes, local voices); say the cost before anything that spends money and wait for approval; look at your results (scene_view, brand keyframes) instead of assuming; never copy real brands; long operations return a task_id → task_result.
+Scenes: stock_load_set or scene_dsl → take_control new → scene_dsl actions with "delay" → scene_view → cameras_rig coverage → take_record → generate (v2v, inputs.video="last_take").
+Ads: brand create → brand get/update → brand keyframes → brand prompts → bring to life (generate, or the Higgsfield MCP if connected) → speak + montage.
+Files are saved under ${OUT}.`;
+/* Pistas para el cliente: qué lee, qué borra, qué sale fuera y cuesta dinero. */
+const RO = { readOnlyHint: true, openWorldHint: false };
+const ANN = {
+  studio_status: ['Estado del estudio', RO], studio_open: ['Abrir Plató', { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }],
+  scene_get: ['Ver la escena (datos)', RO], scene_command: ['Orden en lenguaje natural', { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }],
+  scene_dsl: ['Órdenes exactas al plató', { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }], scene_view: ['Mirar el plató', RO],
+  stock_list: ['Catálogo de decorados y personajes', RO], stock_load_set: ['Cargar decorado', { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }],
+  camera_set: ['Cámara principal', { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }], cameras_rig: ['Rig multicámara', { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }],
+  take_control: ['Controlar la toma', { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }], take_record: ['Grabar la toma', { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }],
+  models_search: ['Buscar modelos de IA', RO], generate: ['Generar con IA (cuesta dinero)', { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }],
+  jobs_status: ['Cola de generaciones', RO], gallery_list: ['Galería', RO], gallery_get: ['Exportar de la galería', { readOnlyHint: true, openWorldHint: false }],
+  director: ['Director de IA', { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }], book_load: ['Cargar libro', { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }],
+  speak: ['Voz gratis', { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true }], games: ['Juegos', { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }],
+  montage: ['Montaje', { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }],
+  brand: ['Marcas y anuncios', { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }], learn: ['Clases', { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }],
+  guide: ['Guía para IAs', RO], task_result: ['Resultado de tarea larga', RO],
+};
+for (const t of TOOLS) { const a = ANN[t.name]; if (a) { t.title = a[0]; t.annotations = { title: a[0], ...a[1] }; } }
+
+/* ---------- Guía, recursos y prompts ---------- */
+const GUIDE_FILE = path.join(ROOT, 'docs', 'AGENTS.md');
+function guideText() { try { return fs.readFileSync(GUIDE_FILE, 'utf8'); } catch (e) { return INSTRUCTIONS; } }
+function guideSections() { const out = {}; const parts = guideText().split(/^## /m); out._head = parts.shift(); for (const p of parts) { const id = p.split(/\s/)[0].toLowerCase(); out[id] = '## ' + p.trim(); } return out; }
+function guideTopic(topic) { const S = guideSections(); const ids = Object.keys(S).filter(k => k !== '_head');
+  if (!topic) return [S._head.trim(), S.inicio || '', 'Temas: ' + ids.join(', ') + '. Pide uno con guide {"topic":"…"}.'].join('\n\n');
+  const k = String(topic).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, '-'); const hit = S[k] || S[ids.find(i => i.startsWith(k) || k.startsWith(i))];
+  return hit || `No hay tema «${topic}». Temas: ${ids.join(', ')}.`; }
+const RESOURCES = [
+  { uri: 'plato://guide', name: 'guide', title: 'Guía de Plató para IAs', description: 'Cómo usar todas las herramientas de Plató, con recetas.', mimeType: 'text/markdown', read: () => guideText() },
+  { uri: 'plato://dsl', name: 'dsl', title: 'DSL del plató 3D', description: 'Referencia de las órdenes JSON de scene_dsl.', mimeType: 'text/plain', read: () => DSL },
+  { uri: 'plato://brand-schema', name: 'brand-schema', title: 'Esquema de marca y anuncio', description: 'Formato del kit de marca, productos y tomas.', mimeType: 'text/markdown', read: () => guideTopic('marcas') },
+];
+const PROMPTS = [
+  { name: 'anuncio', title: 'Crear una marca y su anuncio', description: 'De un brief a marca, productos, spot con tomas, fotogramas y prompts de vídeo.', arguments: [{ name: 'brief', description: 'Qué producto, para quién y con qué tono', required: true }, { name: 'presupuesto', description: 'Cuánto se puede gastar en vídeo (créditos o $)', required: false }],
+    text: a => `Quiero una marca y un anuncio para: ${a.brief}.\nSigue la receta del tema "marcas" de la guía (llama a guide {"topic":"marcas"} si no la tienes). Pasos: studio_status → brand create → brand get (revisa paleta, productos y arco del spot; corrige con brand update) → brand keyframes de todas las tomas y míralas → brand prompts. No copies marcas reales. Antes de dar vida a las tomas dime el coste${a.presupuesto ? ` (presupuesto: ${a.presupuesto})` : ''} y espera mi OK; empieza por una sola toma de prueba.` },
+  { name: 'clase', title: 'Dar una clase', description: 'Prepara y empieza una clase sobre un tema o un documento.', arguments: [{ name: 'tema', required: true, description: 'De qué es la clase' }, { name: 'nivel', required: false, description: 'básico, medio o avanzado' }],
+    text: a => `Dame una clase sobre ${a.tema}${a.nivel ? ` a nivel ${a.nivel}` : ''}. Mira primero learn {"action":"docs"} por si hay material mío relacionado y úsalo como doc_id; si no, usa topic. Luego learn explain.` },
+  { name: 'escena', title: 'Montar y grabar una escena', description: 'Escena 3D con cobertura multicámara y grabación.', arguments: [{ name: 'idea', required: true, description: 'Qué pasa en la escena' }],
+    text: a => `Monta en el plató esta escena: ${a.idea}. studio_status → stock_list → stock_load_set → take_control new → scene_dsl con la acción → scene_view para comprobar → cameras_rig coverage → take_record program. Enséñame los fotogramas antes de generar nada con IA.` },
+  { name: 'juego', title: 'Crear un juego para la tele', description: 'Escribe, prueba y abre un juego del Plató Game Kit.', arguments: [{ name: 'idea', required: true, description: 'El juego' }],
+    text: a => `Crea este juego para la tele: ${a.idea}. games api para la referencia → escribe el módulo completo → games save (corrige hasta que la prueba pase) → games play.` },
+];
+
 
 /* ---------- Puente con la app (WebSocket mínimo) ---------- */
 let app = null; const pending = new Map(); let seq = 0;
@@ -201,13 +250,14 @@ function toContent(r) {
 
 /* ---------- Ejecución de herramientas ---------- */
 const tasks = new Map();
-const SOFT = { take_record: 55, generate: 50, director: 50, montage: 55, scene_command: 50, book_load: 50 };
+const SOFT = { brand: 55, learn: 50, take_record: 55, generate: 50, director: 50, montage: 55, scene_command: 50, book_load: 50 };
 async function runTool(name, args, onProgress) {
   args = args || {};
   if (name === 'task_result') { const t = tasks.get(args.task_id); if (!t) throw new Error('No existe la tarea ' + args.task_id);
     if (!t.done) await Promise.race([t.promise.catch(() => {}), new Promise(r => setTimeout(r, Math.min(110, +args.wait_seconds || 40) * 1000))]);
     if (!t.done) return [{ type: 'text', text: `La tarea ${args.task_id} (${t.tool}) sigue en marcha (${Math.round((Date.now() - t.t0) / 1000)} s). Vuelve a llamar a task_result.` }];
     if (t.error) throw t.error; return toContent(t.result); }
+  if (name === 'guide') return [{ type: 'text', text: guideTopic(args.topic) }];
   if (name === 'studio_open') return [{ type: 'text', text: await openApp(!!args.headless) + (await waitForApp(20000) ? ' La app ya está conectada.' : ' Aún no se ha conectado: espera unos segundos y llama a studio_status.') }];
   if (name === 'studio_status' && !app) return [{ type: 'text', text: `Plató Studio no está conectado a este servidor MCP (puerto ${PORT}).\nOpciones: llama a studio_open, o abre ${APP_URL} en el navegador (o la app de GitHub Pages con ?mcp=${PORT}). La pestaña debe quedarse abierta y visible mientras trabajas.` }];
   if (name === 'speak') { const r = await speak({ engine: args.engine || 'kokoro', text: args.text, voice: args.voice || (args.engine === 'edge' ? 'es-ES-ElviraNeural' : 'ef_dora'), speed: args.speed || 1 });
@@ -234,11 +284,17 @@ async function handle(msg, ctx = {}) {
   const err = (code, message) => isNote ? null : { jsonrpc: '2.0', id, error: { code, message } };
   try {
     switch (method) {
-      case 'initialize': return ok({ protocolVersion: SUPPORTED.includes(params && params.protocolVersion) ? params.protocolVersion : SUPPORTED[0], capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'plato-studio', title: 'Plató Studio', version: VERSION }, instructions: INSTRUCTIONS });
+      case 'initialize': return ok({ protocolVersion: SUPPORTED.includes(params && params.protocolVersion) ? params.protocolVersion : SUPPORTED[0], capabilities: { tools: { listChanged: false }, resources: { listChanged: false }, prompts: { listChanged: false } }, serverInfo: { name: 'plato-studio', title: 'Plató Studio', version: VERSION }, instructions: INSTRUCTIONS });
       case 'ping': return ok({});
       case 'tools/list': return ok({ tools: TOOLS });
-      case 'resources/list': return ok({ resources: [] });
-      case 'prompts/list': return ok({ prompts: [] });
+      case 'resources/list': return ok({ resources: RESOURCES.map(({ read, ...r }) => r) });
+      case 'resources/templates/list': return ok({ resourceTemplates: [{ uriTemplate: 'plato://guide/{topic}', name: 'guide-topic', title: 'Tema de la guía', mimeType: 'text/markdown' }] });
+      case 'resources/read': { const uri = params && params.uri; const r = RESOURCES.find(x => x.uri === uri); const m = !r && /^plato:\/\/guide\/(.+)$/.exec(uri || '');
+        if (!r && !m) return err(-32002, 'Recurso no encontrado: ' + uri); return ok({ contents: [{ uri, mimeType: r ? r.mimeType : 'text/markdown', text: r ? r.read() : guideTopic(decodeURIComponent(m[1])) }] }); }
+      case 'prompts/list': return ok({ prompts: PROMPTS.map(({ text, ...p }) => p) });
+      case 'prompts/get': { const p = PROMPTS.find(x => x.name === (params && params.name)); if (!p) return err(-32602, 'Prompt desconocido: ' + (params && params.name)); const a = (params && params.arguments) || {};
+        for (const q of p.arguments) if (q.required && !a[q.name]) return err(-32602, 'Falta el argumento ' + q.name);
+        return ok({ description: p.description, messages: [{ role: 'user', content: { type: 'text', text: p.text(a) } }] }); }
       case 'tools/call': {
         const name = params && params.name; if (!TOOLS.some(t => t.name === name)) return err(-32602, 'Herramienta desconocida: ' + name);
         if (ctx.relay) return await ctx.relay(msg);
