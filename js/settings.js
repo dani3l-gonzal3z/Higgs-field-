@@ -5,6 +5,9 @@ import { DEFAULT_CATALOG, MODES } from './catalog.js';
 import { mcpSettingsCard } from './mcp.js';
 import { guideSettingsCard } from './guide.js';
 import { deviceCard } from './device.js';
+import { localAICard } from './localai.js';
+import { localLLM } from './llm.js';
+import { localCaps } from './local.js';
 
 let root = null;
 export async function renderSettings(r) {
@@ -18,7 +21,7 @@ export async function renderSettings(r) {
   for (const [id, p] of Object.entries(PROVIDERS)) { const inp = el('input', { class: 'txt', type: 'password', autocomplete: 'off', placeholder: p.keyLabel, value: s.keys[id] || '' }); inp.addEventListener('change', () => { s.keys[id] = inp.value.trim(); save(); renderSettings(r); toast('Guardado'); });
     keys.append(el('div', { class: 'keyrow' }, el('div', { class: 'kh' }, el('b', {}, p.name), p.needsProxy ? el('span', { class: 'tag' }, 'necesita proxy') : el('span', { class: 'tag ok' }, 'directo'), s.keys[id] ? el('span', { class: 'tag ok' }, '✓') : null, el('a', { href: p.keyUrl, target: '_blank', class: 'lnk' }, p.keyHelp)),
       el('div', { class: 'inrow' }, inp, btn('👁', () => { inp.type = inp.type === 'password' ? 'text' : 'password'; }, 'mini-b')))); }
-  r.append(keys, deviceCard());
+  r.append(keys, deviceCard(), localAICard());
   // Proxy
   const purl = el('input', { class: 'txt', placeholder: 'https://plato-proxy.TU-USUARIO.workers.dev', value: s.proxy.url }); purl.addEventListener('change', () => { s.proxy.url = purl.value.trim().replace(/\/+$/, ''); save(); });
   const ptok = el('input', { class: 'txt', type: 'password', placeholder: 'Contraseña del proxy (PROXY_TOKEN)', value: s.proxy.token }); ptok.addEventListener('change', () => { s.proxy.token = ptok.value.trim(); save(); });
@@ -31,7 +34,9 @@ export async function renderSettings(r) {
   const lm = el('input', { class: 'txt', placeholder: 'Modelo', value: s.llm.model }); lm.addEventListener('change', () => { s.llm.model = lm.value.trim(); save(); });
   const lb = el('input', { class: 'txt', placeholder: 'URL base (OpenRouter por defecto)', value: s.llm.base }); lb.addEventListener('change', () => { s.llm.base = lb.value.trim(); save(); });
   r.append(el('section', { class: 'card' }, el('h3', {}, 'Asistente de IA (director y prompts)'), el('p', { class: 'note' }, 'Lo usa el plató para entender órdenes complejas y el Estudio para mejorar prompts. Sin clave, el plató funciona en modo básico.'),
-    seg([['anthropic', 'Anthropic (Claude)'], ['openai', 'Compatible OpenAI / OpenRouter']], () => s.llm.provider, v => { s.llm.provider = v; if (v === 'anthropic' && !s.llm.model) s.llm.model = 'claude-sonnet-5-5'; save(); renderSettings(r); }), el('div', { class: 'gap' }), lk, el('div', { class: 'gap' }), lm, s.llm.provider !== 'anthropic' ? el('div', {}, el('div', { class: 'gap' }), lb) : null));
+    seg([['anthropic', 'Anthropic (Claude)'], ['openai', 'Compatible OpenAI / OpenRouter'], ...(localCaps() ? [['local', '🏠 En tu equipo']] : [])], () => s.llm.provider, v => { s.llm.provider = v; if (v === 'anthropic' && !s.llm.model) s.llm.model = 'claude-sonnet-5-5'; save(); renderSettings(r); }), el('div', { class: 'gap' }),
+    ...(s.llm.provider === 'local' ? [localModelPick(s, save)] : [lk, el('div', { class: 'gap' }), lm, s.llm.provider !== 'anthropic' ? el('div', {}, el('div', { class: 'gap' }), lb) : null]),
+    !s.llm.key && s.llm.provider !== 'local' && localLLM() ? el('p', { class: 'note' }, `Sin clave, Plató usa tu modelo local (${localLLM().model}).`) : null));
   r.append(mcpSettingsCard(), guideSettingsCard());
   // Presupuesto
   const spent = await spentThisMonth();
@@ -79,5 +84,12 @@ function catalogEditor() { const s = getSettings(); const ta = el('textarea', { 
     el('div', { class: 'row-btns' }, btn('📋 Copiar plantilla de modelo', () => copyText(JSON.stringify(tpl, null, 1)), 'mini-b')), ta,
     el('div', { class: 'acts' }, btn('Cancelar', () => close()), btn('Guardar', () => { try { const c = JSON.parse(ta.value); if (!Array.isArray(c)) throw new Error('Debe ser una lista [ … ]'); for (const m of c) { if (!m.id || !m.provider || !m.mode || !m.endpoint) throw new Error('Cada modelo necesita id, provider, mode y endpoint'); if (!PROVIDERS[m.provider]) throw new Error('Proveedor desconocido: ' + m.provider); } s.catalog = c; s.catalogRemoved = DEFAULT_CATALOG.map(d => d.id).filter(id => !c.some(m => m.id === id)); saveSettings(s); close(); renderSettings(root); toast('Catálogo guardado'); } catch (e) { toast('JSON no válido: ' + e.message, 4500); } }, 'b on')));
   close = modal('Catálogo de modelos', body, { wide: true }); }
+function localModelPick(s, save) {
+  const models = ((localCaps() || {}).ai || {}).ollama ? localCaps().ai.ollama.models : [];
+  if (!models.length) return el('p', { class: 'note' }, 'Descarga un modelo en «🧠 IA local» (más abajo) y aparecerá aquí.');
+  const sel = el('select', { class: 'txt' }, models.map(m => el('option', { value: m, selected: m === (s.llm.localModel || models[0]) }, m)));
+  sel.addEventListener('change', () => { s.llm.localModel = sel.value; save(); });
+  return el('div', {}, sel, el('p', { class: 'note' }, 'Todo se queda en tu equipo: sin clave y sin coste.'));
+}
 function exportCfg(withKeys) { const s = getSettings(); const o = JSON.parse(JSON.stringify(s)); if (!withKeys) { for (const k in o.keys) o.keys[k] = ''; o.llm.key = ''; o.proxy.token = ''; } download(new Blob([JSON.stringify(o, null, 1)], { type: 'application/json' }), withKeys ? 'plato-studio-ajustes-CON-CLAVES.json' : 'plato-studio-ajustes.json'); }
 function importCfg() { const f = el('input', { type: 'file', accept: 'application/json', on: { change: async e => { try { const o = JSON.parse(await e.target.files[0].text()); const s = getSettings(); for (const k of ['keys', 'proxy', 'llm', 'budget']) if (o[k]) for (const kk in o[k]) if (o[k][kk] !== '' && o[k][kk] != null) s[k][kk] = o[k][kk]; if (o.catalog) s.catalog = o.catalog; saveSettings(s); renderSettings(root); toast('Ajustes importados'); } catch (err) { toast('Archivo no válido'); } } } }); f.click(); }

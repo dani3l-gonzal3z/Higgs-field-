@@ -78,6 +78,16 @@ Un proyecto de marca reúne todo lo que hace falta para un anuncio: identidad (n
 
 Viene con un ejemplo, **Colorín**: snacks crujientes de seis verduras, cada color un sabor.
 
+## 🧠 IA local (sin claves) y 🎭 Recast local
+
+En ⚙️ Ajustes → 🧠 IA local, Plató mira tu equipo (gráfica, memoria, disco) y te deja descargar por packs solo lo que te cabe. Instala su propio Python con [uv](https://github.com/astral-sh/uv), así que no necesitas tener nada instalado.
+
+- **Cerebro local con Ollama**: el director, el profe, las marcas y el asistente funcionan sin ninguna clave. Recomienda modelos según tu memoria y los descarga con progreso.
+- **Agentes locales**: [opencode](https://opencode.ai) y [Hermes Agent](https://github.com/NousResearch/hermes-agent) quedan conectados al MCP de Plató y usan tu modelo de Ollama.
+- **Recast local** (Estudio Pro → 🎭): cambias a una persona por tu personaje, o cambias y borras objetos, en tu propio vídeo. Tocas lo que quieres cambiar, [SAM 3.1](https://github.com/facebookresearch/sam3) lo sigue por el clip, Plató recorta solo esa zona, la genera con [Wan 2.2 Animate](https://github.com/Wan-Video/Wan2.2) o Wan VACE en [ComfyUI](https://github.com/comfyanonymous/ComfyUI) (que maneja por debajo) y la pega con borde suave: el resto del vídeo queda como lo grabaste. El audio original se copia tal cual, o se separa la voz y se cambia con [Seed-VC](https://github.com/Plachtaa/seed-vc).
+
+Equipo: la máscara, el audio, las voces y Ollama van en cualquier ordenador. Generar vídeo necesita una NVIDIA: 8 GB para objetos, 16-24 GB (con 32 GB de RAM) para el cambio de personaje. Cada pack muestra su licencia; los modelos son abiertos (Apache-2.0, MIT, SAM License, GPL-3.0 para Seed-VC, que corre como proceso aparte).
+
 ## 📱 Plató en el móvil: chatea con el aparato
 
 En 🎓 Aprender aparece un QR (con Plató abierto como aplicación). Escanéalo con el móvil en la misma wifi y tendrás un chat con el aparato, siempre que esté encendido:
@@ -192,6 +202,10 @@ js/games.js         Jugar: crear, mejorar y lanzar partidas
 js/qr.js            generador de códigos QR
 js/local.js         servicios del aparato (FFmpeg, voces, proxy)
 js/learn.js         Aprender: documentos, clases, preguntas en directo
+js/localai.js       Ajustes → IA local: packs, modelos de Ollama, agentes
+js/recast.js        Recast local: máscara, generación y pegado
+mcp/localai.mjs     equipo, descargas, Python con uv, Ollama, ComfyUI, opencode, Hermes
+mcp/recast.mjs      SAM 3.1 + Wan Animate / VACE en ComfyUI, recorte y pegado con FFmpeg, audio
 js/brands.js        Marcas y anuncios: kit, productos, campaña, dar vida
 js/brandart.js      dibujo de marca: logotipos, etiquetas, cierre
 ads.html            el plató de anuncios low-poly

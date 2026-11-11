@@ -9,7 +9,7 @@ export const MODES = [
   { v: 'games', ic: '🎮', t: 'Jugar', d: 'Describe cualquier juego y juégalo en la tele con los móviles como mando.', grad: 'linear-gradient(135deg,#11998e,#57e389)' },
   { v: 'plato', ic: '🎨', t: 'Crear escenas', d: 'El plató 3D: decorados, personajes, cámaras y acción con tus palabras.', grad: 'linear-gradient(135deg,#e86aa8,#ff9a5a)' },
 ];
-export const PRO = [['studio', '✨', 'Estudio IA'], ['lab', '🧪', 'Laboratorio'], ['gallery', '🖼', 'Galería'], ['edit', '🎞', 'Montaje'], ['chars', '👤', 'Personajes']];
+export const PRO = [['studio', '✨', 'Estudio IA'], ['lab', '🧪', 'Laboratorio'], ['gallery', '🖼', 'Galería'], ['edit', '🎞', 'Montaje'], ['chars', '👤', 'Personajes'], ['recast', '🎭', 'Recast local']];
 const hello = () => { const h = new Date().getHours(); return h < 6 ? 'Buenas noches' : h < 13 ? 'Buenos días' : h < 21 ? 'Buenas tardes' : 'Buenas noches'; };
 
 export async function renderHome(r) {

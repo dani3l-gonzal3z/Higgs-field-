@@ -31,6 +31,8 @@ Reglas de oro:
 | Pasar la previz a imagen real | `models_search` + `generate` con `inputs.video="last_take"` |
 | Película o capítulo entero | `director`, `book_load` |
 | Marca + anuncio | `brand` |
+| IA en el equipo del usuario (modelos, descargas) | `local` |
+| Cambiar persona u objeto de un vídeo real, en local | `recast` |
 | Clase sobre un tema o documento | `learn` |
 | Juego para la tele | `games` |
 | Voz en off gratis | `speak` |
@@ -96,6 +98,37 @@ Hay tres caminos, de más a menos integrado:
 3. **Dentro de Claude** (artifact de Plató): la pestaña «Dar vida» de una marca hace el camino 2 por sí sola con la cuenta de Higgsfield del usuario.
 
 Para que el vídeo respete la marca: usa como imagen inicial un still o fotograma clave donde el envase ya tenga los colores y el logo, y el prompt de `brand prompts`. Pide planos cortos (5 s) y sin texto sobreimpreso: el texto lo pone el montaje.
+
+## local — IA en el equipo del usuario
+
+Plató puede funcionar sin claves ni proveedores: descarga modelos abiertos y los corre en el ordenador del usuario. Todo va por packs (`local {"action":"status"}` dice cuáles caben en su equipo y cuánto pesan):
+
+| Pack | Para qué | Equipo |
+|---|---|---|
+| `ollama` | LLM local: director, profe, marcas y asistente sin claves | cualquiera (mejor con 16 GB de RAM) |
+| `comfy` | motor de vídeo (ComfyUI, sin interfaz; Plató lo arranca) | NVIDIA; sin ella solo sirve para máscaras |
+| `sam` | máscaras SAM 3.1 (toques o texto) y seguimiento | cualquiera (lento sin gráfica) |
+| `personaje` | Wan 2.2 Animate 14B fp8: cambia una persona por un personaje | NVIDIA 16 GB + 32 GB RAM (o 12 + 48) |
+| `objeto` | Wan VACE 1.3B: cambia o borra objetos | NVIDIA 8 GB |
+| `fluidez` | interpolación FILM (dobla fotogramas) | con `comfy` |
+| `audio` | separar voz y música | cualquiera |
+| `voz` | Seed-VC: cambiar el timbre de la voz | mejor con gráfica |
+| `opencode` / `hermes` | agentes locales conectados al MCP de Plató | con `ollama` |
+
+Reglas: di el tamaño antes de descargar (`personaje` son ~28 GB); si `fits.ok` es falso, explica por qué y no insistas. Las instalaciones son trabajos: `install` → `job` hasta `done`. Para modelos de lenguaje: `models`, `pull {"model":"qwen3:8b"}`.
+
+## recast — Cambiar personas u objetos de un vídeo real (local)
+
+Es el efecto «Genjutsu», pero en la gráfica del usuario y gratis. Solo se regenera la zona de la máscara: se recorta, se genera a buena resolución y se pega con borde suave; fuera de la máscara quedan los píxeles originales. El audio original se copia tal cual (o se cambia la voz con Seed-VC, o se quita).
+
+1. `recast {"action":"new","path":"~/Videos/clip.mp4"}` → `id`.
+2. `recast {"action":"segment","id","start":0,"dur":5}` (máx. 20 s) → te devuelve el primer fotograma.
+3. `recast {"action":"mask","id","points":[{"x":0.42,"y":0.55}]}` (0-1 sobre esa imagen; `"pos":false` para excluir) o `"text":"man in red shirt"`. Mira la imagen que devuelve: la máscara va en rosa.
+4. `recast {"action":"track","id"}` → la sigue por todo el tramo.
+5. `recast {"action":"run","id","mode":"personaje","quality":"draft","ref_path":"~/personaje.png","prompt":"..."}`. Modos: `personaje` (necesita imagen), `objeto` (imagen opcional + prompt en inglés), `borrar`. `dry_run:true` prueba recorte y pegado sin IA.
+6. `recast {"action":"job","id"}` hasta `done`; el resultado se guarda en la carpeta del usuario. Si el borrador convence, repite con `"quality":"final"`.
+
+Voz: `"voice":{"mode":"convert","voice":"ef_dora"}` (voz de Kokoro como referencia) o `"ref_path"` con 10-20 s de una voz con permiso. Nunca cambies la cara o la voz de una persona real sin su consentimiento.
 
 ## aprender — Clases
 
