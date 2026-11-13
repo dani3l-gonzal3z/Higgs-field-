@@ -14,11 +14,12 @@ import { startAssistant } from './assistant.js';
 import { renderGames } from './games.js';
 import { renderBrands } from './brands.js';
 import { renderRecast } from './recast.js';
+import { renderTaller, leaveTaller } from './taller.js';
 import { renderHome, renderLearn, PRO, setupSpatialNav } from './home.js';
 import { maybeTour, startTour, onGuide, missionsDone, MISSIONS } from './guide.js';
 
-const VIEWS = { home: ['🏠', 'Inicio'], learn: ['🎓', 'Aprender'], director: ['🎬', 'Contar historias'], games: ['🎮', 'Jugar'], brands: ['🏷', 'Marcas'], plato: ['🎨', 'Crear escenas'], studio: ['✨', 'Estudio IA', 'pro'], lab: ['🧪', 'Laboratorio', 'pro'], gallery: ['🖼', 'Galería', 'pro'], edit: ['🎞', 'Montaje', 'pro'], chars: ['👤', 'Personajes', 'pro'], recast: ['🎭', 'Recast local', 'pro'], settings: ['⚙️', 'Ajustes'] };
-const RENDER = { brands: renderBrands, recast: renderRecast, home: renderHome, learn: renderLearn, games: renderGames, director: renderDirector, lab: renderLab, studio: renderStudio, gallery: renderGallery, edit: renderEditor, chars: renderChars, settings: renderSettings };
+const VIEWS = { home: ['🏠', 'Inicio'], learn: ['🎓', 'Aprender'], director: ['🎬', 'Contar historias'], games: ['🎮', 'Jugar'], brands: ['🏷', 'Marcas'], taller: ['🔌', 'Taller'], plato: ['🎨', 'Crear escenas'], studio: ['✨', 'Estudio IA', 'pro'], lab: ['🧪', 'Laboratorio', 'pro'], gallery: ['🖼', 'Galería', 'pro'], edit: ['🎞', 'Montaje', 'pro'], chars: ['👤', 'Personajes', 'pro'], recast: ['🎭', 'Recast local', 'pro'], settings: ['⚙️', 'Ajustes'] };
+const RENDER = { taller: renderTaller, brands: renderBrands, recast: renderRecast, home: renderHome, learn: renderLearn, games: renderGames, director: renderDirector, lab: renderLab, studio: renderStudio, gallery: renderGallery, edit: renderEditor, chars: renderChars, settings: renderSettings };
 const view = $('#view'), frame = $('#plato');
 
 function buildNav(v = 'home') { const t = $('#tabs'); t.innerHTML = ''; const [ic, lb, grp] = VIEWS[v];
@@ -29,6 +30,7 @@ async function updSpend() { const s = getSettings(); const sp = await spentThisM
 async function route() {
   const v = VIEWS[location.hash.slice(1)] ? location.hash.slice(1) : 'home';
   for (const m of document.querySelectorAll('.modal')) m.remove();
+  if (v !== 'taller') leaveTaller();
   buildNav(v); document.body.dataset.view = v; frame.hidden = v !== 'plato'; view.hidden = v === 'plato';
   // Cada visita pinta en un contenedor nuevo: si llega otra (p. ej. cuando Claude termina de conectar), la anterior escribe en uno ya retirado y no se duplica nada.
   if (v !== 'plato') { view.scrollTop = 0; const box = el('div', { class: 'vbox' }); view.replaceChildren(box); try { await RENDER[v](box); } catch (e) { console.error(e); box.innerHTML = ''; box.append(el('div', { class: 'empty big' }, 'Algo ha fallado al abrir esta sección: ' + e.message)); } }

@@ -3,7 +3,7 @@ import { el, btn, toast, getSettings, saveSettings, confirmBox } from './core.js
 import { localBase, detectLocal } from './local.js';
 
 const api = async (p, body) => { const r = await fetch(localBase() + p, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store' }); const j = await r.json(); if (!r.ok || j.error) throw new Error(j.error || 'Error'); return j; };
-const CATS = [['cerebro', '🧠 Cerebro'], ['video', '🎬 Vídeo'], ['audio', '🎙 Audio'], ['agentes', '🤖 Agentes'], ['base', '🧩 Base']];
+const CATS = [['cerebro', '🧠 Cerebro'], ['video', '🎬 Vídeo'], ['audio', '🎙 Audio'], ['taller', '🔌 Taller'], ['agentes', '🤖 Agentes'], ['base', '🧩 Base']];
 const ICON = { ok: '✅', partial: '🟡', installing: '⏳', missing: '⚪' };
 
 export function localAICard() {

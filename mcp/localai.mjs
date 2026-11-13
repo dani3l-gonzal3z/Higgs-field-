@@ -141,6 +141,7 @@ export const PACKS = [
     files: [M('frame_interpolation', 'film_net_fp16.safetensors', HF + 'Comfy-Org/frame_interpolation/resolve/main/frame_interpolation/film_net_fp16.safetensors', 0.07)] },
   { id: 'audio', cat: 'audio', needs: ['python'], title: 'Separar voz y música', desc: 'Saca la voz de la música (modelos UVR/MDX). Va bien en procesador.', gb: 0.6, license: 'MIT' },
   { id: 'voz', cat: 'audio', needs: ['python', 'audio'], title: 'Cambiar la voz (Seed-VC)', desc: 'Convierte la voz de tu clip en otra a partir de 10-20 s de muestra (o de una voz de Kokoro). Con gráfica va al momento; en procesador, lento.', gb: 2, license: 'GPL-3.0 (proceso aparte)' },
+  { id: 'taller', cat: 'taller', needs: ['python'], title: 'Taller: compilar y grabar', desc: 'arduino-cli para compilar el C++ del Arduino y grabar tu placa por USB, y mpremote para pasar el código a una Pico real. La Pico simulada no lo necesita.', gb: 0.35, license: 'GPL-3.0 (arduino-cli) · MIT (mpremote)' },
   { id: 'opencode', cat: 'agentes', needs: ['ollama'], title: 'opencode', desc: 'Agente que usa tu modelo local y maneja Plató por MCP: le pides cosas en lenguaje normal.', gb: 0.15, license: 'MIT' },
   { id: 'hermes', cat: 'agentes', needs: ['ollama'], title: 'Hermes Agent', desc: 'Agente de Nous Research con memoria y habilidades. Plató lo conecta con su MCP; se instala con su propio instalador.', gb: 0.5, license: 'MIT', external: true },
 ];
@@ -167,6 +168,7 @@ function packState(p) {
     case 'comfy': return fs.existsSync(path.join(COMFY, 'main.py')) && fs.existsSync(envPy('comfy')) ? 'ok' : 'missing';
     case 'audio': return fs.existsSync(envPy('audio')) && fs.existsSync(path.join(envDir('audio'), '.ok')) ? 'ok' : 'missing';
     case 'voz': return fs.existsSync(path.join(AI, 'seed-vc', 'inference.py')) && fs.existsSync(path.join(envDir('seedvc'), '.ok')) ? 'ok' : 'missing';
+    case 'taller': return fs.existsSync(path.join(AI, 'arduino', '.ok')) && fs.existsSync(envPy('taller')) ? 'ok' : fs.existsSync(path.join(AI, 'arduino', '.ok')) || fs.existsSync(envPy('taller')) ? 'partial' : 'missing';
     case 'opencode': return fs.existsSync(OPENCODE_BIN) || run(WIN ? 'where' : 'which', ['opencode']) ? 'ok' : 'missing';
     case 'hermes': return hermesBin() ? (hermesLinked() ? 'ok' : 'partial') : 'missing';
   }
@@ -188,7 +190,7 @@ export async function aiStatus() {
 
 // Resumen rápido para /api/caps: qué hay listo para usar ahora mismo.
 export async function aiCaps() { const ol = await ollamaInfo(); const st = id => packState(pack(id)) === 'ok';
-  return { ollama: { running: ol.running, installed: ol.installed, models: (ol.models || []).map(m => m.name) }, video: st('comfy'), sam: st('sam'), personaje: st('personaje'), objeto: st('objeto'), audio: st('audio'), voz: st('voz'), tier: hardware().tier }; }
+  return { taller: st('taller'), ollama: { running: ol.running, installed: ol.installed, models: (ol.models || []).map(m => m.name) }, video: st('comfy'), sam: st('sam'), personaje: st('personaje'), objeto: st('objeto'), audio: st('audio'), voz: st('voz'), tier: hardware().tier }; }
 
 /* ---------- Trabajos de instalación ---------- */
 const JOBS = new Map();
@@ -266,6 +268,11 @@ const INSTALL = {
     const lines = fs.readFileSync(fs.existsSync(req) ? req : path.join(dir, 'requirements.txt'), 'utf8').split(/\r?\n/).map(s => s.trim()).filter(s => s && !s.startsWith('#') && !s.startsWith('--') && !/^torch(audio|vision)?\b/.test(s));
     await pip(j, 'seedvc', lines); fs.writeFileSync(path.join(envDir('seedvc'), '.ok'), new Date().toISOString());
   },
+  async taller(j) {
+    const { installTaller } = await import('./taller.mjs');
+    if (!fs.existsSync(path.join(AI, 'arduino', '.ok'))) await installTaller(j, download, extract);
+    if (!fs.existsSync(envPy('taller'))) { await ensureEnv(j, 'taller', '3.12'); j.say('Instalando mpremote (para la Pico real)…'); await pip(j, 'taller', ['mpremote']); }
+  },
   async opencode(j) {
     if (packState(pack('opencode')) === 'ok') return; const npm = WIN ? 'npm.cmd' : 'npm';
     j.say('Instalando opencode con npm…'); fs.mkdirSync(path.join(AI, 'node'), { recursive: true });
@@ -285,6 +292,7 @@ export function remove(id) {
   else if (id === 'audio') rm(envDir('audio'));
   else if (id === 'voz') { rm(path.join(AI, 'seed-vc')); rm(envDir('seedvc')); }
   else if (id === 'opencode') { stopOpencode(); rm(path.join(AI, 'node')); }
+  else if (id === 'taller') { rm(path.join(AI, 'arduino')); rm(envDir('taller')); }
   else if (id === 'hermes') unlinkHermes();
   else { const shared = new Set(PACKS.filter(q => q.id !== id && packState(q) !== 'missing').flatMap(q => (q.files || []).map(f => f.name)));
     for (const f of p.files || []) if (!shared.has(f.name)) rm(path.join(MODELS, f.dir, f.name));

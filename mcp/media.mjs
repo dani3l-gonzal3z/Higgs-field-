@@ -143,6 +143,7 @@ export function mediaHandler({ ORIGINS, isLocal, OUT, log }) {
       if (p === '/api/render/progress') { return json(res, 200, JOBP.get(url.searchParams.get('job')) || { p: 0 }), true; }
       if (p === '/api/tts' && req.method === 'POST') { const q = await readJSON(req, 1e6); const r = await speak(q); return json(res, 200, { audio: r.audio.toString('base64'), mime: r.mime, dur: r.dur, words: r.words }), true; }
       if (p.startsWith('/api/ai/') || p.startsWith('/api/ollama/')) { const { aiRoute } = await import('./localai.mjs'); if (await aiRoute(req, res, url, { readJSON, json })) return true; }
+      if (p.startsWith('/api/taller/')) { const { tallerRoute } = await import('./taller.mjs'); if (await tallerRoute(req, res, url, { readJSON, json })) return true; }
       if (p.startsWith('/api/recast/')) { const { recastRoute } = await import('./recast.mjs'); if (await recastRoute(req, res, url, { readJSON, json, OUT })) return true; }
       json(res, 404, { error: 'No existe ' + p }); return true;
     } catch (e) { log('api', p, e.message); if (!res.headersSent) json(res, 500, { error: e.message }); else res.destroy(); return true; }

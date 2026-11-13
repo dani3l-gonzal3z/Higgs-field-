@@ -78,6 +78,20 @@ Un proyecto de marca reúne todo lo que hace falta para un anuncio: identidad (n
 
 Viene con un ejemplo, **Colorín**: snacks crujientes de seis verduras, cada color un sabor.
 
+## 🔌 Taller de electrónica
+
+Monta un circuito con Arduino Uno o Raspberry Pi Pico, prográmalo y simúlalo antes de tocar un cable; luego llévalo a la mesa.
+
+- **Pico + MicroPython, todo en el navegador** (también dentro de Claude y en el móvil): escribes Python y corre de verdad en un RP2040 emulado.
+- **Arduino Uno + C++**: el emulador corre en el navegador; para compilar hace falta Plató abierto como aplicación (instala «Taller: compilar y grabar» en IA local).
+- Piezas: LEDs, LED RGB, resistencias, botones, interruptor, potenciómetro, sensor de luz, zumbador, servo, 7 segmentos, LCD 16×2, sensor ultrasónico y protoboards (las patas se clavan solas en los agujeros).
+- Avisos de la vida real: LED sin resistencia, cortocircuitos, 5 V en la Pico.
+- **El profe**: «quiero un semáforo con botón para peatones» → circuito + código + pasos. Y te explica el circuito que hayas montado.
+- **A la mesa**: lista de la compra, montaje paso a paso y grabación por USB en tu placa.
+- Abre y guarda proyectos de Wokwi y Velxio (`diagram.json`).
+
+Está hecho sobre [avr8js](https://github.com/wokwi/avr8js), [rp2040js](https://github.com/wokwi/rp2040js) y [@wokwi/elements](https://github.com/wokwi/wokwi-elements) (MIT) y toma piezas de [Velxio](https://github.com/davidmonterocrespo24/velxio) (AGPL-3.0). Detalles en [`taller/LICENCIAS.md`](taller/LICENCIAS.md).
+
 ## 🧠 IA local (sin claves) y 🎭 Recast local
 
 En ⚙️ Ajustes → 🧠 IA local, Plató mira tu equipo (gráfica, memoria, disco) y te deja descargar por packs solo lo que te cabe. Instala su propio Python con [uv](https://github.com/astral-sh/uv), así que no necesitas tener nada instalado.
@@ -203,6 +217,10 @@ js/qr.js            generador de códigos QR
 js/local.js         servicios del aparato (FFmpeg, voces, proxy)
 js/learn.js         Aprender: documentos, clases, preguntas en directo
 js/localai.js       Ajustes → IA local: packs, modelos de Ollama, agentes
+js/taller.js        Taller de electrónica (vista)
+js/taller/          circuito y red eléctrica, motores Uno y Pico, ejemplos
+mcp/taller.mjs      compilar con arduino-cli y grabar la placa por USB
+taller/             firmware MicroPython, arte de placas y protoboards, licencias
 js/recast.js        Recast local: máscara, generación y pegado
 mcp/localai.mjs     equipo, descargas, Python con uv, Ollama, ComfyUI, opencode, Hermes
 mcp/recast.mjs      SAM 3.1 + Wan Animate / VACE en ComfyUI, recorte y pegado con FFmpeg, audio
