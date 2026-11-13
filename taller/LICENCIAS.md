@@ -10,7 +10,7 @@ El Taller se apoya en proyectos abiertos. Gracias a todos ellos.
 | Protoboards (`<velxio-breadboard>`, `<velxio-breadboard-mini>`) | [Velxio](https://github.com/davidmonterocrespo24/velxio) — `js/vendor/velxio-breadboards.js` | AGPL-3.0 |
 | Arte de las protoboards y de la Pico | Fritzing vía Velxio — `taller/art/` (ver `ATTRIBUTION.md`) | CC-BY-SA 3.0 |
 | Firmware de MicroPython para la Pico | [MicroPython](https://micropython.org) (copia de Velxio) — `taller/micropython-rp2040.bin` | MIT |
-| Programa de ejemplo ya compilado (Parpadeo) | Fixture de pruebas de Velxio — `taller/hex/blink.hex` | AGPL-3.0 |
+| Programa de ejemplo ya compilado (Parpadeo) | Fixture de pruebas de Velxio — `taller/hex/blink.hex.txt` | AGPL-3.0 |
 
 El código propio del Taller (`js/taller.js`, `js/taller/*`, `mcp/taller.mjs`) incorpora ideas y piezas de Velxio
 (reglas de la protoboard, convención de nombres de agujeros, patillaje de la Pico, avisos de LED quemado),

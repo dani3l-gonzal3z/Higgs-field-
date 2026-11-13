@@ -308,5 +308,5 @@ export function exampleCircuit(ex, b) { const [parts, connections] = ex.circuit(
 // Programas ya compilados para Uno (para probar sin servidor). Clave: el código sin comentarios ni espacios.
 export const norm = s => String(s || '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '').replace(/\s+/g, '');
 export const PREBUILT = {
-  [norm(EXAMPLES[0].uno)]: 'taller/hex/blink.hex',
+  [norm(EXAMPLES[0].uno)]: 'taller/hex/blink.hex.txt',
 };
