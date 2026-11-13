@@ -41,6 +41,6 @@ cp('frontend/public/component-svgs/fritzing/breadboard-full.svg', 'art/breadboar
 cp('frontend/public/component-svgs/fritzing/breadboard-mini.svg', 'art/breadboard-mini.svg');
 cp('frontend/public/component-svgs/fritzing/ATTRIBUTION.md', 'art/ATTRIBUTION.md');
 cp('frontend/public/boards/pi-pico.svg', 'art/pi-pico.svg');
-cp('frontend/public/firmware/micropython-rp2040.uf2', 'micropython-rp2040.uf2');
+cp('frontend/public/firmware/micropython-rp2040.uf2', 'micropython-rp2040.bin'); // UF2 tal cual, con .bin para que lo sirva cualquier hosting
 fs.rmSync(tmp, { recursive: true, force: true });
 for (const f of ['avr8js.js', 'rp2040js.js', 'wokwi-elements.js', 'velxio-breadboards.js']) console.log(f, Math.round(fs.statSync(path.join(OUT, f)).size / 1024) + ' KB');

@@ -74,7 +74,10 @@ export const setFirmware = b => { UF2 = b; };
 export class PicoRunner extends Base {
   static async create(code) {
     const R = await import('../vendor/rp2040js.js');
-    if (!UF2) { const r = await fetch(new URL('../../taller/micropython-rp2040.uf2', import.meta.url)); if (!r.ok) throw new Error('No encuentro el firmware de MicroPython'); UF2 = new Uint8Array(await r.arrayBuffer()); }
+    if (!UF2) { // firmware de MicroPython: binario si el hosting lo sirve; si no (p. ej. dentro de Claude), una copia en base64
+      const r = await fetch(new URL('../../taller/micropython-rp2040.bin', import.meta.url)).catch(() => null);
+      if (r && r.ok && !/text\/html/.test(r.headers.get('content-type') || '')) UF2 = new Uint8Array(await r.arrayBuffer());
+      else { const m = await import('../../taller/micropython-rp2040.b64.js').catch(() => null); if (!m) throw new Error('No encuentro el firmware de MicroPython'); const bin = atob(m.default); UF2 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) UF2[i] = bin.charCodeAt(i); } }
     return new PicoRunner(R, code);
   }
   constructor(R, code) {
