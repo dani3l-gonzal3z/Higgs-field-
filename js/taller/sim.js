@@ -21,6 +21,9 @@ class Base {
     this.lastV.set(pin, v); this.lastT.set(pin, tUs);
     const cbs = this.edges.get(pin); if (cbs) for (const cb of cbs) cb(v, tUs);
   }
+  // Tren de pulsos en un pin de entrada (encoder de una cinta): rate = flancos por segundo, 0 = parado.
+  encoder(pin, rate) { const E = this._enc || (this._enc = {}); const s = E[pin] || (E[pin] = { rate: 0, on: false, v: false }); s.rate = Math.abs(+rate || 0);
+    if (s.rate > 0 && !s.on) { s.on = true; const tick = () => { if (!(s.rate > 0) || !this.running) { s.on = false; return; } s.v = !s.v; this.setInput(pin, s.v); this.after(1e6 / s.rate, tick); }; this.after(1e6 / s.rate, tick); } }
   // Fracción del tiempo en alto desde la última llamada (0..1) y cambios por segundo.
   duty(pin) {
     const t = this.timeUs(), t0 = this._dutyT0 ?? t; const span = Math.max(1, t - (this._spanT0?.get(pin) ?? t0));
@@ -163,4 +166,37 @@ export class PicoRunner extends Base {
     step();
   }
   stop() { this.running = false; clearTimeout(this.timer); }
+}
+
+/* ---------- El mismo emulador en un hilo aparte (Web Worker) ----------
+   El chip corre en el worker sin frenar la vista; aquí queda una «sombra»: niveles de los pines, flancos con su hora
+   (llegan por lotes cada ~15 ms y se reproducen en orden) y la hora simulada. Sirve cuando nada necesita contestar al
+   chip en microsegundos (I2C por software, DHT22, sensor de ultrasonidos): para eso está PicoRunner en el hilo principal. */
+export class WorkerRunner extends Base {
+  static async create(code, opts = {}) {
+    const w = new Worker(new URL('./simworker.js', import.meta.url), { type: 'module' }); const r = new WorkerRunner(w, opts);
+    await new Promise((res, rej) => { const to = setTimeout(() => { w.terminate(); rej(new Error('el hilo del emulador no arranca')); }, 15000);
+      r._ready = pins => { clearTimeout(to); r.pins = pins; res(); }; w.onerror = e => { clearTimeout(to); w.terminate(); rej(new Error(e.message || 'el hilo del emulador falló')); }; w.postMessage({ t: 'init', code, opts }); });
+    return r;
+  }
+  constructor(w, opts) { super(); this.w = w; this.opts = opts; this.pins = opts.pins || PICO_PINS; this.t = 0; this.lv = {}; this.q = []; this.rgbV = null; this.worker = true;
+    w.onmessage = ({ data: m }) => { if (m.t === 'ready') this._ready(m.pins); else if (m.t === 'tick') this._tick(m); else if (m.t === 'error') { this.running = false; this.onError && this.onError(new Error(m.msg)); } else if (m.t === 'done') this.onDone && this.onDone(); }; }
+  _tick(m) { const e = m.e; for (let i = 0; i < e.length; i += 3) { const pin = e[i], v = !!e[i + 1], t = e[i + 2]; this.lv[pin] = { out: v }; this.t = Math.max(this.t, t); this._fire(t); this._edge(pin, v, t); }
+    this.t = m.time; if (m.lv) for (const [pin, k] of Object.entries(m.lv)) this.lv[pin] = { out: (k & 3) === 1 ? true : (k & 3) === 0 ? false : null, pullup: !!(k & 4), pulldown: !!(k & 8) };
+    this.rgbV = m.rgb; if (m.s) this.serial(m.s); this._fire(this.t); }
+  _fire(t) { while (this.q.length && this.q[0][0] <= t) this.q.shift()[1](); }
+  timeUs() { return this.t; }
+  level(pin) { return this.lv[pin] || { out: null }; }
+  setInput(pin, v) { this.w.postMessage({ t: 'in', pin, v: !!v }); }
+  setAnalog(pin, v) { this.w.postMessage({ t: 'an', pin, v }); }
+  encoder(pin, rate) { const r = Math.abs(+rate || 0); this._er = this._er || {}; if (Math.abs((this._er[pin] ?? -1) - r) < 0.5) return; this._er[pin] = r; this.w.postMessage({ t: 'enc', pin, rate: r }); }
+  write(s) { this.w.postMessage({ t: 'w', s }); }
+  // Aproximado (con la resolución de los lotes): para lo que no necesita microsegundos
+  after(us, fn) { this.q.push([this.t + us, fn]); this.q.sort((a, b) => a[0] - b[0]); }
+  get rgb() { return this.rgbV; }
+  get vcc() { return 3.3; }
+  start() { this.running = true; this.w.postMessage({ t: 'start' }); }
+  pause() { this.running = false; this.w.postMessage({ t: 'pause' }); }
+  resume() { this.running = true; this.w.postMessage({ t: 'resume' }); }
+  stop() { this.running = false; try { this.w.postMessage({ t: 'stop' }); } catch (e) {} setTimeout(() => this.w.terminate(), 100); }
 }

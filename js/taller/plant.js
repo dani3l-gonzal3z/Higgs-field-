@@ -1,5 +1,6 @@
 // Planta industrial del Taller: módulos (cintas, sensores, cilindros, básculas…), piezas que circulan y su física.
 // Sin DOM: se puede simular en Node. El 3D y el editor están en plant3d.js.
+import { Body, collider, step as rigidStep, quatY } from './rigid.js';
 // Coordenadas en metros: X y Z en el suelo, Y hacia arriba. Cada módulo tiene posición (x, z), giro (grados) y parámetros.
 // E/S vistas desde el controlador: 'in' = el controlador LEE (sensor), 'out' = el controlador ESCRIBE (actuador).
 
@@ -12,8 +13,8 @@ export const MODULES = {
   cinta: { name: 'Cinta transportadora', icon: '➡️', group: 'transporte', params: { largo: 2, ancho: 0.4, alto: 0.8, vmax: 0.4, ppm: 500, barandillas: true, siempre: false },
     io: [['motor', 'out', 'd', 'Motor en marcha'], ['inversa', 'out', 'd', 'Sentido inverso'], ['vel', 'out', 'pwm', 'Velocidad (PWM o analógica)'], ['enc', 'in', 'enc', 'Encoder del rodillo']],
     help: 'Lleva las piezas a lo largo de su eje. Con el motor parado, frena. «Siempre en marcha» la convierte en una rampa o cinta sin control.' },
-  emisor: { name: 'Emisor de piezas', icon: '📦', group: 'transporte', params: { cada: 3, mezcla: 'rojo:1,azul:1', tam: 0.18, peso: 1, metal: 0, aleatorio: 0.3, modo: 'auto' },
-    io: [['emitir', 'out', 'd', 'Soltar una pieza (flanco)']], help: 'Suelta piezas sobre lo que tenga debajo. «mezcla» = color:peso,…; «metal» = proporción metálica (0-1).' },
+  emisor: { name: 'Emisor de piezas', icon: '📦', group: 'transporte', params: { cada: 3, mezcla: 'rojo:1,azul:1', forma: 'caja', tam: 0.18, peso: 1, metal: 0, aleatorio: 0.3, modo: 'auto' },
+    io: [['emitir', 'out', 'd', 'Soltar una pieza (flanco)']], help: 'Suelta piezas sobre lo que tenga debajo. «mezcla» = color:peso,…; «forma» = caja, cilindro, bola o mezcla; «metal» = proporción metálica (0-1).' },
   sumidero: { name: 'Contenedor', icon: '🗑', group: 'transporte', params: { largo: 0.6, ancho: 0.6, capacidad: 50 },
     io: [['lleno', 'in', 'd', 'Lleno']], help: 'Recoge lo que cae dentro y lo cuenta por tipo.' },
   fotocelula: { name: 'Fotocélula de barrera', icon: '🔦', group: 'sensores', params: { largo: 0.6, altura: 0.85, nc: false, fallo: 'ninguno' },
@@ -42,9 +43,13 @@ export const ioKey = (m, k) => `${m.id}.${k}`;
 export class Plant {
   constructor(data) { this.load(data || { modules: [], map: {} }); }
   // Dos asignaciones de E/S: a la placa simulada del Taller ('sim') o a los canales del útil HIL ('util')
-  load(d) { this.modules = (d.modules || []).filter(m => MODULES[m.type]).map(m => ({ ...m, p: { ...MODULES[m.type].params, ...(m.p || {}) } })); this.maps = { sim: { ...((d.maps && d.maps.sim) || d.map || {}) }, util: { ...((d.maps && d.maps.util) || {}) } }; this.ctl = d.ctl === 'util' ? 'util' : 'sim'; this.force = {}; this.title = d.title || ''; this.exId = d.exId || ''; this.reset(); }
+  load(d) { this.modules = (d.modules || []).filter(m => MODULES[m.type]).map(m => ({ ...m, p: { ...MODULES[m.type].params, ...(m.p || {}) } })); this.maps = { sim: { ...((d.maps && d.maps.sim) || d.map || {}) }, util: { ...((d.maps && d.maps.util) || {}) } }; this.ctl = d.ctl === 'util' ? 'util' : 'sim'; this.force = {}; this.title = d.title || ''; this.exId = d.exId || ''; this.fisica = d.fisica === 'sencilla' ? 'sencilla' : 'rigida';
+    // Placas: PLC1 es la del Taller (la del circuito); las demás (PLC2…) tienen su placa y su programa aquí. Cables entre placas: [['PLC1:GP14', 'PLC2:GP3']]
+    this.ctls = (d.ctls || []).map(c => ({ id: c.id, board: c.board || 'pico', code: c.code || '' })); this.links = (d.links || []).map(l => [l[0], l[1]]); this.reset(); }
+  addCtl(board = 'pico') { let n = 2; while (this.ctls.some(c => c.id === 'PLC' + n)) n++; const c = { id: 'PLC' + n, board, code: '' }; this.ctls.push(c); return c; }
+  removeCtl(id) { this.ctls = this.ctls.filter(c => c.id !== id); for (const k of Object.keys(this.maps.sim)) if (String(this.maps.sim[k]).startsWith(id + ':')) delete this.maps.sim[k]; this.links = this.links.filter(l => !l.some(x => x.startsWith(id + ':'))); }
   get map() { return this.maps[this.ctl]; }
-  toJSON() { return { title: this.title, exId: this.exId, ctl: this.ctl, modules: this.modules.map(({ id, type, x, z, rot, p }) => ({ id, type, x, z, rot, p })), maps: this.maps }; }
+  toJSON() { return { title: this.title, exId: this.exId, fisica: this.fisica, ctl: this.ctl, ctls: this.ctls, links: this.links, modules: this.modules.map(({ id, type, x, z, rot, p }) => ({ id, type, x, z, rot, p })), maps: this.maps }; }
   reset() { this.sens = {}; this.outs = {}; this.items = []; this.t = 0; this.nextId = 1; this.state = {}; this.stats = { emitidas: 0, suelo: 0, por: {} }; for (const m of this.modules) this.state[m.id] = this.initState(m); this.ui = this.ui || {}; }
   initState(m) { switch (m.type) { case 'cinta': return { v: 0, pos: 0 }; case 'emisor': return { tLast: -99, prev: 0 }; case 'sumidero': return { n: 0, por: {} }; case 'empujador': return { x: 0 }; case 'tope': return { up: 0 }; case 'panel': return { seta: false }; default: return {}; } }
   add(type, x = 0, z = 0, rot = 0, p = {}) { const base = { cinta: 'C', emisor: 'E', sumidero: 'K', fotocelula: 'FC', inductivo: 'IN', color: 'CS', bascula: 'B', empujador: 'P', tope: 'T', torre: 'L', panel: 'PB' }[type] || 'M';
@@ -81,6 +86,7 @@ export class Plant {
       else if (m.type === 'torre') { s.rojo = !!out(key('rojo')); s.ambar = !!out(key('ambar')); s.verde = !!out(key('verde')); s.sirena = !!out(key('sirena')); }
       else if (m.type === 'panel') { s.luz = !!out(key('luz')); }
     }
+    if (this.fisica === 'sencilla') {
     // piezas
     const g = 9.81; const obst = [];
     for (const m of this.modules) { if (m.type === 'empujador') obst.push({ ...this.paddle(m), kin: true, vel: S[m.id].vel || 0 }); if (m.type === 'tope') { const b = this.stopBar(m); if (b) obst.push(b); } }
@@ -106,6 +112,7 @@ export class Plant {
     for (let i = 0; i < this.items.length; i++) for (let j = i + 1; j < this.items.length; j++) { const a = this.items[i], b = this.items[j]; if (Math.abs(a.y - b.y) > Math.min(a.h, b.h)) continue;
       const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz), min = (a.r + b.r) * 0.95; if (d >= min || d < 1e-6) continue; const nx = dx / d, nz = dz / d, push = (min - d) / 2;
       a.x -= nx * push; a.z -= nz * push; b.x += nx * push; b.z += nz * push; const rv = (b.vx - a.vx) * nx + (b.vz - a.vz) * nz; if (rv < 0) { a.vx += rv * nx / 2; a.vz += rv * nz / 2; b.vx -= rv * nx / 2; b.vz -= rv * nz / 2; } }
+    } else this.stepRigid(dt);
     // contenedores
     for (const m of this.modules) { if (m.type !== 'sumidero') continue; const s = S[m.id];
       this.items = this.items.filter(it => { const [lx, lz] = this.local(m, it.x, it.z); if (Math.abs(lx) <= m.p.largo / 2 + it.r * 0.5 && Math.abs(lz) <= m.p.ancho / 2 + it.r * 0.5 && it.y < 0.45) { s.n++; s.por[it.tipo] = (s.por[it.tipo] || 0) + 1; this.stats.por[m.id] = s.por; return false; } return true; }); }
@@ -129,18 +136,46 @@ export class Plant {
   spawn(m) { const mix = String(m.p.mezcla || 'rojo:1').split(',').map(x => x.split(':')).map(([c, w]) => [c.trim(), +w || 1]); const tot = mix.reduce((s, x) => s + x[1], 0); let r = Math.random() * tot, color = mix[0][0];
     for (const [c, w] of mix) { if ((r -= w) <= 0) { color = c; break; } }
     const metal = Math.random() < (m.p.metal || 0); const s = m.p.tam; const peso = +(m.p.peso * (0.8 + Math.random() * 0.4)).toFixed(2);
-    this.items.push({ id: this.nextId++, x: m.x, z: m.z, y: 1.3, vx: 0, vz: 0, vy: 0, w: s, d: s, h: s * 0.8, r: s * 0.62, color: metal ? 'metal' : color, metal, peso, tipo: metal ? 'metal' : color, rot: m.rot || 0 }); this.stats.emitidas++; }
+    let forma = m.p.forma || 'caja'; if (forma === 'mezcla') forma = ['caja', 'cilindro', 'bola'][Math.floor(Math.random() * 3)];
+    const it = { id: this.nextId++, x: m.x, z: m.z, y: 1.3, vx: 0, vz: 0, vy: 0, w: s, d: s, h: s * 0.8, r: s * 0.62, color: metal ? 'metal' : color, metal, peso, tipo: metal ? 'metal' : color, rot: m.rot || 0, forma: 'caja', dims: [s, s * 0.8, s] };
+    if (this.fisica !== 'sencilla') { const shape = forma === 'cilindro' ? { type: 'cilindro', r: s * 0.45, h: s * 0.9 } : forma === 'bola' ? { type: 'bola', r: s * 0.42 } : { type: 'caja', w: s, h: s * 0.8, d: s };
+      it.forma = forma; it.dims = forma === 'cilindro' ? [shape.r, shape.h, shape.r] : forma === 'bola' ? [shape.r, shape.r, shape.r] : [s, s * 0.8, s]; it.r = forma === 'caja' ? s * 0.62 : shape.r; it.h = forma === 'bola' ? shape.r * 2 : shape.h;
+      it.b = new Body(shape, peso, [m.x + (Math.random() - 0.5) * 0.01, 1.3, m.z + (Math.random() - 0.5) * 0.01], quatY(((m.rot || 0) + (Math.random() - 0.5) * 20) * Math.PI / 180)); }
+    this.items.push(it); this.stats.emitidas++; }
+  // Barandillas de una cinta: tramos [x0, x1] con hueco donde hay un cilindro empujador (para que la pieza pueda salir)
+  railSegs(m) { const L = m.p.largo / 2; let segs = [[-L, L]];
+    for (const q of this.modules) { if (q.type !== 'empujador') continue; const [lx, lz] = this.local(m, q.x, q.z); if (Math.abs(lx) > L + 0.25 || Math.abs(lz) > m.p.ancho / 2 + 0.9) continue;
+      const a = lx - 0.24, b = lx + 0.24; segs = segs.flatMap(([x0, x1]) => b <= x0 || a >= x1 ? [[x0, x1]] : [[x0, a], [b, x1]].filter(([u, v]) => v - u > 0.02)); }
+    return segs; }
+  // El mundo fijo para la física rígida: suelo, cintas (con la velocidad de su banda), barandillas, contenedores, paletas y topes
+  colliders() { const S = this.state; const out = [collider([0, -0.5, 0], 0, [200, 0.5, 200], 0.6)];
+    for (const m of this.modules) { const p = m.p, f = this.frame(m), s = S[m.id] || {}, rot = m.rot || 0; const W = (lx, lz, y) => { const [x, z] = this.world(m, lx, lz); return [x, y, z]; };
+      if (m.type === 'cinta') { const v = s.v || 0; out.push(collider([m.x, p.alto - 0.1, m.z], rot, [p.largo / 2, 0.1, p.ancho / 2], 0.8, [v * f.ux, 0, v * f.uz]));
+        if (p.barandillas) for (const [x0, x1] of this.railSegs(m)) for (const k of [-1, 1]) out.push(collider(W((x0 + x1) / 2, k * (p.ancho / 2 + 0.03), p.alto + 0.05), rot, [(x1 - x0) / 2, 0.06, 0.01], 0.15)); }
+      else if (m.type === 'sumidero') { out.push(collider([m.x, 0.01, m.z], rot, [p.largo / 2, 0.01, p.ancho / 2], 0.5));
+        for (const k of [-1, 1]) { out.push(collider(W(0, k * p.ancho / 2, 0.225), rot, [p.largo / 2, 0.225, 0.01], 0.3)); out.push(collider(W(k * p.largo / 2, 0, 0.225), rot, [0.01, 0.225, p.ancho / 2], 0.3)); } }
+      else if (m.type === 'empujador') { const ext = (s.x || 0) * p.carrera, vel = s.vel || 0; out.push(collider(W(0, 0.08 + ext, 0.87), rot, [0.18, 0.05, 0.025], 0.3, [vel * f.vx, 0, vel * f.vz], true)); }
+      else if (m.type === 'tope' && (s.up || 0) > 0.3) out.push(collider([m.x, 0.74 + s.up * 0.12, m.z], rot, [0.015, 0.03, p.ancho / 2], 0.3, [0, 0, 0], true)); }
+    return out; }
+  stepRigid(dt) { const cols = this.colliders(); const bodies = this.items.map(it => it.b).filter(Boolean); const n = 2; for (let i = 0; i < n; i++) rigidStep(bodies, cols, dt / n);
+    const binHit = it => this.modules.some(m => { if (m.type !== 'sumidero') return false; const [lx, lz] = this.local(m, it.x, it.z); return Math.abs(lx) <= m.p.largo / 2 && Math.abs(lz) <= m.p.ancho / 2; });
+    for (const it of this.items) { const b = it.b; if (!b) continue; it.x = b.p[0]; it.z = b.p[2]; it.cy = b.p[1]; it.q = b.q; const [lo, hi] = b.extentY(); it.y = lo; it.h = hi - lo; it.vx = b.v[0]; it.vz = b.v[2];
+      if (lo < 0.03 && !it.floor && !binHit(it)) { it.floor = true; this.stats.suelo++; } }
+    this.items = this.items.filter(it => !it.b || it.b.p[1] > -2); }
 }
 function segDist(px, pz, ax, az, bx, bz) { const vx = bx - ax, vz = bz - az; const t = Math.max(0, Math.min(1, ((px - ax) * vx + (pz - az) * vz) / (vx * vx + vz * vz || 1))); return Math.hypot(px - ax - t * vx, pz - az - t * vz); }
 
 /* ---------- Plantas de ejemplo ---------- */
 export const PLANTS = [
   { id: 'clasificadora', title: 'Clasificadora por color', about: 'Las piezas rojas se apartan con un cilindro; el resto sigue hasta el final. Con botonera, seta y baliza.',
-    build: P => { P.add('emisor', -1.6, 0, 0, { cada: 2.5, mezcla: 'rojo:1,azul:1,verde:1' }); P.add('cinta', 0, 0, 0, { largo: 4 }); P.add('color', -0.4, -0.25, 0, { busca: 'rojo' });
+    build: P => { P.add('emisor', -1.6, 0, 0, { cada: 2.5, mezcla: 'rojo:1,azul:1,verde:1' }); P.add('cinta', 0, 0, 0, { largo: 4 }); P.add('color', -0.4, -0.25, 0, { busca: 'rojo', alcance: 0.22 });
       P.add('fotocelula', 0.6, 0, 0); P.add('empujador', 0.6, -0.42, 0); P.add('sumidero', 0.6, 0.62, 0); P.add('sumidero', 2.25, 0, 0); P.add('panel', -1.2, 1.4, 0); P.add('torre', 1.6, -1.0, 0); } },
   { id: 'pesaje', title: 'Pesaje y rechazo', about: 'Un tope para cada caja sobre la báscula; si pesa de más, el cilindro la rechaza.',
-    build: P => { P.add('emisor', -1.6, 0, 0, { cada: 3, mezcla: 'amarillo:1', peso: 1, aleatorio: 0.2 }); P.add('cinta', 0, 0, 0, { largo: 4 }); P.add('fotocelula', 0.15, 0, 0); P.add('tope', 0.42, 0, 0);
-      P.add('bascula', 0.2, 0, 0); P.add('empujador', 0.2, -0.42, 0); P.add('sumidero', 0.2, 0.62, 0); P.add('sumidero', 2.25, 0, 0); P.add('panel', -1.2, 1.4, 0); P.add('torre', 1.6, -1.0, 0); } },
+    build: P => { P.add('emisor', -1.6, 0, 0, { cada: 3, mezcla: 'amarillo:1', peso: 1, aleatorio: 0.2 }); P.add('cinta', 0, 0, 0, { largo: 4 }); P.add('fotocelula', 0.3, 0, 0); P.add('tope', 0.42, 0, 0);
+      P.add('bascula', 0.31, 0, 0, { largo: 0.24 }); P.add('empujador', 0.31, -0.42, 0); P.add('sumidero', 0.31, 0.62, 0); P.add('sumidero', 2.25, 0, 0); P.add('panel', -1.2, 1.4, 0); P.add('torre', 1.6, -1.0, 0); } },
+  { id: 'dosplacas', title: 'Dos cintas, dos placas', about: 'Cada cinta la lleva una placa. PLC1 (botonera, baliza, cinta 1) avisa a PLC2 con mensajes por el puerto serie; PLC2 (cinta 2) le contesta si la salida está llena.',
+    ctls: [{ id: 'PLC2', board: 'pico' }],
+    build: P => { P.add('emisor', -2.1, 0, 0, { cada: 2 }); P.add('cinta', -1.1, 0, 0, { largo: 2.6 }); P.add('cinta', 1.5, 0, 0, { largo: 2.6, alto: 0.78 }); P.add('fotocelula', 0.05, 0, 0); P.add('fotocelula', 2.6, 0, 0); P.add('sumidero', 3.05, 0, 0); P.add('panel', -1.5, 1.4, 0); P.add('torre', 0.2, -1.0, 0); } },
   { id: 'dos', title: 'Dos cintas en serie', about: 'Transferencia entre cintas con acumulación: la segunda solo arranca si hay sitio.',
-    build: P => { P.add('emisor', -2.3, 0, 0, { cada: 2 }); P.add('cinta', -1.1, 0, 0, { largo: 2.6 }); P.add('cinta', 1.5, 0, 0, { largo: 2.6, alto: 0.78 }); P.add('fotocelula', 0.05, 0, 0); P.add('fotocelula', 2.6, 0, 0); P.add('sumidero', 3.05, 0, 0); P.add('panel', -1.5, 1.4, 0); P.add('torre', 0.2, -1.0, 0); } },
+    build: P => { P.add('emisor', -2.1, 0, 0, { cada: 2 }); P.add('cinta', -1.1, 0, 0, { largo: 2.6 }); P.add('cinta', 1.5, 0, 0, { largo: 2.6, alto: 0.78 }); P.add('fotocelula', 0.05, 0, 0); P.add('fotocelula', 2.6, 0, 0); P.add('sumidero', 3.05, 0, 0); P.add('panel', -1.5, 1.4, 0); P.add('torre', 0.2, -1.0, 0); } },
 ];

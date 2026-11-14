@@ -21,12 +21,12 @@ function kit() {
 }
 
 // Cada módulo es un grupo; lo que se mueve o se enciende va en userData.a
-function buildModule(K, m) {
+function buildModule(K, m, P) {
   const { mat, box, cyl } = K; const g = new THREE.Group(); const p = m.p; const a = {}; g.userData = { mid: m.id, a };
   switch (m.type) {
     case 'cinta': { const L = p.largo, W = p.ancho, H = p.alto; const tex = K.beltTex(); tex.repeat.set(L / 0.12, 1);
       const belt = box(L, 0.02, W, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 }), 0, H - 0.01, 0); g.add(belt); a.tex = tex;
-      for (const s of [-1, 1]) { g.add(box(L, 0.08, 0.03, mat.frame, 0, H - 0.05, s * (W / 2 + 0.015))); if (p.barandillas) g.add(box(L, 0.03, 0.012, mat.yellow, 0, H + 0.07, s * (W / 2 + 0.03))); }
+      for (const s of [-1, 1]) { g.add(box(L, 0.08, 0.03, mat.frame, 0, H - 0.05, s * (W / 2 + 0.015))); if (p.barandillas) for (const [x0, x1] of (P ? P.railSegs(m) : [[-L / 2, L / 2]])) g.add(box(x1 - x0, 0.03, 0.012, mat.yellow, (x0 + x1) / 2, H + 0.07, s * (W / 2 + 0.03))); }
       for (const s of [-1, 1]) g.add(cyl(0.04, W, mat.metal, s * L / 2, H - 0.04, 0, 'z'));
       const n = Math.max(2, Math.ceil(L / 1.2) + 1); for (let i = 0; i < n; i++) { const x = -L / 2 + 0.08 + i * (L - 0.16) / (n - 1); for (const s of [-1, 1]) g.add(box(0.04, H - 0.06, 0.04, mat.frame, x, (H - 0.06) / 2, s * (W / 2 - 0.02))); }
       const mot = cyl(0.06, 0.16, mat.blue, L / 2 - 0.04, H - 0.06, W / 2 + 0.1, 'z'); g.add(mot); a.motor = mot; break; }
@@ -71,14 +71,14 @@ export async function plantView(opts) {
   const grid = new THREE.GridHelper(40, 80, '#9aa1a8', '#b9bec4'); grid.position.y = 0.002; scene.add(grid);
   const modsG = new THREE.Group(), itemsG = new THREE.Group(); scene.add(modsG, itemsG);
   const groups = new Map(); let sel = null, selBox = null; let manual = false; let disposed = false;
-  const itemGeo = new THREE.BoxGeometry(1, 1, 1); const itemMat = {}; const itemMesh = new Map();
+  const itemGeo = { caja: new THREE.BoxGeometry(1, 1, 1), cilindro: new THREE.CylinderGeometry(1, 1, 1, 22), bola: new THREE.SphereGeometry(1, 18, 12) }; const itemMat = {}; const itemMesh = new Map();
   const colorMat = c => itemMat[c] || (itemMat[c] = new THREE.MeshStandardMaterial({ color: COLORS[c] || c, roughness: c === 'metal' ? 0.3 : 0.7, metalness: c === 'metal' ? 0.8 : 0.05 }));
 
   function rebuild(id) { for (const [mid, g] of groups) if (!id || mid === id) { modsG.remove(g); g.traverse(o => { if (o.geometry) o.geometry.dispose(); }); groups.delete(mid); }
-    for (const m of P.modules) if (!groups.has(m.id)) { const g = buildModule(K, m); modsG.add(g); groups.set(m.id, g); } markSel(); if (pad.childElementCount !== P.modules.filter(m => m.type === 'panel').length) paintPad(); }
+    for (const m of P.modules) if (!groups.has(m.id)) { const g = buildModule(K, m, P); modsG.add(g); groups.set(m.id, g); } markSel(); if (pad.childElementCount !== P.modules.filter(m => m.type === 'panel').length) paintPad(); }
   function place(m) { const g = groups.get(m.id); if (g) { g.position.set(m.x, 0, m.z); g.rotation.y = (m.rot || 0) * D2R; } markSel(); }
   function markSel() { if (selBox) { scene.remove(selBox); selBox = null; } const g = sel && groups.get(sel); if (g) { selBox = new THREE.BoxHelper(g, '#1f7aff'); scene.add(selBox); } }
-  const changed = () => { opts.onChange && opts.onChange(); };
+  const changed = () => { for (const m of P.modules) if (m.type === 'cinta') rebuild(m.id); opts.onChange && opts.onChange(); };
 
   /* ── barra de herramientas ── */
   const addMenu = el('div', { class: 'pl-add', hidden: true });
@@ -131,12 +131,14 @@ export async function plantView(opts) {
     if (typeof v0 === 'boolean') return el('label', { class: 'pl-p' }, el('span', {}, k), el('input', { type: 'checkbox', checked: !!m.p[k], on: { change: e => set(e.target.checked) } }));
     if (k === 'fallo') { const s = el('select', { on: { change: e => set(e.target.value) } }, ...['ninguno', 'siempre', 'nunca', 'intermitente', ...(m.type === 'empujador' ? ['atascado'] : [])].map(x => el('option', { value: x }, x))); s.value = m.p[k]; return el('label', { class: 'pl-p' }, el('span', {}, 'fallo'), s); }
     if (k === 'busca') { const s = el('select', { on: { change: e => set(e.target.value) } }, ...Object.keys(COLORS).map(x => el('option', { value: x }, x))); s.value = m.p[k]; return el('label', { class: 'pl-p' }, el('span', {}, 'busca'), s); }
+    if (k === 'forma') { const s = el('select', { on: { change: e => set(e.target.value) } }, ...['caja', 'cilindro', 'bola', 'mezcla'].map(x => el('option', { value: x }, x))); s.value = m.p[k] || 'caja'; return el('label', { class: 'pl-p' }, el('span', {}, 'forma'), s); }
     if (k === 'modo') { const s = el('select', { on: { change: e => set(e.target.value) } }, el('option', { value: 'auto' }, 'solo, cada «cada» s'), el('option', { value: 'señal' }, 'cuando lo pida la placa')); s.value = m.p[k]; return el('label', { class: 'pl-p' }, el('span', {}, 'modo'), s); }
     return el('label', { class: 'pl-p' }, el('span', {}, k), el('input', { class: 'txt', type: typeof v0 === 'number' ? 'number' : 'text', step: 'any', value: String(m.p[k]), on: { change: e => set(typeof v0 === 'number' ? (+e.target.value || 0) : e.target.value) } }));
   }
   function panel() { live.length = 0; side.innerHTML = ''; const m = selM();
     if (!m) { side.append(el('div', { class: 'pl-h' }, el('b', {}, '🏭 ' + (P.title || 'Tu planta')), el('small', {}, `${P.modules.length} módulos`)));
       if (opts.controllerBar) side.append(opts.controllerBar());
+      { const f = el('select', { class: 'pl-sel', on: { change: e => { P.fisica = e.target.value; P.reset(); for (const [, mm] of itemMesh) itemsG.remove(mm); itemMesh.clear(); changed(); } } }, el('option', { value: 'rigida' }, '🧱 Física de cuerpo rígido (vuelcan, giran, ruedan)'), el('option', { value: 'sencilla' }, '▭ Física sencilla (más ligera)')); f.value = P.fisica; side.append(f); }
       const sigs = P.signals(); const on = sigs.filter(s => P.map[s[0]]);
       side.append(el('div', { class: 'pl-h' }, el('b', {}, '🔗 Señales'), el('small', {}, `${on.length} de ${sigs.length} conectadas`)));
       if (opts.extraOverview) side.append(opts.extraOverview());
@@ -170,6 +172,7 @@ export async function plantView(opts) {
     const ext = opts.isRunning && opts.isRunning(); const io = ext ? opts.getIO() : null;
     // Con la placa simulada, la planta va al ritmo de SU reloj (si el emulador va lento, el mundo también: la placa nunca ve el futuro)
     let sdt = dt; const c = ext && opts.clock ? opts.clock() : null; if (c != null) { sdt = lastClock == null || c < lastClock ? 0 : Math.min(0.1, c - lastClock); lastClock = c; } else lastClock = null;
+    if (io && io.sync) io.sync();
     if (ext || manual) { acc += sdt; let n = 0; while (acc >= 1 / 120 && n++ < 24) { P.step(1 / 120, io || nullIO); acc -= 1 / 120; } } else acc = 0;
     paint(); ctl.update(); renderer.render(scene, cam);
     if (now - liveT > 150) { liveT = now; for (const [node, f] of [...live, ...padLive]) { const t = f(); if (node.textContent !== t) node.textContent = t; } hudPaint(); paintBar(); } }
@@ -183,8 +186,8 @@ export async function plantView(opts) {
       else if (m.type === 'torre') { for (const k of ['verde', 'ambar', 'rojo']) a.L[k].material.emissiveIntensity = s[k] ? 1.4 : 0; if (s.sirena) a.L.rojo.material.emissiveIntensity = blink ? 1.6 : 0.2; }
       else if (m.type === 'panel') { a.luz.material.color.set(s.luz ? '#5f5' : '#333'); a.seta.position.y = s.seta ? 1.02 : 1.04; }
       else if (m.type === 'bascula') a.scr.material.color.set((s.kg || 0) > 0 ? '#2f8' : '#0a3'); }
-    const seen = new Set(); for (const it of P.items) { seen.add(it.id); let mm = itemMesh.get(it.id); if (!mm) { mm = new THREE.Mesh(itemGeo, colorMat(it.color)); mm.castShadow = true; mm.scale.set(it.w, it.h, it.d); itemsG.add(mm); itemMesh.set(it.id, mm); }
-      mm.position.set(it.x, it.y + it.h / 2, it.z); mm.rotation.y = (it.rot || 0) * D2R; }
+    const seen = new Set(); for (const it of P.items) { seen.add(it.id); let mm = itemMesh.get(it.id); if (!mm) { mm = new THREE.Mesh(itemGeo[it.forma] || itemGeo.caja, colorMat(it.color)); mm.castShadow = true; const dm = it.dims || [it.w, it.h, it.d]; mm.scale.set(dm[0], dm[1], dm[2]); itemsG.add(mm); itemMesh.set(it.id, mm); }
+      if (it.q) { mm.position.set(it.x, it.cy, it.z); mm.quaternion.set(it.q[0], it.q[1], it.q[2], it.q[3]); } else { mm.position.set(it.x, it.y + it.h / 2, it.z); mm.rotation.y = (it.rot || 0) * D2R; } }
     for (const [id, mm] of itemMesh) if (!seen.has(id)) { itemsG.remove(mm); itemMesh.delete(id); }
     if (selBox) selBox.update(); }
   function hudPaint() { const st = P.stats; const bins = P.modules.filter(m => m.type === 'sumidero').map(m => { const s = P.state[m.id] || { n: 0, por: {} }; return `${m.id}: ${s.n}` + (Object.keys(s.por).length ? ' (' + Object.entries(s.por).map(([t, n]) => `${t} ${n}`).join(', ') + ')' : ''); });
