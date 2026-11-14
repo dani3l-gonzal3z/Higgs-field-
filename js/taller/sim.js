@@ -98,6 +98,9 @@ export class PicoRunner extends Base {
     const names = {}; if (this.map) for (const [pin, gp] of Object.entries(this.map)) (names[gp] = names[gp] || []).push(pin); else for (let i = 0; i < 30; i++) names[i] = ['GP' + i];
     this.raw = {};
     for (let i = 0; i < 30; i++) { const ns = names[i]; if (!ns || !mcu.gpio[i]) continue; mcu.gpio[i].addListener(st => { const S = R.GPIOPinState; const rw = this.raw[i]; if (rw) { const low = st === S.Low; for (const f of rw) f(low); return; } if (st === S.High || st === S.Low) { mcu.gpio[i].setInputValue(st === S.High); /* el pad lee lo que la salida pone, como en el chip */ const t = this.timeUs(); for (const n of ns) this._edge(n, st === S.High, t); } }); }
+    // Los PIO de rp2040js corren en su propio setTimeout, sin relación con el reloj simulado (y sin divisor de reloj):
+    // aquí avanzan al ritmo del procesador, con su divisor, para que encoders, NeoPixel por PIO, etc. tengan su tiempo real.
+    for (const pio of mcu.pio || []) { pio.run = () => {}; for (const m of pio.machines) m._acc = 0; }
     const cdc = this.cdc = new R.USBCDC(mcu.usbCtrl); this.buf = ''; this.booted = false;
     cdc.onDeviceConnected = () => { cdc.sendSerialByte(13); };
     // REPL «raw» de MicroPython: no repite el código; la salida llega tras «OK» y los errores tras el primer \x04.
@@ -145,12 +148,16 @@ export class PicoRunner extends Base {
     this.mcu.core.PC = 0x10000000; this._run();
   }
   pause() { this.running = false; clearTimeout(this.timer); }
+  _pio(c) { for (const pio of this.mcu.pio) { if (pio.stopped) continue; let moved = false;
+    for (const m of pio.machines) { if (!m.enabled) continue; const div = (m.clockDivInt || 1) + (m.clockDivFrac || 0) / 256; m._acc += c / div; while (m._acc >= 1) { m._acc -= 1; m.step(); moved = true; } }
+    if (moved) pio.checkChangedPins(); } }
   resume() { if (!this.running) this._run(); }
   _run() {
     this.running = true; const { sim, mcu } = this; const clock = sim.clock; let t0 = NOW(), n0 = clock.nanos; const cyc = 1e9 / 125e6;
     const step = () => { if (!this.running) return; this._flush(); const fast = this.phase !== 'out' && this.phase !== 'err' && this.phase !== 'done';
+      const pioOn = (mcu.pio || []).some(p => !p.stopped);
       if (fast) { t0 = NOW(); n0 = clock.nanos; } const until = fast ? clock.nanos + 50e6 : n0 + (NOW() - t0) * 1e6; let guard = 0;
-      try { while (clock.nanos < until && guard++ < 3e6) { if (fast && !(guard & 2047)) this._flush(); if (mcu.core.waiting) { const nx = Math.min(clock.nanosToNextAlarm, until - clock.nanos); if (nx <= 0) break; clock.tick(nx); } else clock.tick(mcu.core.executeInstruction() * cyc); } }
+      try { while (clock.nanos < until && guard++ < 3e6) { if (fast && !(guard & 2047)) this._flush(); if (mcu.core.waiting) { const nx = Math.min(clock.nanosToNextAlarm, until - clock.nanos); if (nx <= 0) break; clock.tick(nx); } else { const c = mcu.core.executeInstruction(); clock.tick(c * cyc); if (pioOn) this._pio(c); } } }
       catch (e) { this.running = false; this.onError && this.onError(e); return; }
       this.timer = setTimeout(step, fast ? 0 : 4); };
     step();

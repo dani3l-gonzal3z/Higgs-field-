@@ -104,6 +104,18 @@ Monta un circuito, prográmalo y simúlalo antes de tocar un cable; luego lléva
 - **A la mesa**: lista de la compra, montaje paso a paso y grabación por USB en tu placa.
 - Abre y guarda proyectos de Wokwi y Velxio (`diagram.json`).
 
+### 🏭 Planta: una línea de producción que controla tu placa
+
+Pestaña **🏭 Planta** del Taller: una planta industrial en 3D sin límite de módulos, controlada por la placa del Taller (simulada) o por **tu placa de verdad** a través del útil HIL.
+
+- **Módulos**: cintas (motor, sentido, velocidad por PWM, encoder), emisor de piezas (colores, peso, metálicas, al azar o a petición), contenedores con contador, fotocélulas de barrera, sensores inductivos y de color, básculas (salida analógica), cilindros de simple y doble efecto con finales de carrera, topes, balizas y botonera (marcha NA, paro y seta NC, selector). Cada uno con sus medidas y parámetros.
+- **Física**: las piezas viajan sobre las cintas, pasan de una a otra (también en L o a distinta altura), caen, se empujan y se paran contra topes y cilindros; los sensores ven lo que tienen delante de verdad.
+- **Editor 3D**: añade, arrastra con imán a 5 cm, gira, duplica y borra; cambia medidas en el panel. Guarda y abre plantas (`.planta.json`).
+- **Señales**: cada sensor y actuador se conecta a un pin de la placa o a un canal del útil («⚡ Conectar señales solas» busca pines libres y respeta los que solo son entrada). Valor en vivo de cada señal y **fallos inyectables** (sensor siempre activo, muerto, intermitente; cilindro atascado; forzar cualquier señal).
+- **Tiempo honrado**: con la placa simulada, la planta va al ritmo del reloj del chip emulado; si el emulador va lento, el mundo también.
+- **Ejemplos con su programa**: clasificadora por color (cola FIFO de piezas), pesaje con tope y rechazo, dos cintas con acumulación. «📝 Escribir el programa» lo genera para la placa elegida y los pines tal como estén conectados (MicroPython, Python de placa Linux o Arduino C++), con máquina de estados, paro, seta y rearme.
+- **Con una placa real**: el útil HIL (`util/`, una Pico con `util/firmware/main.py`) pone en sus salidas lo que «ven» los sensores y lee lo que manda tu STM32, ESP32, Arduino o PLC. Se conecta por Web Serial; «⬇ Instalar firmware» lo graba desde el navegador. Vigilancia: si Plató se calla 1,5 s, todo a reposo.
+
 Está hecho sobre [avr8js](https://github.com/wokwi/avr8js), [rp2040js](https://github.com/wokwi/rp2040js) y [@wokwi/elements](https://github.com/wokwi/wokwi-elements) (MIT) y toma piezas de [Velxio](https://github.com/davidmonterocrespo24/velxio) (AGPL-3.0). Detalles en [`taller/LICENCIAS.md`](taller/LICENCIAS.md).
 
 ## 🧠 IA local (sin claves) y 🎭 Recast local
@@ -232,9 +244,10 @@ js/local.js         servicios del aparato (FFmpeg, voces, proxy)
 js/learn.js         Aprender: documentos, clases, preguntas en directo
 js/localai.js       Ajustes → IA local: packs, modelos de Ollama, agentes
 js/taller.js        Taller de electrónica (vista)
-js/taller/          placas y su capa de soporte, circuito y red eléctrica, motores, ejemplos
+js/taller/          placas y su capa de soporte, circuito y red eléctrica, motores, ejemplos, planta 3D (plant*.js) y enlace con el útil (util.js)
 mcp/taller.mjs      compilar con arduino-cli y grabar la placa por USB
 taller/             firmware MicroPython, arte de placas y protoboards, licencias
+util/firmware/      firmware del útil HIL (Pico + MicroPython)
 js/recast.js        Recast local: máscara, generación y pegado
 mcp/localai.mjs     equipo, descargas, Python con uv, Ollama, ComfyUI, opencode, Hermes
 mcp/recast.mjs      SAM 3.1 + Wan Animate / VACE en ComfyUI, recorte y pegado con FFmpeg, audio

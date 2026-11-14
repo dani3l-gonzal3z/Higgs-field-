@@ -15,14 +15,17 @@ import { defineParts } from './taller/parts.js';
 import { I2CBus, PinSlave, attachRP2040, attachAVR } from './taller/i2c.js';
 import { SSD1306, MPU6050, BMP280, DS1307, LcdI2C, WS2812 } from './taller/devices.js';
 import { RealBoard, webSerialOk } from './taller/webserial.js';
+import { Plant, PLANTS } from './taller/plant.js';
+import { PLANT_SIGNALS, plantProgram, hasProgram } from './taller/plantcode.js';
+import { UtilLink, UTIL_CH, FIRMWARE_URL } from './taller/util.js';
 
-const KEY = 'plato.taller.v1';
+const KEY = 'plato.taller.v1', PKEY = 'plato.taller.plant.v1';
 const WIRE_COLORS = ['green', 'blue', 'orange', 'purple', 'yellow', 'white', 'cyan'];
 const T = { board: 'pico', circuit: null, code: '', sel: null, wireFrom: null, runner: null, ui: {}, geo: { pins: {} }, zoom: 1, serial: '', ex: 'blink', dirty: false, inside: {} };
 let ready = null;
 const loadLibs = () => ready || (ready = (async () => { await import('./vendor/wokwi-elements.js'); await import('./vendor/velxio-breadboards.js'); definePico(); defineBoards(); defineParts(); })());
 
-function save() { try { localStorage.setItem(KEY, JSON.stringify({ board: T.board, circuit: T.circuit, code: T.code, ex: T.ex, inside: T.inside })); } catch (e) {} }
+function save() { try { localStorage.setItem(KEY, JSON.stringify({ board: T.board, circuit: T.circuit, code: T.code, ex: T.ex, inside: T.inside, mode: T.mode })); } catch (e) {} }
 function load() { try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && s.circuit) Object.assign(T, s); } catch (e) {} if (!BOARDS[T.board]) T.circuit = null; if (!T.circuit) useExample('blink', 'pico', false); T.inside = T.inside || {}; }
 function useExample(id, board = T.board, render = true) {
   let ex = EXAMPLES.find(e => e.id === id) || EXAMPLES[0]; if (!supports(ex, board)) ex = EXAMPLES[0];
@@ -44,6 +47,7 @@ function draw() {
   const b = BOARDS[T.board];
   // Barra superior
   const bar = el('div', { class: 'tl-bar' },
+    el('div', { class: 'tl-seg' }, btn('🔌 Circuito', () => setMode('circuit'), 'b' + (T.mode !== 'plant' ? ' on' : '')), btn('🏭 Planta', () => setMode('plant'), 'b' + (T.mode === 'plant' ? ' on' : ''))),
     btn(el('span', { class: 'tl-bname' }, el('b', {}, (FAMILIES.find(f => f[0] === b.family) || ['', '🔲'])[1].split(' ')[0] + ' ' + b.name), el('small', {}, `${b.chip} · ${b.lang === 'cpp' ? 'C++' : b.flavor === 'linux' ? 'Python' : 'MicroPython'} ▾`)), boardPicker, 'b tl-bpick'),
     btn('🔩 Por dentro', inside, 'b'),
     R.runBtn = btn(T.runner ? '■ Parar' : '▶ Simular', () => T.runner ? stop() : start(), 'b on tl-run'), R.pauseBtn = btn(T.paused ? '▶' : '⏸', togglePause, 'b tl-pause'),
@@ -62,7 +66,9 @@ function draw() {
   R.mon = el('pre', { class: 'tl-mon' }, T.serial || (b.lang === 'python' ? 'La salida de print() aparece aquí.' : 'La salida de Serial.print() aparece aquí.'));
   const inp = el('input', { class: 'txt', placeholder: 'Escribe y pulsa Intro para mandarlo por el puerto serie', on: { keydown: e => { if (e.key === 'Enter' && T.runner) { T.runner.write(e.target.value + '\n'); e.target.value = ''; } } } });
   const side = el('div', { class: 'tl-side' }, el('div', { class: 'tl-h' }, el('b', {}, b.lang === 'cpp' ? '⚙️ Arduino C++' : b.flavor === 'linux' ? `🐍 Python · ${b.lib}` : b.flavor === 'stm32' ? '🐍 MicroPython · STM32' : '🐍 MicroPython'), el('small', {}, (EXAMPLES.find(e => e.id === T.ex) || {}).title || 'Tu circuito')), R.code, el('div', { class: 'tl-h' }, el('b', {}, '🖥 Monitor')), R.mon, inp);
-  root.append(bar, R.warn, el('div', { class: 'tl-main' }, el('div', { class: 'tl-left' }, R.tools, el('div', { class: 'tl-stagewrap' }, R.stage, R.probeEl), T.showIns ? insPanel().el : '', R.status), side));
+  const plantMode = T.mode === 'plant'; if (R.pv) { R.pv.dispose(); R.pv = null; } R.plantHost = plantMode ? el('div', { class: 'tl-planthost' }, el('div', { class: 'empty' }, 'Montando la planta 3D…')) : null;
+  root.append(bar, R.warn, el('div', { class: 'tl-main' }, el('div', { class: 'tl-left' + (plantMode ? ' plant' : '') }, R.tools, el('div', { class: 'tl-stagewrap' }, R.stage, R.probeEl), R.plantHost || '', T.showIns ? insPanel().el : '', R.status), side));
+  if (plantMode) mountPlant(R.plantHost);
   tools(); requestAnimationFrame(() => requestAnimationFrame(() => { measure(); if (T.fit !== false) fit(); paintWires(); }));
 }
 // Encaja el circuito en la pantalla (las piezas de verdad son pequeñas: mejor verlas grandes).
@@ -127,7 +133,7 @@ function stageUp() {
 /* ---------- Teclado ---------- */
 let clip = null;
 function onKey(e) {
-  if (!R || !R.root.isConnected) return; const tg = e.target; if (tg && (tg.tagName === 'TEXTAREA' || tg.tagName === 'INPUT' || tg.tagName === 'SELECT' || tg.isContentEditable)) return;
+  if (!R || !R.root.isConnected || T.mode === 'plant') return; const tg = e.target; if (tg && (tg.tagName === 'TEXTAREA' || tg.tagName === 'INPUT' || tg.tagName === 'SELECT' || tg.isContentEditable)) return;
   if (document.querySelector('.modal-bg, .modal')) return;
   const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
   if (mod && k === 'z' && !e.shiftKey) { e.preventDefault(); return undo(); }
@@ -440,14 +446,14 @@ function loop() {
   frame = setTimeout(loop, 33);
 }
 function stop(keepMsg) {
-  if (T.runner) { try { T.runner.stop(); } catch (e) {} } T.runner = null; T.paused = false; if (R && R.pauseBtn) R.pauseBtn.textContent = '⏸'; clearTimeout(frame); T.probe = null; if (R && R.probeEl) R.probeEl.hidden = true;
+  T.pio = null; if (T.runner) { try { T.runner.stop(); } catch (e) {} } T.runner = null; T.paused = false; if (R && R.pauseBtn) R.pauseBtn.textContent = '⏸'; clearTimeout(frame); T.probe = null; if (R && R.probeEl) R.probeEl.hidden = true;
   if (audio) { try { audio.g.gain.value = 0; } catch (e) {} }
   if (!R || !R.world) return; R.root.classList.remove('running'); if (R.runBtn) R.runBtn.textContent = '▶ Simular'; if (R.warn && !keepMsg) { R.warn.textContent = ''; R.warn.classList.remove('on'); }
   for (const w of R.world.querySelectorAll('.tl-part')) { const x = w.firstChild; w.classList.remove('burn'); if ('value' in x && x.tagName === 'WOKWI-LED') { x.value = false; } if (x.tagName === 'WOKWI-RGB-LED') { x.ledRed = x.ledGreen = x.ledBlue = 0; } if (x.tagName === 'WOKWI-BUZZER') x.hasSignal = false; if ('led13' in x) { x.led13 = false; x.ledPower = false; } if ('led25' in x) x.led25 = false; if ('ledBuiltIn' in x) { x.ledBuiltIn = false; x.ledPower = false; } if ('leds' in x) x.leds = {}; if (x.tagName === 'WOKWI-7SEGMENT') x.values = [0, 0, 0, 0, 0, 0, 0, 0]; }
   tools();
 }
-export function leaveTaller() { stop(); }
-export const _t = { T, draw: () => draw(), useExample, start, stop, tapPin, addPart, measure: () => measure(), paint: () => paintWires(), importDiagram, loadDesign };
+export function leaveTaller() { stop(); if (R && R.pv) { R.pv.dispose(); R.pv = null; } if (T.util) T.util.safe().catch(() => {}); }
+export const _t = { T, draw: () => draw(), useExample, start, stop, tapPin, addPart, measure: () => measure(), paint: () => paintWires(), importDiagram, loadDesign, getPlant: () => getPlant(), loadPlant: id => loadExamplePlant(id), autoAssign: () => autoAssign(), writeProgram: () => writeProgram(), setMode: m => setMode(m) };
 
 /* ---------- El profe: monta el circuito por ti o te lo explica ---------- */
 function catalogText() {
@@ -565,4 +571,87 @@ function realUsb(b) {
       act('■ Parar', () => T.real.stop()), act('⏏ Desconectar', async () => { await T.real.close(); T.real = null; say('Desconectada.\n'); }));
     if (libs().length) row.append(el('small', { class: 'note' }, `Tu programa usa ${libs().join(', ')}: al grabar, también se copian a la placa.`)); };
   render(); box.append(row, mon, el('p', { class: 'note' }, b.engine === 'shim' ? `Ojo: en la ${b.name} real tu código corre en su propio MicroPython (aquí lo simulamos sobre un RP2040), así que el resultado es el mismo salvo diferencias de tiempos.` : 'Es el mismo MicroPython que en el simulador.')); return box;
+}
+
+/* ---------- 🏭 Planta: una línea de producción en 3D que tu placa (simulada o de verdad, con el útil) controla ---------- */
+function setMode(m) { T.mode = m; save(); draw(); }
+function getPlant() {
+  if (T.plantObj) return T.plantObj; let d = null; try { d = JSON.parse(localStorage.getItem(PKEY) || 'null'); } catch (e) {}
+  const P = T.plantObj = new Plant(d || undefined); if (!d) { const ex = PLANTS[0]; ex.build(P); P.exId = ex.id; P.title = ex.title; autoAssign(true, 'sim'); autoAssign(true, 'util'); } return P; }
+function savePlant() { try { localStorage.setItem(PKEY, JSON.stringify(T.plantObj.toJSON())); } catch (e) {} }
+async function mountPlant(host) {
+  try { const { plantView } = await import('./taller/plant3d.js'); const P = getPlant();
+    const pv = await plantView({ plant: P, pinOptions, getIO: plantIOFor, isRunning: () => P.ctl === 'util' ? !!(T.util && T.util.connected) : !!T.runner && !T.paused, onChange: savePlant, controllerBar, clock: () => P.ctl === 'sim' && T.runner ? T.runner.timeUs() / 1e6 : null });
+    if (!host.isConnected) { pv.dispose(); return; } host.innerHTML = ''; host.append(pv.el); R.pv = pv;
+  } catch (e) { host.innerHTML = ''; host.append(el('div', { class: 'empty' }, 'No se pudo abrir la vista 3D: ' + e.message)); }
+}
+const boardDigital = b => b.engine === 'avr' ? [...UNO_PINS, ...(b.extraPins || [])] : mcuPins(b);
+function pinOptions(dir, type) {
+  const P = getPlant();
+  if (P.ctl === 'util') { const L = dir === 'in' ? (type === 'a' ? UTIL_CH.toDut.a : type === 'enc' ? UTIL_CH.toDut.enc : UTIL_CH.toDut.d) : (type === 'pwm' ? [...UTIL_CH.fromDut.pwm, ...UTIL_CH.fromDut.d] : UTIL_CH.fromDut.d);
+    const say = { DO: 'salida digital del útil', AO: 'tensión del útil', ENC: 'encoder A/B/Z del útil', DI: 'entrada digital del útil', PW: 'PWM medido en DI', AI: 'entrada analógica del útil' };
+    return L.map(c => [c, `${c} · ${say[c.replace(/\d+$/, '')]}`]); }
+  const b = BOARDS[T.board]; const pins = dir === 'in' && type === 'a' ? analogPins(b) : boardDigital(b).filter(p => dir === 'in' || !inOnly(b, p));
+  return pins.map(p => [p, boardPinLabel(b, p)]); }
+const inOnly = (b, pin) => (b.inputOnly || []).includes(keyOf(b, pin)); // pines que solo pueden ser entrada (ESP32: 34-39)
+// Conecta las señales a pines libres: primero las que usa el programa de ejemplo, luego el resto
+function autoAssign(quiet, ctl) {
+  const P = getPlant(); ctl = ctl || P.ctl; const map = P.maps[ctl]; for (const k of Object.keys(map)) delete map[k];
+  const sigs = P.signals(); const want = PLANT_SIGNALS[P.exId] ? [...PLANT_SIGNALS[P.exId], ...(P.exId === 'clasificadora' ? ['CS1.hay'] : [])] : sigs.filter(s => s[1] === 'in' || s[2] !== 'pwm').map(s => s[0]);
+  let skipped = 0;
+  if (ctl === 'util') { const n = { DO: 0, AO: 0, DI: 0, ENC: 0 };
+    for (const k of want) { const s = sigs.find(x => x[0] === k); if (!s) continue; const [, dir, type] = s; let ch = null;
+      if (dir === 'in') ch = type === 'a' ? (n.AO < 4 ? 'AO' + n.AO++ : null) : type === 'enc' ? (n.ENC++ ? null : 'ENC') : (n.DO < 8 ? 'DO' + n.DO++ : null);
+      else ch = n.DI < 8 ? (type === 'pwm' ? 'PW' : 'DI') + n.DI++ : null;
+      if (ch) map[k] = ch; else skipped++; } }
+  else { const b = BOARDS[T.board]; const bp = T.circuit && boardPart(); const used = new Set(); if (bp) for (const c of T.circuit.connections) for (const ref of [c[0], c[1]]) { const [id, pin] = ref.split(':'); if (id === bp.id) used.add(pin); }
+    const ana = analogPins(b).filter(p => !used.has(p)); const ser = b.engine === 'avr' ? ['0', '1'] : [];
+    const dig = boardDigital(b).filter(p => !used.has(p) && !ser.includes(p)); const digi = [...dig.filter(p => !ana.includes(p)), ...dig.filter(p => ana.includes(p))]; const taken = new Set();
+    for (const k of want) { const s = sigs.find(x => x[0] === k); if (!s) continue; const [, dir, type] = s; const pool = dir === 'in' && type === 'a' ? ana : digi; const pin = pool.find(p => !taken.has(p) && (dir === 'in' || !inOnly(b, p)));
+      if (pin) { map[k] = pin; taken.add(pin); } else skipped++; } }
+  savePlant(); if (!quiet) { if (R && R.pv) R.pv.panel(); toast(skipped ? `Conectadas; ${skipped} señales no caben en ${ctl === 'util' ? 'el útil' : 'esta placa'}` : 'Señales conectadas a pines libres', 1800); }
+}
+function writeProgram() {
+  const P = getPlant(); if (!hasProgram(P.exId)) return toast('Esta planta no es un ejemplo: escribe tu programa (las señales y sus pines están en la lista)', 2500);
+  const r = plantProgram(P.exId, P, T.board); if (!r) return; if (T.runner) stop(); T.code = r.code; save(); if (R && R.ed) R.ed.value = r.code;
+  toast(r.missing.length ? `Programa escrito; faltan por conectar: ${r.missing.join(', ')}` : 'Programa escrito en el editor: pulsa ▶ Simular', 2200); }
+function loadExamplePlant(id) {
+  const ex = PLANTS.find(p => p.id === id); if (!ex) return; const P = getPlant(); const ctl = P.ctl; P.load({ ctl }); ex.build(P); P.exId = ex.id; P.title = ex.title; autoAssign(true, 'sim'); autoAssign(true, 'util'); savePlant();
+  if (R && R.pv) R.pv.refresh(); }
+// Puente con la placa simulada: los sensores fuerzan sus pines, los actuadores se leen del pin (nivel o ciclo de trabajo)
+function plantIOFor() { const P = getPlant(); if (P.ctl === 'util') return utilIO(P); if (!T.runner) return null; return T.pio || (T.pio = simIO(T.runner, P)); }
+function simIO(runner, P) {
+  const cache = {}, enc = {}, lvl = {}; const typeOf = k => (P.signals().find(s => s[0] === k) || [])[2];
+  return {
+    out: k => { const pin = P.map[k]; if (!pin) return false; if (typeOf(k) === 'pwm') { const d = runner.duty(pin); return d.rate > 0 ? d.duty : (runner.level(pin).out ? 1 : 0); } return !!runner.level(pin).out; },
+    in: (k, v) => { const pin = P.map[k]; if (!pin) return; T.forced && T.forced.add(pin);
+      if (typeof v === 'number') { if (cache[k] == null || Math.abs(cache[k] - v) > 0.005) { cache[k] = v; runner.setAnalog(pin, v); } }
+      else { const b = !!v; if (cache[k] !== b) { cache[k] = b; runner.setInput(pin, b); } } },
+    // Encoder: los flancos que tocan en este paso, repartidos en el tiempo con alarmas del reloj simulado
+    enc: (k, rate, pos) => { const pin = P.map[k]; if (!pin) return; T.forced && T.forced.add(pin); const e = Math.floor(pos * 2); if (enc[k] == null) { enc[k] = e; return; } const n = Math.abs(e - enc[k]); enc[k] = e; const m = Math.min(n, 400);
+      for (let i = 0; i < m; i++) runner.after(Math.round((i + 0.5) * 8333 / m), () => { lvl[k] = !lvl[k]; runner.setInput(pin, lvl[k]); }); },
+  }; }
+function utilIO(P) { const U = T.util; if (!U || !U.connected) return null;
+  return { out: k => { const ch = P.map[k]; return ch ? U.get(ch) : false; }, in: (k, v) => { const ch = P.map[k]; if (ch) U.set(ch, v); }, enc: (k, rate) => { if (P.map[k] === 'ENC') U.set('ENC', rate); } }; }
+function controllerBar() {
+  const P = getPlant(); const b = BOARDS[T.board]; const box = el('div', { class: 'pl-ctl' });
+  const sayMon = t => { T.serial = (T.serial || '') + t; if (R && R.mon) { R.mon.textContent = T.serial.slice(-6000); R.mon.scrollTop = R.mon.scrollHeight; } };
+  const act = (label, fn, cls = 'mini-b') => btn(label, async e => { const bt = e.currentTarget; bt.disabled = true; try { await fn(); } catch (er) { toast('❌ ' + er.message, 3000); sayMon('\n❌ ' + er.message + '\n'); } bt.disabled = false; R.pv && R.pv.panel(); }, cls);
+  const setCtl = c => { if (P.ctl === c) return; P.ctl = c; if (!Object.keys(P.map).length) autoAssign(true); savePlant(); R.pv && R.pv.panel(); };
+  const exSel = el('select', { class: 'pl-sel', on: { change: e => { if (e.target.value) loadExamplePlant(e.target.value); } } }, el('option', { value: '' }, '📚 Cargar una planta de ejemplo…'), ...PLANTS.map(p => el('option', { value: p.id }, p.title)));
+  box.append(el('div', { class: 'tl-seg' }, btn(`🧪 ${b.name} simulada`, () => setCtl('sim'), 'mini-b' + (P.ctl === 'sim' ? ' on' : '')), btn('🔌 Placa real (útil)', () => setCtl('util'), 'mini-b' + (P.ctl === 'util' ? ' on' : ''))));
+  if (P.ctl === 'sim') box.append(el('p', { class: 'muted' }, `Pulsa ▶ Simular: la ${b.name} ejecuta el programa del editor y mueve la planta. Los sensores entran por sus pines; los motores y cilindros salen de ellos. También lo ves en 📈.`));
+  else { const U = T.util; const on = U && U.connected;
+    box.append(el('p', { class: 'muted' }, on ? `Útil conectado${U.id ? ' · ' + U.id.replace(/^ID /, '') : ''}. Tu placa de verdad (cableada al útil) manda; la planta reacciona en tiempo real.` : 'Tu placa de verdad (STM32, ESP32, Arduino, PLC…) ejecuta su programa. El útil HIL le da los sensores de la planta y lee sus salidas. Conéctalo por USB.'));
+    if (!webSerialOk()) box.append(el('p', { class: 'warn' }, 'Este navegador no tiene Web Serial: usa Chrome o Edge en el ordenador.'));
+    else box.append(el('div', { class: 'pl-row' },
+      on ? act('⏏ Desconectar', async () => { await U.close(); }) : act('🔌 Conectar el útil', async () => { T.util = new UtilLink(); T.util.log = sayMon; await T.util.connect(); sayMon('Útil conectado.\n'); }, 'mini-b on'),
+      act('⬇ Instalar firmware', async () => { if (T.util && T.util.connected) await T.util.close(); const code = await (await fetch(FIRMWARE_URL)).text(); const rb = new RealBoard(sayMon); sayMon('Grabando el firmware del útil (main.py)…\n'); await rb.connect(); await rb.save(code, 'main.py'); await rb.close(); sayMon('✅ Firmware grabado. Ya puedes «Conectar el útil».\n'); }),
+      on ? act('🛑 Todo a reposo', async () => { await U.safe(); }) : '')); }
+  box.append(el('div', { class: 'pl-row' }, btn('⚡ Conectar señales solas', () => autoAssign(), 'mini-b'), P.ctl === 'sim' && hasProgram(P.exId) ? btn('📝 Escribir el programa', writeProgram, 'mini-b') : '',
+    btn('💾', () => download(new Blob([JSON.stringify(P.toJSON(), null, 1)], { type: 'application/json' }), (P.title || 'planta').replace(/\W+/g, '-').toLowerCase() + '.planta.json'), 'mini-b'),
+    btn('📂', () => { const i = el('input', { type: 'file', accept: '.json,application/json', on: { change: async e => { const f = e.target.files[0]; if (!f) return; try { P.load(JSON.parse(await f.text())); savePlant(); R.pv && R.pv.refresh(); } catch (er) { toast('Ese archivo no es una planta', 1800); } } } }); i.click(); }, 'mini-b'),
+    btn('🆕', async () => { if (!(await confirmBox('¿Empezar una planta vacía?'))) return; P.load({ ctl: P.ctl }); P.title = 'Mi planta'; savePlant(); R.pv && R.pv.refresh(); }, 'mini-b')), exSel);
+  if (P.exId) { const ex = PLANTS.find(p => p.id === P.exId); if (ex) box.append(el('p', { class: 'muted' }, ex.about)); }
+  return box;
 }
