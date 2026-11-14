@@ -34,8 +34,8 @@ class Base {
 /* ---------- Arduino Uno ---------- */
 export const UNO_PINS = [...Array(14).keys()].map(String).concat(['A0', 'A1', 'A2', 'A3', 'A4', 'A5']);
 export class AvrRunner extends Base {
-  static async create(hex) { const A = await import('../vendor/avr8js.js'); return new AvrRunner(A, hex); }
-  constructor(A, hex) {
+  static async create(hex, opts = {}) { const A = await import('../vendor/avr8js.js'); return new AvrRunner(A, hex, opts); }
+  constructor(A, hex, opts = {}) {
     super(); this.A = A; this.F = 16e6;
     const prog = new Uint16Array(0x8000 / 2); loadHex(hex, new Uint8Array(prog.buffer));
     const cpu = this.cpu = new A.CPU(prog);
@@ -43,7 +43,7 @@ export class AvrRunner extends Base {
     this.ports = { B: new A.AVRIOPort(cpu, A.portBConfig), C: new A.AVRIOPort(cpu, A.portCConfig), D: new A.AVRIOPort(cpu, A.portDConfig) };
     this.usart = new A.AVRUSART(cpu, A.usart0Config, this.F); this.usart.onByteTransmit = b => this.serial(String.fromCharCode(b));
     this.adc = new A.AVRADC(cpu, A.adcConfig);
-    this.pins = UNO_PINS;
+    this.pins = opts.pins || UNO_PINS;
     const map = this.map = {}; for (let i = 0; i < 8; i++) map[String(i)] = ['D', i]; for (let i = 8; i < 14; i++) map[String(i)] = ['B', i - 8]; for (let i = 0; i < 6; i++) map['A' + i] = ['C', i];
     const byPort = { B: [], C: [], D: [] }; for (const [pin, [p, b]] of Object.entries(map)) byPort[p][b] = pin;
     for (const [p, port] of Object.entries(this.ports)) port.addListener((v, old) => { const ch = v ^ old; if (!ch) return; const t = this.timeUs(); for (let b = 0; b < 8; b++) if (ch & (1 << b) && byPort[p][b] != null) this._edge(byPort[p][b], !!(v & (1 << b)), t); });
@@ -72,51 +72,73 @@ export const PICO_PINS = [...Array(23).keys()].map(i => 'GP' + i).concat(['GP25'
 let UF2 = null;
 export const setFirmware = b => { UF2 = b; };
 export class PicoRunner extends Base {
-  static async create(code) {
+  // opts: { map: pata → GPIO, pins: patas de E/S, prelude: código de soporte (placas «shim»), adc: pata → canal }
+  static async create(code, opts = {}) {
     const R = await import('../vendor/rp2040js.js');
     if (!UF2) { // firmware de MicroPython: binario si el hosting lo sirve; si no (p. ej. dentro de Claude), una copia en base64
       const r = await fetch(new URL('../../taller/micropython-rp2040.bin', import.meta.url)).catch(() => null);
       if (r && r.ok && !/text\/html/.test(r.headers.get('content-type') || '')) UF2 = new Uint8Array(await r.arrayBuffer());
       else { const m = await import('../../taller/micropython-rp2040.b64.js').catch(() => null); if (!m) throw new Error('No encuentro el firmware de MicroPython'); const bin = atob(m.default); UF2 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) UF2[i] = bin.charCodeAt(i); } }
-    return new PicoRunner(R, code);
+    return new PicoRunner(R, code, opts);
   }
-  constructor(R, code) {
-    super(); this.R = R; this.code = code; this.pins = PICO_PINS;
+  constructor(R, code, opts = {}) {
+    super(); this.R = R; this.opts = opts; this.pins = opts.pins || PICO_PINS; this.map = opts.map || null;
+    this.pre = opts.prelude || ''; this.offset = this.pre ? this.pre.split('\n').length - 1 : 0; this.code = this.pre + code; this.av = null;
     const sim = this.sim = new R.Simulator(); const mcu = this.mcu = sim.rp2040; mcu.loadBootrom(R.bootromB1);
     try { mcu.logger = new R.ConsoleLogger(R.LogLevel.Error); } catch (e) {}
     for (let o = 0; o + 512 <= UF2.length; o += 512) { const v = new DataView(UF2.buffer, UF2.byteOffset + o, 512); if (v.getUint32(0, true) !== 0x0a324655) continue;
       mcu.flash.set(UF2.subarray(o + 32, o + 32 + v.getUint32(16, true)), v.getUint32(12, true) - 0x10000000); }
-    for (let i = 0; i < 30; i++) { const pin = 'GP' + i; mcu.gpio[i] && mcu.gpio[i].addListener(st => { const S = R.GPIOPinState; if (st === S.High || st === S.Low) this._edge(pin, st === S.High, this.timeUs()); }); }
+    // Cada GPIO del chip avisa a las patas de la placa que cuelgan de él
+    const names = {}; if (this.map) for (const [pin, gp] of Object.entries(this.map)) (names[gp] = names[gp] || []).push(pin); else for (let i = 0; i < 30; i++) names[i] = ['GP' + i];
+    for (let i = 0; i < 30; i++) { const ns = names[i]; if (!ns || !mcu.gpio[i]) continue; mcu.gpio[i].addListener(st => { const S = R.GPIOPinState; if (st === S.High || st === S.Low) { mcu.gpio[i].setInputValue(st === S.High); /* el pad lee lo que la salida pone, como en el chip */ const t = this.timeUs(); for (const n of ns) this._edge(n, st === S.High, t); } }); }
     const cdc = this.cdc = new R.USBCDC(mcu.usbCtrl); this.buf = ''; this.booted = false;
     cdc.onDeviceConnected = () => { cdc.sendSerialByte(13); };
     // REPL «raw» de MicroPython: no repite el código; la salida llega tras «OK» y los errores tras el primer \x04.
     this.phase = 'boot';
     cdc.onSerialData = v => this._rx(new TextDecoder().decode(v));
   }
+  _gp(pin) { if (this.map) { const g = this.map[pin]; return g == null ? -1 : g; } return /^GP\d+$/.test(pin) ? +pin.slice(2) : -1; }
+  // La capa de soporte dice dónde guarda los valores analógicos: «ESC ] PLATO dirección BEL». No se enseña.
+  _out(s) {
+    this._mk = (this._mk || '') + s; let out = '';
+    for (;;) { const i = this._mk.indexOf('\x1b]PLATO'); if (i < 0) { const j = this._mk.lastIndexOf('\x1b'); if (j >= 0 && j > this._mk.length - 12) { out += this._mk.slice(0, j); this._mk = this._mk.slice(j); } else { out += this._mk; this._mk = ''; } break; }
+      const k = this._mk.indexOf('\x07', i); if (k < 0) { out += this._mk.slice(0, i); this._mk = this._mk.slice(i); break; }
+      this.av = +this._mk.slice(i + 8, k).trim() - 0x20000000; out += this._mk.slice(0, i); this._mk = this._mk.slice(k + 1).replace(/^\r?\n/, ''); }
+    if (out) this.serial(out.replace(/\r/g, ''));
+  }
+  // Los errores cuentan las líneas desde el principio (soporte incluido): las devuelvo a las de tu programa.
+  _fixErr(e) { if (!this.offset) return e; return e.replace(/File "<stdin>", line (\d+)/g, (m, n) => +n > this.offset ? `File "<stdin>", line ${+n - this.offset}` : `File "soporte de la placa", line ${n}`); }
+  get rgb() { if (this.av == null) return null; const m = this.mcu.sram; const u = i => m[this.av + i * 2] | m[this.av + i * 2 + 1] << 8; return u(39) ? { r: u(36), g: u(37), b: u(38) } : null; }
   _rx(s) {
     if (this.phase === 'boot') { this.buf += s; if (this.buf.includes('>>>')) { this.phase = 'raw'; this.buf = ''; this._send('\x01'); } return; }
     if (this.phase === 'raw') { this.buf += s; if (this.buf.includes('raw REPL') && this.buf.trimEnd().endsWith('>')) { this.phase = 'ok'; this.buf = ''; this._send(this.code.replace(/\r/g, '').replace(/\t/g, '    ') + '\n'); this._send('\x04'); } return; }
     if (this.phase === 'ok') { this.buf += s; const i = this.buf.indexOf('OK'); if (i < 0) return; const rest = this.buf.slice(i + 2); this.buf = ''; this.phase = 'out'; if (rest) this._rx(rest); return; }
-    if (this.phase === 'out') { const k = s.indexOf('\x04'); if (k < 0) { this.serial(s.replace(/\r/g, '')); return; } if (k) this.serial(s.slice(0, k).replace(/\r/g, '')); this.phase = 'err'; this.err = ''; const rest = s.slice(k + 1); if (rest) this._rx(rest); return; }
-    if (this.phase === 'err') { const k = s.indexOf('\x04'); this.err += k < 0 ? s : s.slice(0, k); if (k >= 0) { this.phase = 'done'; const e = this.err.replace(/\r/g, '').trim(); if (e && this.onError) this.onError(new Error(e)); else if (this.onDone) this.onDone(); } }
+    if (this.phase === 'out') { const k = s.indexOf('\x04'); if (k < 0) { this._out(s); return; } if (k) this._out(s.slice(0, k)); this.phase = 'err'; this.err = ''; const rest = s.slice(k + 1); if (rest) this._rx(rest); return; }
+    if (this.phase === 'err') { const k = s.indexOf('\x04'); this.err += k < 0 ? s : s.slice(0, k); if (k >= 0) { this.phase = 'done'; const e = this._fixErr(this.err.replace(/\r/g, '').trim()); if (e && this.onError) this.onError(new Error(e)); else if (this.onDone) this.onDone(); } }
   }
   // El FIFO USB de la Pico tiene 512 bytes: mando el programa poco a poco para no perder nada.
   _send(s) { (this.txq = this.txq || []).push(...new TextEncoder().encode(s)); this._flush(); }
   _flush() { const q = this.txq; if (!q || !q.length) return; const f = this.cdc.txFIFO; let i = 0; while (i < q.length && !f.full) this.cdc.sendSerialByte(q[i++]); q.splice(0, i); }
   timeUs() { return this.mcu.clock.nanos / 1000; }
-  level(pin) { const g = this.mcu.gpio[+pin.slice(2)]; if (!g) return { out: null }; const S = this.R.GPIOPinState; const v = g.value;
+  level(pin) { const g = this.mcu.gpio[this._gp(pin)]; if (!g) return { out: null }; const S = this.R.GPIOPinState; const v = g.value;
     return v === S.High ? { out: true } : v === S.Low ? { out: false } : { out: null, pullup: v === S.InputPullUp, pulldown: v === S.InputPullDown }; }
-  setInput(pin, v) { const g = this.mcu.gpio[+pin.slice(2)]; if (g) g.setInputValue(!!v); }
-  setAnalog(pin, volts) { const ch = { GP26: 0, GP27: 1, GP28: 2 }[pin]; if (ch != null) this.mcu.adc.channelValues[ch] = Math.max(0, Math.min(4095, Math.round(volts / 3.3 * 4095))); }
+  setInput(pin, v) { const g = this.mcu.gpio[this._gp(pin)]; if (g) g.setInputValue(!!v); }
+  setAnalog(pin, volts) {
+    const adc = this.opts.adc; const x = Math.max(0, Math.min(1, volts / 3.3));
+    if (adc) { const ch = adc[pin]; if (ch == null || this.av == null) return; const v = Math.round(x * 65535), m = this.mcu.sram; m[this.av + ch * 2] = v & 255; m[this.av + ch * 2 + 1] = v >> 8; return; }
+    const ch = this._gp(pin) - 26; if (ch >= 0 && ch < 4) this.mcu.adc.channelValues[ch] = Math.round(x * 4095); }
   write(str) { this._send(str); }
   after(us, fn) { const a = this.sim.clock.createAlarm(() => fn()); a.schedule(Math.max(1, us) * 1000); }
   get vcc() { return 3.3; }
-  start() { // a tiempo real: el reloj simulado no adelanta al de verdad (si no, sleep() no duraría nada)
-    this.running = true; this.mcu.core.PC = 0x10000000; const { sim, mcu } = this; const clock = sim.clock; const t0 = NOW(), n0 = clock.nanos; const cyc = 1e9 / 125e6;
-    const step = () => { if (!this.running) return; this._flush(); const until = n0 + (NOW() - t0) * 1e6; let guard = 0;
-      try { while (clock.nanos < until && guard++ < 2e6) { if (mcu.core.waiting) { const nx = Math.min(clock.nanosToNextAlarm, until - clock.nanos); if (nx <= 0) break; clock.tick(nx); } else clock.tick(mcu.core.executeInstruction() * cyc); } }
+  start() {
+    // Mientras MicroPython arranca y recibe el programa, a toda máquina; después, a tiempo real
+    // (el reloj simulado no adelanta al de verdad: si no, sleep() no duraría nada).
+    this.running = true; this.mcu.core.PC = 0x10000000; const { sim, mcu } = this; const clock = sim.clock; let t0 = NOW(), n0 = clock.nanos; const cyc = 1e9 / 125e6;
+    const step = () => { if (!this.running) return; this._flush(); const fast = this.phase !== 'out' && this.phase !== 'err' && this.phase !== 'done';
+      if (fast) { t0 = NOW(); n0 = clock.nanos; } const until = fast ? clock.nanos + 50e6 : n0 + (NOW() - t0) * 1e6; let guard = 0;
+      try { while (clock.nanos < until && guard++ < 3e6) { if (fast && !(guard & 2047)) this._flush(); if (mcu.core.waiting) { const nx = Math.min(clock.nanosToNextAlarm, until - clock.nanos); if (nx <= 0) break; clock.tick(nx); } else clock.tick(mcu.core.executeInstruction() * cyc); } }
       catch (e) { this.running = false; this.onError && this.onError(e); return; }
-      this.timer = setTimeout(step, 4); };
+      this.timer = setTimeout(step, fast ? 0 : 4); };
     step();
   }
   stop() { this.running = false; clearTimeout(this.timer); }

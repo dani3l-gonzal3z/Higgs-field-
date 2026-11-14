@@ -80,12 +80,21 @@ Viene con un ejemplo, **Colorín**: snacks crujientes de seis verduras, cada col
 
 ## 🔌 Taller de electrónica
 
-Monta un circuito con Arduino Uno o Raspberry Pi Pico, prográmalo y simúlalo antes de tocar un cable; luego llévalo a la mesa.
+Monta un circuito, prográmalo y simúlalo antes de tocar un cable; luego llévalo a la mesa. 26 placas:
 
-- **Pico + MicroPython, todo en el navegador** (también dentro de Claude y en el móvil): escribes Python y corre de verdad en un RP2040 emulado.
-- **Arduino Uno + C++**: el emulador corre en el navegador; para compilar hace falta Plató abierto como aplicación (instala «Taller: compilar y grabar» en IA local).
+| Familia | Placas | Cómo se simula |
+|---|---|---|
+| Arduino | Uno, Nano | chip ATmega328P emulado; C++ (compilar necesita Plató como aplicación) |
+| Raspberry Pi Pico | Pico, Pico W, Nano RP2040 Connect | chip RP2040 emulado con MicroPython oficial, en el navegador |
+| ESP32 | DevKit V1, DevKitC V4, S3 DevKitC-1, C3 DevKitM-1, C3 SuperMini, C6 DevKitC-1, XIAO C3, XIAO S3, Lolin32 Lite, Nano ESP32, ESP32-CAM | MicroPython (machine, neopixel, network…) |
+| STM32 | Blue Pill, Black Pill, Nucleo-64 F411RE, Pyboard v1.1 | MicroPython (machine y pyb, PWM con temporizadores) |
+| Robótica y Linux | Raspberry Pi 4 y 5, RDK X3 y X5, Jetson Orin Nano, KickPi K1 | Python con RPi.GPIO / Hobot.GPIO / Jetson.GPIO, gpiozero o wiringpi |
+
+- «Chip emulado» = el procesador se emula instrucción a instrucción. «Simulada» = tu programa corre en MicroPython sobre un RP2040 emulado, con una **capa de soporte** que imita los pines y librerías de esa placa (respeta detalles como los pines solo-entrada del ESP32 o que Hobot.GPIO solo tiene PWM en los pines 32 y 33). No se simulan las radios, cámaras ni aceleradores de IA.
+- **🔩 Por dentro**: patillaje de la placa, su programa de fábrica y la capa de soporte, que puedes leer y cambiar.
+- Todo lo que es Python corre en el navegador (también dentro de Claude y en el móvil).
 - Piezas: LEDs, LED RGB, resistencias, botones, interruptor, potenciómetro, sensor de luz, zumbador, servo, 7 segmentos, LCD 16×2, sensor ultrasónico y protoboards (las patas se clavan solas en los agujeros).
-- Avisos de la vida real: LED sin resistencia, cortocircuitos, 5 V en la Pico.
+- Avisos de la vida real: LED sin resistencia, cortocircuitos, 5 V en placas de 3,3 V.
 - **El profe**: «quiero un semáforo con botón para peatones» → circuito + código + pasos. Y te explica el circuito que hayas montado.
 - **A la mesa**: lista de la compra, montaje paso a paso y grabación por USB en tu placa.
 - Abre y guarda proyectos de Wokwi y Velxio (`diagram.json`).
@@ -218,7 +227,7 @@ js/local.js         servicios del aparato (FFmpeg, voces, proxy)
 js/learn.js         Aprender: documentos, clases, preguntas en directo
 js/localai.js       Ajustes → IA local: packs, modelos de Ollama, agentes
 js/taller.js        Taller de electrónica (vista)
-js/taller/          circuito y red eléctrica, motores Uno y Pico, ejemplos
+js/taller/          placas y su capa de soporte, circuito y red eléctrica, motores, ejemplos
 mcp/taller.mjs      compilar con arduino-cli y grabar la placa por USB
 taller/             firmware MicroPython, arte de placas y protoboards, licencias
 js/recast.js        Recast local: máscara, generación y pegado

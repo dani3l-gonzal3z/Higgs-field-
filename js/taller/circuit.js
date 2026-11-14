@@ -1,9 +1,7 @@
 // Taller: catálogo de piezas, red eléctrica (nets) y evaluación "de verdad suficiente" para aprender.
 // El formato del circuito es el diagram.json de Wokwi/Velxio, así que se importa y exporta tal cual.
-export const BOARDS = {
-  uno: { type: 'wokwi-arduino-uno', id: 'uno', name: 'Arduino Uno', lang: 'cpp', vcc: 5 },
-  pico: { type: 'wokwi-pi-pico', id: 'pico', name: 'Raspberry Pi Pico', lang: 'python', vcc: 3.3 },
-};
+import { BOARDS, boardByType, powerOf, analogPins, PICO_PINS_ART } from './boards.js';
+export { BOARDS };
 // kind: cómo se comporta. label/hint: lo que ve la gente.
 export const PARTS = {
   'wokwi-led': { name: 'LED', icon: '💡', kind: 'led', attrs: { color: 'red' }, opts: { color: ['red', 'green', 'blue', 'yellow', 'white', 'orange'] }, pins: { A: 'ánodo + (pata larga)', C: 'cátodo − (pata corta)' }, real: 'LED de 5 mm' },
@@ -25,16 +23,12 @@ export const TYPE_ALIAS = { 'wokwi-breadboard': 'velxio-breadboard', 'wokwi-brea
 export const RES_OHMS = v => { const m = /^([\d.]+)\s*([kKmM]?)/.exec(String(v || '')); if (!m) return 1000; return +m[1] * (m[2].toLowerCase() === 'k' ? 1e3 : m[2].toLowerCase() === 'm' ? 1e6 : 1); };
 
 /* ---------- Placa Raspberry Pi Pico (arte de Velxio/Fritzing; patillaje a paso de 0,1" como el resto) ---------- */
-const K = 79 / 105; // del dibujo de Velxio (5 px/mm) al paso estándar de 9,6 px
-const PICO_PINS = [['GP0', 8, 17], ['GP1', 8, 30], ['GND.1', 8, 42], ['GP2', 8, 55], ['GP3', 8, 68], ['GP4', 8, 81], ['GP5', 8, 93], ['GND.2', 8, 106], ['GP6', 8, 119], ['GP7', 8, 131], ['GP8', 8, 144], ['GP9', 8, 157], ['GND.3', 8, 169], ['GP10', 8, 182], ['GP11', 8, 195], ['GP12', 8, 207], ['GP13', 8, 220], ['GND.4', 8, 233], ['GP14', 8, 246], ['GP15', 8, 258],
-  ['GP16', 97, 258], ['GP17', 97, 246], ['GND.5', 97, 233], ['GP18', 97, 220], ['GP19', 97, 207], ['GP20', 97, 195], ['GP21', 97, 182], ['GND.6', 97, 169], ['GP22', 97, 157], ['RUN', 97, 144], ['GP26', 97, 131], ['GP27', 97, 119], ['GND.7', 97, 106], ['GP28', 97, 93], ['ADC_VREF', 97, 81], ['3V3', 97, 68], ['3V3_EN', 97, 55], ['GND.8', 97, 42], ['VSYS', 97, 30], ['VBUS', 97, 17]]
-  .map(([name, x, y]) => ({ name, x: +(x * K).toFixed(2), y: +(y * K).toFixed(2), signals: [] }));
 export function definePico() {
   if (typeof customElements === 'undefined' || customElements.get('wokwi-pi-pico')) return;
   customElements.define('wokwi-pi-pico', class extends HTMLElement {
     constructor() { super(); this.attachShadow({ mode: 'open' }); this._led = false; }
     connectedCallback() { this.shadowRoot.innerHTML = `<style>:host{display:inline-block;line-height:0;position:relative}img{display:block;width:79px;height:200px}i{position:absolute;left:28px;top:8px;width:7px;height:5px;border-radius:2px;background:#3f3;box-shadow:0 0 8px 3px #3f3;opacity:0;transition:opacity .05s}</style><img src="${new URL('../../taller/art/pi-pico.svg', import.meta.url)}" draggable="false" alt="Raspberry Pi Pico"><i></i>`; }
-    get pinInfo() { return PICO_PINS; }
+    get pinInfo() { return PICO_PINS_ART; }
     set led25(v) { this._led = v; const i = this.shadowRoot && this.shadowRoot.querySelector('i'); if (i) i.style.opacity = v ? 1 : 0; }
     get led25() { return this._led; }
   });
@@ -52,8 +46,9 @@ export function staticNets(circuit, geo) {
     if (PARTS[t] && PARTS[t].kind === 'bb') { const groups = {}; for (const pin of pins) { const h = BB_HOLE.exec(pin.name), r = BB_RAIL.exec(pin.name); const g = h ? 'c' + h[1] + h[2] : r ? 'r' + r[1] : null; if (g) (groups[g] = groups[g] || []).push(pin.name); } for (const g of Object.values(groups)) for (let i = 1; i < g.length; i++) uf.u(p.id + ':' + g[0], p.id + ':' + g[i]); }
     if (t === 'wokwi-pushbutton') { uf.u(p.id + ':1.l', p.id + ':1.r'); uf.u(p.id + ':2.l', p.id + ':2.r'); }
     if (t === 'wokwi-7segment') uf.u(p.id + ':COM.1', p.id + ':COM.2');
-    if (t === 'wokwi-arduino-uno') { ['GND.2', 'GND.3'].forEach(g => uf.u(p.id + ':GND.1', p.id + ':' + g)); uf.u(p.id + ':A4', p.id + ':A4.2'); uf.u(p.id + ':A5', p.id + ':A5.2'); }
-    if (t === 'wokwi-pi-pico') for (let i = 2; i <= 8; i++) uf.u(p.id + ':GND.1', p.id + ':GND.' + i);
+    if (t === 'wokwi-arduino-uno') { uf.u(p.id + ':A4', p.id + ':A4.2'); uf.u(p.id + ':A5', p.id + ':A5.2'); }
+    if (t === 'wokwi-arduino-nano') ['11', '12', '13'].forEach(n => uf.u(p.id + ':' + n, p.id + ':' + n + '.2'));
+    const brd = boardByType(t); if (brd) { const first = {}; for (const pin of Object.keys(brd.power || {})) { const c = powerOf(brd, pin); if (first[c]) uf.u(p.id + ':' + first[c], p.id + ':' + pin); else first[c] = pin; } }
   }
   // Patas clavadas en la protoboard (a menos de 4 px de un agujero)
   const holes = []; for (const p of parts) if ((PARTS[TYPE_ALIAS[p.type] || p.type] || {}).kind === 'bb') for (const pin of geo.pins[p.id] || []) holes.push({ id: p.id + ':' + pin.name, x: pin.ax, y: pin.ay });
@@ -64,16 +59,15 @@ export function staticNets(circuit, geo) {
 /* ---------- Evaluación en cada fotograma ---------- */
 // Devuelve el estado visual de cada pieza y avisos (LED sin resistencia, cortocircuito, 5 V en la Pico…).
 export function evaluate({ circuit, uf0, runner, board, ui }) {
-  const uf = uf0.clone(); const parts = circuit.parts; const B = board; const VCC = BOARDS[B.key].vcc; const warn = new Set(); const out = {};
+  const uf = uf0.clone(); const parts = circuit.parts; const B = BOARDS[board.key]; const VCC = B.vcc; const warn = new Set(); const out = {};
   for (const p of parts) { const t = p.type, st = ui[p.id] || {};
     if (t === 'wokwi-pushbutton' && st.pressed) uf.u(p.id + ':1.l', p.id + ':2.l');
     if (t === 'wokwi-slide-switch') uf.u(p.id + ':2', p.id + ':' + (st.value ? '3' : '1')); }
   const net = id => uf.f(id);
-  // Fuentes fuertes por net
+  // Fuentes fuertes por net: la alimentación de la placa y sus pines de salida
   const drv = new Map(); const add = (n, v, src) => { const a = drv.get(n) || []; a.push({ v, src }); drv.set(n, a); };
-  const bid = B.id;
-  if (B.key === 'uno') { add(net(bid + ':5V'), 5, '5V'); add(net(bid + ':3.3V'), 3.3, '3.3V'); add(net(bid + ':GND.1'), 0, 'GND'); }
-  else { add(net(bid + ':3V3'), 3.3, '3V3'); add(net(bid + ':VBUS'), 5, 'VBUS'); add(net(bid + ':VSYS'), 5, 'VSYS'); add(net(bid + ':GND.1'), 0, 'GND'); }
+  const bid = board.id;
+  for (const [pin, v] of Object.entries(B.power || {})) add(net(bid + ':' + pin), v, pin);
   const mcuPins = runner ? runner.pins : []; const duty = {};
   for (const pin of mcuPins) { const l = runner.level(pin); if (l.out == null) continue; const d = runner.duty(pin); duty[pin] = d; const pwm = d.rate > 30; const v = pwm ? (d.duty > 0.01 ? VCC : 0) : l.out ? VCC : 0; add(net(bid + ':' + pin), v, 'pin:' + pin); }
   // Potenciómetro y sensor de luz actúan como fuentes en su salida
@@ -86,9 +80,9 @@ export function evaluate({ circuit, uf0, runner, board, ui }) {
   const res = parts.filter(p => p.type === 'wokwi-resistor').map(p => [net(p.id + ':1'), net(p.id + ':2'), RES_OHMS(p.attrs && p.attrs.value)]);
   const eff = n => { const s = strong(n); if (s != null) return { v: s, via: 'direct', n }; for (const [a, b, r] of res) { const o = a === n ? b : b === n ? a : null; if (o == null) continue; const s2 = strong(o); if (s2 != null) return { v: s2, via: 'res', r, n: o }; } return null; };
   // Entradas del microcontrolador
-  for (const pin of mcuPins) { const l = runner.level(pin); if (l.out != null) continue; const e = eff(net(bid + ':' + pin));
-    const isAnalog = B.key === 'uno' ? /^A[0-5]$/.test(pin) : /^GP2[6-8]$/.test(pin);
-    if (e) { runner.setInput(pin, e.v > VCC / 2); if (isAnalog) runner.setAnalog(pin, Math.min(VCC, e.v)); if (B.key === 'pico' && e.v > 3.6) warn.add(`⚠️ ${pin} recibe 5 V: la Pico real solo aguanta 3,3 V en sus pines.`); }
+  const analog = new Set(analogPins(B));
+  for (const pin of mcuPins) { const l = runner.level(pin); if (l.out != null) continue; const e = eff(net(bid + ':' + pin)); const isAnalog = analog.has(pin);
+    if (e) { runner.setInput(pin, e.v > VCC / 2); if (isAnalog) runner.setAnalog(pin, Math.min(VCC, e.v)); if (VCC < 4 && !B.tol5 && e.v > 3.6) warn.add(`⚠️ El pin ${pin} recibe 5 V: la ${B.name} real solo aguanta 3,3 V en sus pines.`); }
     else { runner.setInput(pin, l.pullup ? true : false); if (isAnalog) runner.setAnalog(pin, l.pullup ? VCC : 0); } }
   // Salidas visibles
   const pinOf = n => mcuPins.find(pin => net(bid + ':' + pin) === n);
@@ -102,9 +96,22 @@ export function evaluate({ circuit, uf0, runner, board, ui }) {
     else if (p.type === 'wokwi-7segment') { const c = net(id + ':COM.1'); out[id] = { values: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'DP'].map(s => bright(net(id + ':' + s), c).on ? 1 : 0) }; }
     else if (p.type === 'wokwi-buzzer') { const p2 = pinOf(net(id + ':2')) || pinOf(net(id + ':1')); const d = p2 && duty[p2]; const gnd = eff(net(id + ':1')); out[id] = { hasSignal: !!(d && d.rate > 40 && gnd && gnd.v < 0.5), freq: d ? d.rate / 2 : 0 }; }
   }
-  // Placa: LED de la placa
-  if (runner) { if (B.key === 'uno') { const l = runner.level('13'); const d = duty['13']; out[bid] = { led13: d && d.rate > 30 ? d.duty > 0.2 : !!l.out, ledPower: true }; } else { const l = runner.level('GP25'); out[bid] = { led25: !!l.out }; } }
+  // LEDs de la propia placa
+  if (runner) out[bid] = boardLeds(B, runner, duty);
   return { out, warn: [...warn], pinOf, net };
+}
+// Estado de los LEDs de la placa, con el nombre de propiedad que espera su dibujo
+export function boardLeds(B, runner, duty = {}) {
+  const lit = (ref, low) => { const l = runner.level(ref); const d = duty[ref]; const on = d && d.rate > 30 ? d.duty > 0.2 : !!l.out; return l.out == null && !(d && d.rate > 30) ? false : low ? !on : on; };
+  const ref = k => B.engine === 'avr' ? k : '#' + k; const L = B.led;
+  if (L && L.prop) return { [L.prop]: lit(ref(L.pin || L.key), L.low), ...(L.extra || {}) };
+  const o = {};
+  if (L) o[L.id || 'led'] = lit(ref(L.key), L.low);
+  if (B.flash) o.flash = lit(ref(B.flash));
+  for (const [id, k] of B.leds || []) o[id] = lit(ref(k));
+  if (B.rgbPins) { const c = k => (lit(ref(B.rgbPins[k]), B.rgbPins.low) ? 255 : 0); o.rgb = { r: c('r'), g: c('g'), b: c('b') }; }
+  if (B.rgb && runner.rgb) o.rgb = runner.rgb;
+  return { leds: o };
 }
 
 /* ---------- Pantalla LCD HD44780 en modo 4 bits (RS, E, D4-D7) ---------- */
@@ -133,7 +140,7 @@ export class HD44780 {
 
 /* ---------- Pasos para montarlo en la vida real ---------- */
 export function bom(circuit) {
-  const m = new Map(); for (const p of circuit.parts) { const t = TYPE_ALIAS[p.type] || p.type; const info = PARTS[t] || (Object.values(BOARDS).find(b => b.type === t) ? { real: Object.values(BOARDS).find(b => b.type === t).name } : { real: t });
+  const m = new Map(); for (const p of circuit.parts) { const t = TYPE_ALIAS[p.type] || p.type; const info = PARTS[t] || (boardByType(t) ? { real: boardByType(t).name } : { real: t });
     const k = info.real + (t === 'wokwi-resistor' ? ` de ${fmtOhms(p.attrs && p.attrs.value)}` : t === 'wokwi-led' ? ` ${COLOR_ES[(p.attrs && p.attrs.color) || 'red'] || ''}` : ''); m.set(k, (m.get(k) || 0) + 1); }
   const wires = circuit.connections.length; if (wires) m.set('Cables dupont macho-macho', wires);
   return [...m.entries()].map(([k, n]) => ({ item: k.trim(), n }));
@@ -142,7 +149,7 @@ export const COLOR_ES = { red: 'rojo', green: 'verde', blue: 'azul', yellow: 'am
 export const fmtOhms = v => { const o = RES_OHMS(v); return o >= 1e6 ? o / 1e6 + ' MΩ' : o >= 1e3 ? o / 1e3 + ' kΩ' : o + ' Ω'; };
 export function describePin(circuit, ref) {
   const [id, pin] = ref.split(':'); const p = circuit.parts.find(x => x.id === id); if (!p) return ref; const t = TYPE_ALIAS[p.type] || p.type;
-  const board = Object.values(BOARDS).find(b => b.type === t); if (board) return `el pin ${pin} de la ${board.name}`;
+  const board = boardByType(t); if (board) { const pw = powerOf(board, pin); return pw ? `el ${pw === 'gnd' ? 'GND' : pw === '5v' ? '5 V' : '3,3 V'} (pata ${pin}) de la ${board.name}` : board.flavor === 'linux' ? `el pin físico ${pin} de la ${board.name}` : `el pin ${pin} de la ${board.name}`; }
   const info = PARTS[t] || { name: t, pins: {} }; const label = (info.pins || {})[pin] || pin;
   if (info.kind === 'bb') return `el agujero ${pin} de la protoboard`;
   const extra = t === 'wokwi-led' ? ` ${COLOR_ES[(p.attrs && p.attrs.color) || 'red']}` : t === 'wokwi-resistor' ? ` de ${fmtOhms(p.attrs && p.attrs.value)}` : '';

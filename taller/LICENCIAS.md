@@ -9,6 +9,7 @@ El Taller se apoya en proyectos abiertos. Gracias a todos ellos.
 | Dibujo y comportamiento visual de las piezas | [@wokwi/elements](https://github.com/wokwi/wokwi-elements) + [lit](https://github.com/lit/lit) — `js/vendor/wokwi-elements.js` | MIT · BSD-3-Clause |
 | Protoboards (`<velxio-breadboard>`, `<velxio-breadboard-mini>`) | [Velxio](https://github.com/davidmonterocrespo24/velxio) — `js/vendor/velxio-breadboards.js` | AGPL-3.0 |
 | Arte de las protoboards y de la Pico | Fritzing vía Velxio — `taller/art/` (ver `ATTRIBUTION.md`) | CC-BY-SA 3.0 |
+| Dibujos y patillaje de las placas ESP32, STM32 y Pico W | [Velxio](https://github.com/davidmonterocrespo24/velxio) (`frontend/public/boards`, `Esp32Element.ts`, `Stm32BluePillElement.ts`) — `taller/art/boards/`, `js/taller/boards-art.js` | AGPL-3.0 |
 | Firmware de MicroPython para la Pico | [MicroPython](https://micropython.org) (copia de Velxio) — `taller/micropython-rp2040.bin` | MIT |
 | Programa de ejemplo ya compilado (Parpadeo) | Fixture de pruebas de Velxio — `taller/hex/blink.hex.txt` | AGPL-3.0 |
 
@@ -25,6 +26,9 @@ así que esa parte se distribuye bajo **AGPL-3.0** como Velxio.
 - El profe de Plató diseña el circuito y el código a partir de una frase y explica el circuito que tengas.
 - «A la mesa»: lista de la compra, montaje paso a paso cable a cable y grabación en la placa real por USB.
 - Compatible con el `diagram.json` de Wokwi y Velxio en los dos sentidos.
+- 26 placas con un solo motor: las que no se emulan a nivel de chip (ESP32, STM32, Raspberry Pi, RDK, Jetson, KickPi) corren su MicroPython/Python sobre el RP2040 emulado gracias a una capa de soporte que imita `machine`, `pyb`, `neopixel`, `network`, `RPi.GPIO`, `Hobot.GPIO`, `Jetson.GPIO`, `gpiozero` y `wiringpi`. La capa se ve y se edita desde la app (🔩 Por dentro) y respeta detalles de cada placa (pines solo-entrada, PWM solo por hardware, numeración BOARD/BCM/wPi).
+- El ADC de esas placas va por memoria compartida con el simulador, así que cualquier pin analógico de la placa real funciona (no solo los cuatro del RP2040).
+- En el RP2040 emulado, leer un pin de salida devuelve lo que la salida pone (como en el chip real), así que `led.value(not led.value())` parpadea.
 
 ## Reconstruir las librerías
 
@@ -35,4 +39,5 @@ git clone https://github.com/wokwi/wokwi-elements ref/wokwi-elements
 git clone https://github.com/lit/lit ref/lit
 git clone https://github.com/davidmonterocrespo24/velxio ref/velxio
 node scripts/build-taller-vendor.mjs ref        # necesita esbuild
+node scripts/build-taller-boards.mjs ref        # dibujos y patillaje de las placas (de Velxio)
 ```

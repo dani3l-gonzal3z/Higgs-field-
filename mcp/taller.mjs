@@ -9,7 +9,7 @@ import { AI, envPy } from './localai.mjs';
 const WIN = process.platform === 'win32', MAC = process.platform === 'darwin', ARM = process.arch === 'arm64';
 const DIR = path.join(AI, 'arduino'); const BIN = path.join(DIR, WIN ? 'arduino-cli.exe' : 'arduino-cli');
 const ENV = { ARDUINO_DIRECTORIES_DATA: path.join(DIR, 'data'), ARDUINO_DIRECTORIES_USER: path.join(DIR, 'user'), ARDUINO_DIRECTORIES_DOWNLOADS: path.join(DIR, 'staging'), ARDUINO_UPDATER_ENABLE_NOTIFICATION: 'false' };
-const FQBN = { uno: 'arduino:avr:uno' };
+const FQBN = { uno: 'arduino:avr:uno', nano: 'arduino:avr:nano:cpu=atmega328' };
 export const tallerAsset = () => `arduino-cli_latest_${WIN ? 'Windows_64bit.zip' : MAC ? (ARM ? 'macOS_ARM64.tar.gz' : 'macOS_64bit.tar.gz') : (ARM ? 'Linux_ARM64.tar.gz' : 'Linux_64bit.tar.gz')}`;
 export const cliPath = () => fs.existsSync(BIN) ? BIN : (spawnSync(WIN ? 'where' : 'which', ['arduino-cli'], { encoding: 'utf8' }).stdout || '').split(/\r?\n/)[0].trim();
 export const tallerReady = () => !!cliPath() && fs.existsSync(path.join(DIR, '.ok'));
@@ -42,18 +42,19 @@ async function compile(board, code) {
     await cli(['lib', 'install', m[1].split('/').pop()]).catch(() => { throw new Error(`Falta la librería «${m[1]}» y no la encuentro en el gestor de Arduino`); }); await cli(args); }
   const hex = path.join(out, 'sketch.ino.hex'); return { hex: fs.readFileSync(hex, 'utf8'), size: fs.statSync(path.join(out, 'sketch.ino.bin')).size || null, out };
 }
-async function upload(board, code) {
-  if (board === 'pico') { // MicroPython: copio main.py y reinicio
+async function upload(board, code, kind) {
+  if (kind === 'linux') throw new Error('Esta placa es un ordenador con Linux: copia el programa con scp (o pégalo en Thonny/VS Code en la placa) y ejecútalo con python3.');
+  if (kind === 'mpy' || board === 'pico') { // MicroPython (Pico, ESP32, STM32…): copio main.py y reinicio
     const py = envPy('taller'); if (!fs.existsSync(py)) throw new Error('Falta mpremote: instala «Taller: compilar y grabar» en Ajustes → IA local');
     const f = path.join(DIR, 'main.py'); fs.mkdirSync(DIR, { recursive: true }); fs.writeFileSync(f, code);
     await new Promise((ok, ko) => { const p = spawn(py, ['-m', 'mpremote', 'connect', 'auto', 'fs', 'cp', f, ':main.py', '+', 'reset'], { windowsHide: true }); let e = ''; p.stderr.on('data', d => e += d); p.stdout.on('data', d => e += d);
-      p.on('close', c => c === 0 ? ok() : ko(new Error(/no device found|failed to access/i.test(e) ? 'No encuentro la Pico: conéctala por USB (con MicroPython instalado) y cierra Thonny si lo tienes abierto.' : e.trim().split('\n').slice(-2).join(' ')))); });
-    return { text: 'main.py copiado a la Pico y reiniciada: ya está funcionando.' };
+      p.on('close', c => c === 0 ? ok() : ko(new Error(/no device found|failed to access/i.test(e) ? 'No encuentro la placa: conéctala por USB (con MicroPython instalado) y cierra Thonny si lo tienes abierto.' : e.trim().split('\n').slice(-2).join(' ')))); });
+    return { text: 'main.py copiado a la placa y reiniciada: ya está funcionando.' };
   }
   const { out } = await compile(board, code);
   const list = JSON.parse(await cli(['board', 'list', '--format', 'json'])); const ports = (list.detected_ports || list || []).filter(p => p.port && /serial|usb/i.test(p.port.protocol + p.port.address));
   const pick = ports.find(p => (p.matching_boards || []).some(b => b.fqbn === FQBN[board])) || ports[0];
-  if (!pick) throw new Error('No veo ninguna placa por USB. Conéctala y vuelve a probar.');
+  if (!FQBN[board]) throw new Error('Esa placa no se graba desde aquí'); if (!pick) throw new Error('No veo ninguna placa por USB. Conéctala y vuelve a probar.');
   await cli(['upload', '-p', pick.port.address, '--fqbn', FQBN[board], '--input-dir', out]);
   return { text: `Grabado en ${pick.port.address}${pick.matching_boards && pick.matching_boards[0] ? ' (' + pick.matching_boards[0].name + ')' : ''}.` };
 }
@@ -63,7 +64,7 @@ export async function tallerRoute(req, res, url, { readJSON, json }) {
   try {
     if (p === '/api/taller/status') return json(res, 200, { ready: tallerReady(), cli: !!cliPath(), mpremote: fs.existsSync(envPy('taller')) }), true;
     if (p === '/api/taller/compile' && req.method === 'POST') { const b = await readJSON(req); const r = await compile(b.board || 'uno', String(b.code || '')); return json(res, 200, { hex: r.hex, size: r.size }), true; }
-    if (p === '/api/taller/upload' && req.method === 'POST') { const b = await readJSON(req); return json(res, 200, await upload(b.board || 'uno', String(b.code || ''))), true; }
+    if (p === '/api/taller/upload' && req.method === 'POST') { const b = await readJSON(req); return json(res, 200, await upload(b.board || 'uno', String(b.code || ''), b.kind)), true; }
   } catch (e) { return json(res, 200, { error: e.message, log: e.log ? String(e.log).slice(-3000) : undefined }), true; }
   json(res, 404, { error: 'No existe ' + p }); return true;
 }

@@ -34,7 +34,7 @@ Reglas de oro:
 | IA en el equipo del usuario (modelos, descargas) | `local` |
 | Cambiar persona u objeto de un vídeo real, en local | `recast` |
 | Clase sobre un tema o documento | `learn` |
-| Circuitos con Arduino o Pico | la sección Taller de la app (`#taller`); circuito en formato `diagram.json` de Wokwi |
+| Circuitos con Arduino, Pico, ESP32, STM32, Raspberry Pi, RDK, Jetson o KickPi | la sección Taller de la app (`#taller`); circuito en formato `diagram.json` de Wokwi |
 | Juego para la tele | `games` |
 | Voz en off gratis | `speak` |
 | Montaje final | `montage` |
