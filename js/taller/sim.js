@@ -43,12 +43,15 @@ export class AvrRunner extends Base {
     this.ports = { B: new A.AVRIOPort(cpu, A.portBConfig), C: new A.AVRIOPort(cpu, A.portCConfig), D: new A.AVRIOPort(cpu, A.portDConfig) };
     this.usart = new A.AVRUSART(cpu, A.usart0Config, this.F); this.usart.onByteTransmit = b => this.serial(String.fromCharCode(b));
     this.adc = new A.AVRADC(cpu, A.adcConfig);
+    try { this.twi = new A.AVRTWI(cpu, A.twiConfig, this.F); } catch (e) { this.twi = null; }
     this.pins = opts.pins || UNO_PINS;
     const map = this.map = {}; for (let i = 0; i < 8; i++) map[String(i)] = ['D', i]; for (let i = 8; i < 14; i++) map[String(i)] = ['B', i - 8]; for (let i = 0; i < 6; i++) map['A' + i] = ['C', i];
     const byPort = { B: [], C: [], D: [] }; for (const [pin, [p, b]] of Object.entries(map)) byPort[p][b] = pin;
     for (const [p, port] of Object.entries(this.ports)) port.addListener((v, old) => { const ch = v ^ old; if (!ch) return; const t = this.timeUs(); for (let b = 0; b < 8; b++) if (ch & (1 << b) && byPort[p][b] != null) this._edge(byPort[p][b], !!(v & (1 << b)), t); });
   }
   timeUs() { return this.cpu.cycles / 16; }
+  // «¿El chip tira de este pin a 0?» (para buses de drenador abierto como I2C o el DHT22)
+  onRaw(pin, cb) { this.onEdge(pin, v => cb(!v)); }
   level(pin) { const m = this.map[pin]; if (!m) return { out: null }; const s = this.ports[m[0]].pinState(m[1]); const P = this.A.PinState;
     return s === P.High ? { out: true } : s === P.Low ? { out: false } : { out: null, pullup: s === P.InputPullUp }; }
   setInput(pin, v) { const m = this.map[pin]; if (m) this.ports[m[0]].setPin(m[1], !!v); }
@@ -56,7 +59,10 @@ export class AvrRunner extends Base {
   after(us, fn) { this.cpu.addClockEvent(fn, Math.max(1, Math.round(us * 16))); }
   get vcc() { return 5; }
   write(str) { for (const ch of str) this.usart.writeByte(ch.charCodeAt(0)); }
-  start() {
+  start() { this._run(); }
+  pause() { this.running = false; cancelAnimationFrame(this.raf); }
+  resume() { if (!this.running) this._run(); }
+  _run() {
     this.running = true; let last = NOW();
     const step = () => { if (!this.running) return; const now = NOW(); const dt = Math.min(50, now - last); last = now;
       const target = this.cpu.cycles + Math.floor(this.F * dt / 1000); const { cpu } = this; const ins = this.A.avrInstruction;
@@ -90,13 +96,16 @@ export class PicoRunner extends Base {
       mcu.flash.set(UF2.subarray(o + 32, o + 32 + v.getUint32(16, true)), v.getUint32(12, true) - 0x10000000); }
     // Cada GPIO del chip avisa a las patas de la placa que cuelgan de él
     const names = {}; if (this.map) for (const [pin, gp] of Object.entries(this.map)) (names[gp] = names[gp] || []).push(pin); else for (let i = 0; i < 30; i++) names[i] = ['GP' + i];
-    for (let i = 0; i < 30; i++) { const ns = names[i]; if (!ns || !mcu.gpio[i]) continue; mcu.gpio[i].addListener(st => { const S = R.GPIOPinState; if (st === S.High || st === S.Low) { mcu.gpio[i].setInputValue(st === S.High); /* el pad lee lo que la salida pone, como en el chip */ const t = this.timeUs(); for (const n of ns) this._edge(n, st === S.High, t); } }); }
+    this.raw = {};
+    for (let i = 0; i < 30; i++) { const ns = names[i]; if (!ns || !mcu.gpio[i]) continue; mcu.gpio[i].addListener(st => { const S = R.GPIOPinState; const rw = this.raw[i]; if (rw) { const low = st === S.Low; for (const f of rw) f(low); return; } if (st === S.High || st === S.Low) { mcu.gpio[i].setInputValue(st === S.High); /* el pad lee lo que la salida pone, como en el chip */ const t = this.timeUs(); for (const n of ns) this._edge(n, st === S.High, t); } }); }
     const cdc = this.cdc = new R.USBCDC(mcu.usbCtrl); this.buf = ''; this.booted = false;
     cdc.onDeviceConnected = () => { cdc.sendSerialByte(13); };
     // REPL «raw» de MicroPython: no repite el código; la salida llega tras «OK» y los errores tras el primer \x04.
     this.phase = 'boot';
     cdc.onSerialData = v => this._rx(new TextDecoder().decode(v));
   }
+  // Escucha el estado crudo del pin (sale a 0 o lo suelta): buses de drenador abierto
+  onRaw(pin, cb) { const g = this._gp(pin); if (g < 0) return; (this.raw[g] = this.raw[g] || []).push(cb); }
   _gp(pin) { if (this.map) { const g = this.map[pin]; return g == null ? -1 : g; } return /^GP\d+$/.test(pin) ? +pin.slice(2) : -1; }
   // La capa de soporte dice dónde guarda los valores analógicos: «ESC ] PLATO dirección BEL». No se enseña.
   _out(s) {
@@ -133,7 +142,12 @@ export class PicoRunner extends Base {
   start() {
     // Mientras MicroPython arranca y recibe el programa, a toda máquina; después, a tiempo real
     // (el reloj simulado no adelanta al de verdad: si no, sleep() no duraría nada).
-    this.running = true; this.mcu.core.PC = 0x10000000; const { sim, mcu } = this; const clock = sim.clock; let t0 = NOW(), n0 = clock.nanos; const cyc = 1e9 / 125e6;
+    this.mcu.core.PC = 0x10000000; this._run();
+  }
+  pause() { this.running = false; clearTimeout(this.timer); }
+  resume() { if (!this.running) this._run(); }
+  _run() {
+    this.running = true; const { sim, mcu } = this; const clock = sim.clock; let t0 = NOW(), n0 = clock.nanos; const cyc = 1e9 / 125e6;
     const step = () => { if (!this.running) return; this._flush(); const fast = this.phase !== 'out' && this.phase !== 'err' && this.phase !== 'done';
       if (fast) { t0 = NOW(); n0 = clock.nanos; } const until = fast ? clock.nanos + 50e6 : n0 + (NOW() - t0) * 1e6; let guard = 0;
       try { while (clock.nanos < until && guard++ < 3e6) { if (fast && !(guard & 2047)) this._flush(); if (mcu.core.waiting) { const nx = Math.min(clock.nanosToNextAlarm, until - clock.nanos); if (nx <= 0) break; clock.tick(nx); } else clock.tick(mcu.core.executeInstruction() * cyc); } }

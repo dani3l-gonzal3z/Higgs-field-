@@ -92,6 +92,11 @@ Monta un circuito, prográmalo y simúlalo antes de tocar un cable; luego lléva
 
 - «Chip emulado» = el procesador se emula instrucción a instrucción. «Simulada» = tu programa corre en MicroPython sobre un RP2040 emulado, con una **capa de soporte** que imita los pines y librerías de esa placa (respeta detalles como los pines solo-entrada del ESP32 o que Hobot.GPIO solo tiene PWM en los pines 32 y 33). No se simulan las radios, cámaras ni aceleradores de IA.
 - **🔩 Por dentro**: patillaje de la placa, su programa de fábrica y la capa de soporte, que puedes leer y cambiar.
+- **Motor eléctrico de verdad** (análisis nodal en cada fotograma): tensiones y corrientes reales, LEDs que lucen según su corriente, divisores, transistores NPN/PNP, MOSFET, diodos, motores y relés; avisos de sobrecorriente por pin con los límites de cada chip, cortocircuitos y consumo de la placa.
+- **Instrumentos**: polímetro (M), analizador lógico con decodificación I2C/UART y exportación VCD (PulseView, GTKWave), trazador del puerto serie, pausa (P) y tiempo simulado.
+- **Buses y módulos**: I2C (hardware del RP2040, TWI del ATmega y por software bit a bit) con OLED SSD1306, LCD I2C, MPU6050, BMP280 y DS1307; NeoPixel (WS2812, tren de pulsos real); DHT22; PIR; joystick. Las librerías de MicroPython (`ssd1306`, `mpu6050`, `bmp280`, `lcd_i2c`) vienen incluidas.
+- **Edición profesional**: deshacer/rehacer, selección por recuadro, copiar/pegar/duplicar, atajos de teclado, cables con codos, notas; editor con colores, autocompletado de la API de cada placa y la línea del error marcada.
+- **Tu placa real por USB desde el navegador** (Web Serial, Chrome/Edge): ejecutar o grabar `main.py` (con las librerías que use) en una Pico, ESP32 o STM32 con MicroPython.
 - Todo lo que es Python corre en el navegador (también dentro de Claude y en el móvil).
 - Piezas: LEDs, LED RGB, resistencias, botones, interruptor, potenciómetro, sensor de luz, zumbador, servo, 7 segmentos, LCD 16×2, sensor ultrasónico y protoboards (las patas se clavan solas en los agujeros).
 - Avisos de la vida real: LED sin resistencia, cortocircuitos, 5 V en placas de 3,3 V.

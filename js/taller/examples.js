@@ -2,6 +2,7 @@
 // C++ (Arduino), MicroPython (Pico, ESP32), MicroPython de STM32 (pyb) y Python de Linux (RPi.GPIO / Hobot.GPIO /
 // Jetson.GPIO, gpiozero, wiringpi). Los circuitos usan «papeles» (LED, botón, analógico…) que cada placa asigna a sus patas.
 import { BOARDS, keyOf, PHYS2BCM } from './boards.js';
+const pinOfKey = (b, k) => { const e = (b.io || []).find(x => x[0] === k); return e ? e[1] : k; };
 const P = (type, id, left, top, attrs = {}, rotate = 0) => ({ type, id, left, top, rotate, attrs });
 const W = (a, b, color = 'green') => [a, b, color, []];
 const UNO = {
@@ -64,6 +65,9 @@ const UNO = {
 // Contexto de una placa: dónde va cada cosa y cómo se escribe cada pin en su lenguaje
 export function ctx(key) {
   const b = BOARDS[key]; const r = { ...b.roles }; r.sem = r.sem || [r.led, r.out2, r.out3]; r.pwm = r.pwm || r.led; r.buzz = r.buzz || r.led;
+  // Patas del I2C: las de la placa (Uno A4/A5, Pico GP4/GP5…) o las que usa I2C(n) por defecto
+  const i2 = b.engine === 'avr' ? ['A5', 'A4'] : b.key === 'nanorp' ? ['A5', 'A4'] : b.engine === 'pico' ? ['GP5', 'GP4'] : b.i2c ? Object.values(b.i2c)[0].map(k => pinOfKey(b, k)) : [r.out2, r.out3];
+  r.scl = r.scl || i2[0]; r.sda = r.sda || i2[1]; r.i2cId = b.i2c ? Object.keys(b.i2c)[0] : '0';
   const id = b.id; const sbc = b.flavor === 'linux';
   const c = {
     b, r, id, X: sbc ? 60 : b.px, Y: sbc ? b.py : 0,
@@ -575,6 +579,111 @@ while True:
     gpiozero: c => lcdPy(c, 'from gpiozero import LED as Salida\nfrom time import sleep', p => `Salida(${c.lit(p)})`, 'p.value = (v >> i) & 1', 'e.on(); sleep(0.000001); e.off(); sleep(0.00005)', 'rs.value = es_dato', 'esperar', 'sleep(1)', 'rs.off()', 'def esperar(ms): sleep(ms / 1000)'),
     wiringpi: c => lcdPy(c, `import wiringpi as wp\n\nwp.wiringPiSetupPhys()\nfor p in (${c.r.lcd.map(c.lit).join(', ')}):\n    wp.pinMode(p, wp.OUTPUT)`, p => c.lit(p), 'wp.digitalWrite(p, (v >> i) & 1)', 'wp.digitalWrite(e, 1); wp.delayMicroseconds(1); wp.digitalWrite(e, 0); wp.delayMicroseconds(50)', 'wp.digitalWrite(rs, es_dato)', 'wp.delay', 'wp.delay(1000)', 'wp.digitalWrite(rs, 0)'),
   },
+  oled: {
+    mpy: c => `# Pantalla OLED SSD1306 por I2C: SDA en ${c.say(c.r.sda)}, SCL en ${c.say(c.r.scl)}
+from machine import Pin, I2C
+import ssd1306, time
+
+i2c = I2C(${c.r.i2cId}, sda=Pin(${c.lit(c.r.sda)}), scl=Pin(${c.lit(c.r.scl)}))
+print("Dispositivos I2C:", [hex(d) for d in i2c.scan()])
+oled = ssd1306.SSD1306_I2C(128, 64, i2c)
+
+n = 0
+while True:
+    oled.fill(0)
+    oled.text("Hola, Plato!", 0, 0)
+    oled.text("Cuenta: %d" % n, 0, 16)
+    oled.rect(0, 34, 128, 18, 1)
+    oled.fill_rect(2, 36, n % 125, 14, 1)
+    oled.show()
+    n += 1
+    time.sleep(0.05)
+`,
+    stm32: c => `# Pantalla OLED SSD1306 por I2C(${c.r.i2cId}): SDA en ${c.say(c.r.sda)}, SCL en ${c.say(c.r.scl)}
+from machine import I2C
+import ssd1306, pyb
+
+i2c = I2C(${c.r.i2cId})
+print("Dispositivos I2C:", [hex(d) for d in i2c.scan()])
+oled = ssd1306.SSD1306_I2C(128, 64, i2c)
+
+n = 0
+while True:
+    oled.fill(0)
+    oled.text("Hola, Plato!", 0, 0)
+    oled.text("Cuenta: %d" % n, 0, 16)
+    oled.rect(0, 34, 128, 18, 1)
+    oled.fill_rect(2, 36, n % 125, 14, 1)
+    oled.show()
+    n += 1
+    pyb.delay(50)
+`,
+    cpp: () => `// Pantalla OLED SSD1306 por I2C (SDA = A4, SCL = A5)
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+Adafruit_SSD1306 oled(128, 64, &Wire, -1);
+int n = 0;
+
+void setup() {
+  oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  oled.setTextColor(SSD1306_WHITE);
+}
+
+void loop() {
+  oled.clearDisplay();
+  oled.setCursor(0, 0);  oled.print("Hola, Plato!");
+  oled.setCursor(0, 16); oled.print("Cuenta: "); oled.print(n);
+  oled.drawRect(0, 34, 128, 18, SSD1306_WHITE);
+  oled.fillRect(2, 36, n % 125, 14, SSD1306_WHITE);
+  oled.display();
+  n++;
+  delay(50);
+}
+`,
+  },
+  anillo: {
+    mpy: c => `# Anillo de 16 NeoPixel (WS2812) en ${c.say(c.r.led)}: un arcoíris que gira
+from machine import Pin
+import neopixel, time
+
+N = 16
+anillo = neopixel.NeoPixel(Pin(${c.lit(c.r.led)}), N)
+
+def rueda(p):   # 0..255 -> color del arcoíris
+    if p < 85: return (255 - p * 3, p * 3, 0)
+    if p < 170: p -= 85; return (0, 255 - p * 3, p * 3)
+    p -= 170; return (p * 3, 0, 255 - p * 3)
+
+paso = 0
+while True:
+    for i in range(N):
+        r, g, b = rueda((i * 256 // N + paso) & 255)
+        anillo[i] = (r // 6, g // 6, b // 6)   # flojito: 16 LEDs a tope chupan casi 1 A
+    anillo.write()
+    paso = (paso + 8) & 255
+    time.sleep(0.03)
+`,
+    cpp: c => `// Anillo de 16 NeoPixel (WS2812) en el pin ${c.r.led}: un arcoíris que gira
+#include <Adafruit_NeoPixel.h>
+
+Adafruit_NeoPixel anillo(16, ${c.r.led}, NEO_GRB + NEO_KHZ800);
+uint16_t paso = 0;
+
+void setup() {
+  anillo.begin();
+  anillo.setBrightness(40);   // flojito: 16 LEDs a tope chupan casi 1 A
+}
+
+void loop() {
+  for (int i = 0; i < 16; i++) anillo.setPixelColor(i, anillo.gamma32(anillo.ColorHSV(paso + i * 4096)));
+  anillo.show();
+  paso += 1024;
+  delay(30);
+}
+`,
+  },
   luz: {
     mpy: c => `# Sensor de luz en ${c.say(c.r.adc)}: más voltaje = más oscuro
 from machine import Pin, ADC
@@ -641,8 +750,10 @@ while True:
     ${sleep1}
 `;
 }
+const NEW = { oled: { title: 'Pantalla OLED', level: 2, about: 'Texto y una barra que avanza en una pantalla OLED de 128×64 por I2C. Mira el bus en el analizador lógico (📈).' },
+  anillo: { title: 'Anillo NeoPixel', level: 2, about: 'Un arcoíris girando en 16 LEDs WS2812 con un solo pin. El tren de pulsos de 800 kHz se simula entero.' } };
 const flavorOf = b => b.flavor === 'cpp' ? 'cpp' : b.flavor === 'linux' ? ({ 'gpiozero': 'gpiozero', 'wiringpi': 'wiringpi' }[b.lib] || 'rpigpio') : b.flavor === 'stm32' ? 'stm32' : 'mpy';
-export function exampleCode(ex, key) { const b = BOARDS[key]; const f = flavorOf(b); if (f === 'cpp') return UNO[ex.id].uno; const g = CODE[ex.id][f]; return g ? g(ctx(key)) : null; }
+export function exampleCode(ex, key) { const b = BOARDS[key]; const f = flavorOf(b); if (f === 'cpp') return UNO[ex.id] ? UNO[ex.id].uno : CODE[ex.id].cpp ? CODE[ex.id].cpp(ctx(key)) : null; const g = CODE[ex.id][f]; return g ? g(ctx(key)) : null; }
 export const supports = (ex, key) => exampleCode(ex, key) != null;
 
 /* ---------- Circuitos ---------- */
@@ -659,8 +770,10 @@ export const EXAMPLES = [
   { id: 'distancia', circuit: c => [[P('wokwi-hc-sr04', 'sonar', ...at(c, 0, 40))], [W('sonar:VCC', c.V5, 'red'), W('sonar:GND', c.GND, 'black'), W('sonar:TRIG', c.pin('trig'), 'blue'), W('sonar:ECHO', c.pin('echo'), 'green')]] },
   { id: 'lcd', circuit: c => [[P('wokwi-lcd1602', 'lcd', ...at(c, -10, 20), { pins: 'full' })],
     [W('lcd:VSS', c.GND, 'black'), W('lcd:VDD', c.V5, 'red'), W('lcd:RW', c.GND, 'black'), W('lcd:A', c.V5, 'red'), W('lcd:K', c.GND, 'black'), ...['RS', 'E', 'D4', 'D5', 'D6', 'D7'].map((k, i) => W('lcd:' + k, c.at(c.r.lcd[i]), 'blue'))]] },
+  { id: 'oled', circuit: c => [[P('wokwi-ssd1306', 'oled', ...at(c, 0, 40))], [W('oled:GND', c.GND, 'black'), W('oled:VIN', c.VCC, 'red'), W('oled:DATA', c.pin('sda'), 'blue'), W('oled:CLK', c.pin('scl'), 'yellow')]] },
+  { id: 'anillo', circuit: c => [[P('wokwi-led-ring', 'anillo', ...at(c, 10, 30), { pixels: '16' })], [W('anillo:GND', c.GND, 'black'), W('anillo:VCC', c.V5, 'red'), W('anillo:DIN', c.pin('led'), 'green')]] },
   { id: 'luz', circuit: c => join([[P('wokwi-photoresistor-sensor', 'ldr', ...at(c, -20, 200))], [W('ldr:VCC', c.VCC, 'red'), W('ldr:GND', c.GND, 'black'), W('ldr:AO', c.pin('adc'), 'orange')]], led(c, 'r1', 'led1', 0, 52, 'white', 'led')) },
-].map(e => ({ ...e, title: UNO[e.id].title, level: UNO[e.id].level, about: UNO[e.id].about }));
+].map(e => ({ ...e, ...(UNO[e.id] || NEW[e.id]) }));
 export function exampleCircuit(ex, key) { const c = ctx(key); const [parts, connections] = ex.circuit(c); return { version: 1, author: 'Plató', editor: 'plato-taller', parts: [c.board, ...parts], connections }; }
 // El programa «de fábrica» de cada placa: lo que trae dentro al sacarla de la caja (un parpadeo)
 export const insideCode = key => exampleCode(EXAMPLES[0], key);

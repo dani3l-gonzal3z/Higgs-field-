@@ -30,6 +30,10 @@ así que esa parte se distribuye bajo **AGPL-3.0** como Velxio.
 - El ADC de esas placas va por memoria compartida con el simulador, así que cualquier pin analógico de la placa real funciona (no solo los cuatro del RP2040).
 - En el RP2040 emulado, leer un pin de salida devuelve lo que la salida pone (como en el chip real), así que `led.value(not led.value())` parpadea.
 
+## Hecho aquí (sin código de terceros)
+
+El motor eléctrico (`js/taller/solver.js`), el bus I2C y su esclavo a nivel de pin (`i2c.js`), los modelos de OLED, MPU6050, BMP280, DS1307, LCD I2C, WS2812 y DHT22 (`devices.js`, `taller.js`), los dibujos de transistores, MOSFET, diodo, motor, relé y módulos (`parts.js`), el editor de código (`editor.js`), los instrumentos (`instruments.js`), Web Serial (`webserial.js`) y las librerías de MicroPython incluidas (`ssd1306`, `mpu6050`, `bmp280`, `lcd_i2c`, en `boards.js`) están escritos para Plató. La calibración del BMP280 y sus fórmulas son las de la hoja de datos de Bosch.
+
 ## Reconstruir las librerías
 
 ```

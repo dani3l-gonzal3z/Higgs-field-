@@ -89,59 +89,59 @@ export const BOARDS = {
     about: 'RP2040 en formato Nano. En MicroPython los pines se llaman por su GPIO (D13 = Pin(6)).' },
 
   /* ── ESP32 (simulado a nivel MicroPython) ── */
-  esp32: { family: 'esp32', name: 'ESP32 DevKit V1', chip: 'ESP32', tag: 'board-esp32-devkit-v1', art: 'esp32', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
+  esp32: { family: 'esp32', name: 'ESP32 DevKit V1', i2c: { 0: ['18', '19'], 1: ['25', '26'] }, chip: 'ESP32', tag: 'board-esp32-devkit-v1', art: 'esp32', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
     io: [...num([34, 35, 32, 33, 25, 26, 27, 14, 12, 13, 15, 2, 4, 16, 17, 5, 18, 19, 21, 22, 23]), ['36', 'VP'], ['39', 'VN']], inputOnly: ['34', '35', '36', '39'],
     adc: ['32', '33', '34', '35', '36', '39', '0', '2', '4', '12', '13', '14', '15', '25', '26', '27'], power: { '3V3': 3.3, VIN: 5, GND: 0, GND2: 0 }, led: { key: '2' },
     roles: { led: '18', out2: '19', out3: '21', btn: '4', adc: '34', trig: '5', echo: '17', lcd: ['23', '22', '21', '19', '18', '5'], gnd: 'GND2', vcc: '3V3', v5: 'VIN' }, place: [30, 20], px: 230,
     about: 'El ESP32 clásico de 30 pines. LED azul en el GPIO2. Los pines 34, 35, 36 y 39 solo sirven de entrada.' },
-  esp32c4: { family: 'esp32', name: 'ESP32 DevKitC V4', chip: 'ESP32-WROOM-32', tag: 'board-esp32-devkit-c-v4', art: 'esp32-devkit-c-v4', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
+  esp32c4: { i2c: { 0: ['18', '19'], 1: ['25', '26'] }, family: 'esp32', name: 'ESP32 DevKitC V4', chip: 'ESP32-WROOM-32', tag: 'board-esp32-devkit-c-v4', art: 'esp32-devkit-c-v4', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
     io: [...num([34, 35, 32, 33, 25, 26, 27, 14, 12, 13, 23, 22, 21, 19, 18, 5, 17, 16, 4, 0, 2, 15]), ['36', 'VP'], ['39', 'VN']], inputOnly: ['34', '35', '36', '39'],
     adc: ['32', '33', '34', '35', '36', '39', '0', '2', '4', '12', '13', '14', '15', '25', '26', '27'], power: { '3V3': 3.3, '5V': 5, 'GND.1': 0, 'GND.2': 0, 'GND.3': 0 },
     roles: { led: '18', out2: '19', out3: '21', btn: '4', adc: '34', trig: '5', echo: '17', lcd: ['23', '22', '21', '19', '18', '5'], gnd: 'GND.2', vcc: '3V3', v5: '5V' }, place: [30, 20], px: 230,
     about: 'La placa de referencia de Espressif. No trae LED para programar: pon uno tú.' },
-  esp32s3: { family: 'esp32', name: 'ESP32-S3 DevKitC-1', chip: 'ESP32-S3', tag: 'board-esp32-s3-devkitc-1', art: 'esp32-s3', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
+  esp32s3: { i2c: { 0: ['9', '8'] }, family: 'esp32', name: 'ESP32-S3 DevKitC-1', chip: 'ESP32-S3', tag: 'board-esp32-s3-devkitc-1', art: 'esp32-s3', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
     io: num([4, 5, 6, 7, 15, 16, 17, 18, 8, 3, 46, 9, 10, 11, 12, 13, 14, 1, 2, 42, 41, 40, 39, 38, 0, 45, 48, 47, 21]), adc: num([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]).map(x => x[0]),
     power: { '3V3.1': 3.3, '3V3.2': 3.3, '5V': 5, 'GND.1': 0, 'GND.2': 0, 'GND.3': 0, 'GND.4': 0 }, rgb: '48',
     roles: { led: '41', out2: '40', out3: '39', btn: '42', adc: '1', trig: '38', echo: '47', lcd: ['21', '47', '45', '0', '38', '39'], gnd: 'GND.3', vcc: '3V3.1', v5: '5V' }, place: [30, 20], px: 220,
     note: 'Los GPIO 35-37 (memoria PSRAM en muchos módulos) y 19-20 (USB) no se ofrecen. El LED RGB de la placa es un NeoPixel en el GPIO48: neopixel.NeoPixel(Pin(48), 1).',
     about: 'ESP32-S3 con USB nativo y LED RGB (NeoPixel en el GPIO48). Pensado para IA en el borde.' },
-  esp32c3: { family: 'esp32', name: 'ESP32-C3 DevKitM-1', chip: 'ESP32-C3 (RISC-V)', tag: 'board-esp32-c3-devkitm-1', art: 'esp32-c3', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
+  esp32c3: { i2c: { 0: ['9', '8'] }, family: 'esp32', name: 'ESP32-C3 DevKitM-1', chip: 'ESP32-C3 (RISC-V)', tag: 'board-esp32-c3-devkitm-1', art: 'esp32-c3', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
     io: [...num([2, 3, 0, 1, 10, 19, 18, 4, 5, 6, 7, 8, 9]), ['20', 'RX'], ['21', 'TX']], adc: ['0', '1', '2', '3', '4'], rgb: '8',
     power: { '3V3.1': 3.3, '3V3.2': 3.3, '5V.1': 5, '5V.2': 5, ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => ['GND.' + i, 0])) },
     roles: { led: '7', out2: '6', out3: '5', btn: '9', adc: '4', trig: '18', echo: '19', lcd: ['19', '18', '7', '6', '5', '4'], gnd: 'GND.6', vcc: '3V3.1', v5: '5V.1' }, place: [30, 30], px: 220,
     about: 'ESP32 pequeño con núcleo RISC-V. LED RGB NeoPixel en el GPIO8.' },
-  c3mini: { family: 'esp32', name: 'ESP32-C3 SuperMini', chip: 'ESP32-C3 (RISC-V)', tag: 'board-esp32-c3-supermini', art: 'aitewinrobot-esp32c3-supermini', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
+  c3mini: { i2c: { 0: ['9', '8'] }, family: 'esp32', name: 'ESP32-C3 SuperMini', chip: 'ESP32-C3 (RISC-V)', tag: 'board-esp32-c3-supermini', art: 'aitewinrobot-esp32c3-supermini', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
     io: [...num([5, 6, 7, 8, 9, 10, 4, 3, 2, 1, 0]), ['20', 'RX'], ['21', 'TX']], adc: ['0', '1', '2', '3', '4'], power: { '5V': 5, GND: 0, '3V3': 3.3 }, led: { key: '8', low: true },
     roles: { led: '4', out2: '3', out3: '2', btn: '1', adc: '0', trig: '3', echo: '2', lcd: ['4', '3', '2', '1', '0', '10'], gnd: 'GND', vcc: '3V3', v5: '5V' }, place: [40, 40], px: 170,
     about: 'Diminuta y baratísima. LED azul en el GPIO8 (se enciende con 0).' },
-  xiaoc3: { family: 'esp32', name: 'Seeed XIAO ESP32-C3', chip: 'ESP32-C3 (RISC-V)', tag: 'board-xiao-esp32-c3', art: 'xiao-esp32-c3', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
+  xiaoc3: { i2c: { 0: ['7', '6'] }, family: 'esp32', name: 'Seeed XIAO ESP32-C3', chip: 'ESP32-C3 (RISC-V)', tag: 'board-xiao-esp32-c3', art: 'xiao-esp32-c3', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
     io: [['2', 'D0'], ['3', 'D1'], ['4', 'D2'], ['5', 'D3'], ['6', 'D4'], ['7', 'D5'], ['21', 'D6'], ['20', 'D7'], ['8', 'D8'], ['9', 'D9'], ['10', 'D10']], adc: ['2', '3', '4'], power: { '3V3': 3.3, '5V': 5, GND: 0 },
     roles: { led: 'D10', out2: 'D9', out3: 'D8', btn: 'D7', adc: 'D0', trig: 'D9', echo: 'D8', lcd: ['D10', 'D9', 'D8', 'D7', 'D6', 'D5'], gnd: 'GND', vcc: '3V3', v5: '5V' }, place: [40, 40], px: 170,
     note: 'En MicroPython los pines van por GPIO: D0 es Pin(2), D10 es Pin(10). Sin LED para el usuario.',
     about: 'Del tamaño de un sello. En el código, los pines por su número de GPIO (D10 = Pin(10)).' },
-  xiaos3: { family: 'esp32', name: 'Seeed XIAO ESP32-S3', chip: 'ESP32-S3', tag: 'board-xiao-esp32-s3', art: 'xiao-esp32-s3', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
+  xiaos3: { i2c: { 0: ['6', '5'] }, family: 'esp32', name: 'Seeed XIAO ESP32-S3', chip: 'ESP32-S3', tag: 'board-xiao-esp32-s3', art: 'xiao-esp32-s3', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
     io: [['1', 'D0'], ['2', 'D1'], ['3', 'D2'], ['4', 'D3'], ['5', 'D4'], ['6', 'D5'], ['43', 'D6'], ['44', 'D7'], ['7', 'D8'], ['8', 'D9'], ['9', 'D10'], ['21', null]], adc: num([1, 2, 3, 4, 5, 6, 7, 8, 9]).map(x => x[0]),
     power: { '3V3': 3.3, '5V': 5, GND: 0 }, led: { key: '21', low: true },
     roles: { led: 'D10', out2: 'D9', out3: 'D8', btn: 'D7', adc: 'D0', trig: 'D9', echo: 'D8', lcd: ['D10', 'D9', 'D8', 'D7', 'D6', 'D5'], gnd: 'GND', vcc: '3V3', v5: '5V' }, place: [40, 40], px: 170,
     about: 'XIAO con S3 y LED naranja en el GPIO21 (se enciende con 0).' },
-  lolin32: { family: 'esp32', name: 'Wemos Lolin32 Lite', chip: 'ESP32', tag: 'board-lolin32-lite', art: 'wemos-lolin32-lite', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
+  lolin32: { i2c: { 0: ['18', '19'], 1: ['25', '26'] }, family: 'esp32', name: 'Wemos Lolin32 Lite', chip: 'ESP32', tag: 'board-lolin32-lite', art: 'wemos-lolin32-lite', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
     io: [...[34, 35, 32, 33, 25, 26, 27, 14, 12, 13, 15, 2, 0, 4, 16, 17, 5, 18, 23, 19, 22].map(n => [String(n), 'GPIO' + n]), ['36', 'VP'], ['39', 'VN']], inputOnly: ['34', '35', '36', '39'],
     adc: ['32', '33', '34', '35', '36', '39', '0', '2', '4', '12', '13', '14', '15', '25', '26', '27'], power: { '3V': 3.3, GND: 0 }, led: { key: '22', low: true },
     roles: { led: 'GPIO18', out2: 'GPIO23', out3: 'GPIO19', btn: 'GPIO4', adc: 'GPIO34', trig: 'GPIO5', echo: 'GPIO17', lcd: ['GPIO23', 'GPIO19', 'GPIO18', 'GPIO5', 'GPIO17', 'GPIO16'], gnd: 'GND', vcc: '3V', v5: '3V' }, place: [30, 20], px: 210,
     about: 'ESP32 con cargador de batería LiPo. LED en el GPIO22 (se enciende con 0).' },
-  nanoesp32: { family: 'esp32', name: 'Arduino Nano ESP32', chip: 'ESP32-S3', tag: 'board-nano-esp32', art: 'arduino-nano-esp32', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
+  nanoesp32: { i2c: { 0: ['12', '11'] }, family: 'esp32', name: 'Arduino Nano ESP32', chip: 'ESP32-S3', tag: 'board-nano-esp32', art: 'arduino-nano-esp32', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
     io: [['47', 'D12'], ['38', 'D11'], ['21', 'D10'], ['18', 'D9'], ['17', 'D8'], ['10', 'D7'], ['9', 'D6'], ['8', 'D5'], ['7', 'D4'], ['6', 'D3'], ['5', 'D2'], ['44', 'RX0'], ['43', 'TX1'], ['48', 'D13'], ['46', 'B0'], ['1', 'A0'], ['2', 'A1'], ['3', 'A2'], ['4', 'A3'], ['11', 'A4'], ['12', 'A5'], ['13', 'A6'], ['14', 'A7'], ['0', 'B1'], ['45', null]],
     adc: ['1', '2', '3', '4', '11', '12', '13', '14'], power: { '3V3': 3.3, VBUS: 5, VIN: 5, 'GND.1': 0, 'GND.2': 0 }, led: { key: '48' }, rgbPins: { r: '46', g: '0', b: '45', low: true },
     roles: { led: 'D9', out2: 'D8', out3: 'D7', btn: 'D6', adc: 'A0', trig: 'D5', echo: 'D4', lcd: ['D12', 'D11', 'D5', 'D4', 'D3', 'D2'], gnd: 'GND.2', vcc: '3V3', v5: 'VBUS' }, place: [0, 70], px: 240,
     note: 'Con el MicroPython de Arduino los pines van por GPIO: D13 (LED) es Pin(48). El LED RGB va en los GPIO 46, 0 y 45 y se enciende con 0.',
     about: 'Formato Nano con ESP32-S3. LED en D13 (GPIO48) y LED RGB.' },
-  esp32cam: { family: 'esp32', name: 'ESP32-CAM', chip: 'ESP32', tag: 'board-esp32-cam', art: 'esp32-cam', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
+  esp32cam: { i2c: { 0: ['14', '15'] }, family: 'esp32', name: 'ESP32-CAM', chip: 'ESP32', tag: 'board-esp32-cam', art: 'esp32-cam', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
     io: [...num([12, 13, 15, 14, 2, 4, 16, 0]), ['33', null]], adc: ['2', '4', '12', '13', '14', '15'], power: { '5V.1': 5, '3V3': 3.3, VCC: 3.3, 'GND.1': 0, 'GND.2': 0, 'GND.3': 0 },
     led: { key: '33', low: true, id: 'led' }, flash: '4',
     roles: { led: '13', out2: '12', out3: '15', btn: '14', adc: '2', trig: '15', echo: '14', lcd: ['12', '13', '15', '14', '2', '16'], gnd: 'GND.1', vcc: '3V3', v5: '5V.1' }, place: [30, 30], px: 200,
     note: 'La cámara no se simula. El flash es el GPIO4 y el LED rojo de atrás el GPIO33 (se enciende con 0).',
     about: 'ESP32 con cámara. Aquí: el flash (GPIO4) y el LED rojo (GPIO33).' },
-  esp32c6: { family: 'esp32', name: 'ESP32-C6 DevKitC-1', chip: 'ESP32-C6 (RISC-V)', tag: 'board-esp32-c6-devkitc-1', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
+  esp32c6: { i2c: { 0: ['7', '6'] }, family: 'esp32', name: 'ESP32-C6 DevKitC-1', chip: 'ESP32-C6 (RISC-V)', tag: 'board-esp32-c6-devkitc-1', engine: 'shim', flavor: 'esp32', lang: 'python', vcc: 3.3,
     drawn: twoCols({ label: 'ESP32-C6', chip: 'C6', color: '#1b1b1b', w: 112, left: ['3V3', 'RST', '4', '5', '6', '7', '0', '1', '8', '10', '11', '2', '3', '5V', 'GND.1'], right: ['GND.2', 'TX', 'RX', '15', '23', '22', '21', '20', '19', '18', '9', 'GND.3', '13', '12', 'GND.4'], leds: { rgb: { x: 56, y: 140, size: 7 } } }),
     io: [...num([4, 5, 6, 7, 0, 1, 8, 10, 11, 2, 3, 15, 23, 22, 21, 20, 19, 18, 9, 13, 12]), ['16', 'TX'], ['17', 'RX']], adc: ['0', '1', '2', '3', '4', '5', '6'], rgb: '8',
     power: { '3V3': 3.3, '5V': 5, 'GND.1': 0, 'GND.2': 0, 'GND.3': 0, 'GND.4': 0 },
@@ -149,21 +149,21 @@ export const BOARDS = {
     about: 'El ESP32 con WiFi 6, Thread y Zigbee. LED RGB NeoPixel en el GPIO8.' },
 
   /* ── STM32 (simulado a nivel MicroPython: machine + pyb) ── */
-  bluepill: { family: 'stm32', name: 'STM32 Blue Pill', chip: 'STM32F103C8', tag: 'board-stm32-bluepill', art: 'stm32-bluepill', engine: 'shim', flavor: 'stm32', lang: 'python', vcc: 3.3, tol5: true,
+  bluepill: { i2c: { 1: ['PB6', 'PB7'] }, family: 'stm32', name: 'STM32 Blue Pill', chip: 'STM32F103C8', tag: 'board-stm32-bluepill', art: 'stm32-bluepill', engine: 'shim', flavor: 'stm32', lang: 'python', vcc: 3.3, tol5: true,
     io: num(['PB12', 'PB13', 'PB14', 'PB15', 'PA8', 'PA9', 'PA10', 'PA11', 'PA12', 'PA15', 'PB3', 'PB4', 'PB5', 'PB6', 'PB7', 'PB8', 'PB9', 'PB11', 'PB10', 'PB1', 'PB0', 'PA7', 'PA6', 'PA5', 'PA4', 'PA3', 'PA2', 'PA1', 'PA0', 'PC13']),
     adc: ['PA0', 'PA1', 'PA2', 'PA3', 'PA4', 'PA5', 'PA6', 'PA7', 'PB0', 'PB1'], power: { '5V': 5, '3V3.1': 3.3, '3V3.2': 3.3, 'GND.1': 0, 'GND.2': 0, 'GND.3': 0 }, led: { key: 'PC13', low: true },
     tim: { PA6: [3, 1], PA7: [3, 2], PB6: [4, 1], PB7: [4, 2], PB8: [4, 3], PB9: [4, 4], PA8: [1, 1], PA0: [2, 1], PA1: [2, 2], PB0: [3, 3], PB1: [3, 4] },
     roles: { led: 'PA6', out2: 'PA5', out3: 'PA4', btn: 'PB1', adc: 'PA0', trig: 'PB11', echo: 'PB10', lcd: ['PB11', 'PB10', 'PB1', 'PB0', 'PA7', 'PA5'], gnd: 'GND.2', vcc: '3V3.2', v5: '5V' }, place: [30, 20], px: 200,
     note: 'Ojo: el F103C8 se queda corto de memoria para el MicroPython oficial; en la vida real se programa en C (STM32CubeIDE) o con el núcleo Arduino STM32. Aquí lo pruebas en MicroPython. PC14 y PC15 (cristal de 32 kHz) no se ofrecen.',
     about: 'El STM32 baratísimo de toda la vida (F103). LED en PC13, se enciende con 0. Muchas patas aguantan 5 V.' },
-  blackpill: { family: 'stm32', name: 'STM32 Black Pill', chip: 'STM32F411CE', tag: 'board-stm32-blackpill', art: 'stm32-blackpill', engine: 'shim', flavor: 'stm32', lang: 'python', vcc: 3.3, tol5: true,
+  blackpill: { i2c: { 1: ['PB6', 'PB7'] }, family: 'stm32', name: 'STM32 Black Pill', chip: 'STM32F411CE', tag: 'board-stm32-blackpill', art: 'stm32-blackpill', engine: 'shim', flavor: 'stm32', lang: 'python', vcc: 3.3, tol5: true,
     io: num(['PC13', 'PA0', 'PA1', 'PA2', 'PA3', 'PA4', 'PA5', 'PA6', 'PA7', 'PB0', 'PB1', 'PB2', 'PB10', 'PB9', 'PB8', 'PB7', 'PB6', 'PB5', 'PB4', 'PB3', 'PA15', 'PA12', 'PA11', 'PA10', 'PA9', 'PA8', 'PB15', 'PB14', 'PB13', 'PB12']),
     adc: ['PA0', 'PA1', 'PA2', 'PA3', 'PA4', 'PA5', 'PA6', 'PA7', 'PB0', 'PB1'], power: { '3V3.1': 3.3, '3V3.2': 3.3, '5V.1': 5, '5V.2': 5, 'GND.1': 0, 'GND.2': 0 }, led: { key: 'PC13', low: true },
     tim: { PB6: [4, 1], PB7: [4, 2], PB8: [4, 3], PB9: [4, 4], PA8: [1, 1], PA0: [2, 1], PA1: [2, 2], PA6: [3, 1], PA7: [3, 2] },
     roles: { led: 'PB6', out2: 'PB7', out3: 'PB8', btn: 'PB9', adc: 'PA1', trig: 'PB5', echo: 'PB4', lcd: ['PB15', 'PB14', 'PB13', 'PB12', 'PA8', 'PA9'], gnd: 'GND.1', vcc: '3V3.1', v5: '5V.1' }, place: [30, 20], px: 200,
     note: 'Tiene MicroPython oficial (placa WEACT_F411_BLACKPILL). PC14 y PC15 no se ofrecen.',
     about: 'STM32F411 de WeAct: más potente que la Blue Pill y con MicroPython oficial. LED en PC13 (con 0).' },
-  nucleo: { family: 'stm32', name: 'ST Nucleo-64 F411RE', chip: 'STM32F411RE', tag: 'board-st-nucleo-f411re', engine: 'shim', flavor: 'stm32', lang: 'python', vcc: 3.3, tol5: true,
+  nucleo: { i2c: { 1: ['PB8', 'PB9'] }, family: 'stm32', name: 'ST Nucleo-64 F411RE', chip: 'STM32F411RE', tag: 'board-st-nucleo-f411re', engine: 'shim', flavor: 'stm32', lang: 'python', vcc: 3.3, tol5: true,
     drawn: twoCols({ label: 'NUCLEO-F411RE', chip: 'STM32F411', color: '#f4f4f0', w: 132, left: ['IOREF', 'RESET', '3V3', '5V', 'GND.1', 'GND.2', 'VIN', null, 'A0', 'A1', 'A2', 'A3', 'A4', 'A5'], right: ['D15', 'D14', 'AREF', 'GND.3', 'D13', 'D12', 'D11', 'D10', 'D9', 'D8', 'D7', 'D6', 'D5', 'D4', 'D3', 'D2', 'D1', 'D0'], leds: { led: { x: 100, y: 22, size: 6, color: '#3cf05a' } } }),
     io: [['PA3', 'D0'], ['PA2', 'D1'], ['PA10', 'D2'], ['PB3', 'D3'], ['PB5', 'D4'], ['PB4', 'D5'], ['PB10', 'D6'], ['PA8', 'D7'], ['PA9', 'D8'], ['PC7', 'D9'], ['PB6', 'D10'], ['PA7', 'D11'], ['PA6', 'D12'], ['PA5', 'D13'], ['PB9', 'D14'], ['PB8', 'D15'], ['PA0', 'A0'], ['PA1', 'A1'], ['PA4', 'A2'], ['PB0', 'A3'], ['PC1', 'A4'], ['PC0', 'A5'], ['PC13', null]],
     alias: { D0: 'PA3', D1: 'PA2', D2: 'PA10', D3: 'PB3', D4: 'PB5', D5: 'PB4', D6: 'PB10', D7: 'PA8', D8: 'PA9', D9: 'PC7', D10: 'PB6', D11: 'PA7', D12: 'PA6', D13: 'PA5', D14: 'PB9', D15: 'PB8', A0: 'PA0', A1: 'PA1', A2: 'PA4', A3: 'PB0', A4: 'PC1', A5: 'PC0', LED: 'PA5', SW: 'PC13' },
@@ -172,7 +172,7 @@ export const BOARDS = {
     roles: { led: 'D9', out2: 'D8', out3: 'D7', btn: 'D2', adc: 'A0', trig: 'D4', echo: 'D5', lcd: ['D12', 'D11', 'D5', 'D4', 'D3', 'D2'], gnd: 'GND.3', vcc: '3V3', v5: '5V' }, place: [30, 20], px: 230,
     note: 'Conectores tipo Arduino (D0-D15, A0-A5); en MicroPython valen los dos nombres: Pin("D13") o Pin("PA5"). El LED LD2 está en D13/PA5.',
     about: 'La placa de desarrollo de ST para la industria, con conectores tipo Arduino. MicroPython oficial.' },
-  pyboard: { family: 'stm32', name: 'Pyboard v1.1', chip: 'STM32F405RG', tag: 'board-pyboard-v11', engine: 'shim', flavor: 'stm32', lang: 'python', vcc: 3.3, tol5: true,
+  pyboard: { i2c: { 1: ['PB6', 'PB7'], 2: ['PB10', 'PB11'] }, family: 'stm32', name: 'Pyboard v1.1', chip: 'STM32F405RG', tag: 'board-pyboard-v11', engine: 'shim', flavor: 'stm32', lang: 'python', vcc: 3.3, tol5: true,
     drawn: twoCols({ label: 'PYBv1.1', chip: 'STM32F405', color: '#2a2a2a', w: 112, left: ['X1', 'X2', 'X3', 'X4', 'X5', 'X6', 'X7', 'X8', 'X9', 'X10', 'X11', 'X12', '3V3', 'GND.1'], right: ['Y1', 'Y2', 'Y3', 'Y4', 'Y5', 'Y6', 'Y7', 'Y8', 'Y9', 'Y10', 'Y11', 'Y12', 'VIN', 'GND.2'],
       leds: { led1: { x: 40, y: 150, size: 5, color: '#ff3030' }, led2: { x: 50, y: 150, size: 5, color: '#30ff50' }, led3: { x: 60, y: 150, size: 5, color: '#ffd030' }, led4: { x: 70, y: 150, size: 5, color: '#3080ff' } } }),
     io: [['PA0', 'X1'], ['PA1', 'X2'], ['PA2', 'X3'], ['PA3', 'X4'], ['PA4', 'X5'], ['PA5', 'X6'], ['PA6', 'X7'], ['PA7', 'X8'], ['PB6', 'X9'], ['PB7', 'X10'], ['PC4', 'X11'], ['PC5', 'X12'], ['PC6', 'Y1'], ['PC7', 'Y2'], ['PB8', 'Y3'], ['PB9', 'Y4'], ['PB12', 'Y5'], ['PB13', 'Y6'], ['PB14', 'Y7'], ['PB15', 'Y8'], ['PB10', 'Y9'], ['PB11', 'Y10'], ['PB0', 'Y11'], ['PB1', 'Y12'], ['PA13', null], ['PA14', null], ['PA15', null], ['PB4', null], ['PB3', null]],
@@ -185,32 +185,32 @@ export const BOARDS = {
     about: 'La placa con la que nació MicroPython (módulo pyb): 4 LEDs, botón USR y pines X/Y.' },
 
   /* ── Robótica y Linux (simulado a nivel Python: librerías GPIO) ── */
-  rpi4: { family: 'linux', name: 'Raspberry Pi 4', chip: 'BCM2711', tag: 'board-rpi4', engine: 'shim', flavor: 'linux', lib: 'RPi.GPIO', lang: 'python', vcc: 3.3, labels: RPI_LABEL,
+  rpi4: { i2c: { 1: ['5', '3'] }, family: 'linux', name: 'Raspberry Pi 4', chip: 'BCM2711', tag: 'board-rpi4', engine: 'shim', flavor: 'linux', lib: 'RPi.GPIO', lang: 'python', vcc: 3.3, labels: RPI_LABEL,
     drawn: sbc({ label: 'Raspberry Pi 4', chip: 'BCM2711', color: '#1d7a3f' }), io: H40(), power: h40pow(), model: 'Raspberry Pi 4 Model B',
     roles: { led: '12', out2: '16', out3: '18', btn: '22', trig: '16', echo: '18', lcd: ['26', '24', '22', '18', '16', '12'], gnd: '14', vcc: '1', v5: '2' }, place: [0, 0], px: 0, py: 240,
     note: 'Sin entradas analógicas (como la de verdad: para eso hace falta un ADC externo). RPi.GPIO admite la numeración física (BOARD) y la BCM.',
     about: 'El ordenador de placa más conocido. Python con RPi.GPIO; los ejemplos usan la numeración física (BOARD).' },
-  rpi5: { family: 'linux', name: 'Raspberry Pi 5', chip: 'BCM2712 + RP1', tag: 'board-rpi5', engine: 'shim', flavor: 'linux', lib: 'gpiozero', lang: 'python', vcc: 3.3, labels: RPI_LABEL,
+  rpi5: { i2c: { 1: ['5', '3'] }, family: 'linux', name: 'Raspberry Pi 5', chip: 'BCM2712 + RP1', tag: 'board-rpi5', engine: 'shim', flavor: 'linux', lib: 'gpiozero', lang: 'python', vcc: 3.3, labels: RPI_LABEL,
     drawn: sbc({ label: 'Raspberry Pi 5', chip: 'BCM2712', color: '#1a6e38' }), io: H40(), power: h40pow(), model: 'Raspberry Pi 5 Model B',
     roles: { led: '12', out2: '16', out3: '18', btn: '22', trig: '16', echo: '18', lcd: ['26', '24', '22', '18', '16', '12'], gnd: '14', vcc: '1', v5: '2' }, place: [0, 0], px: 0, py: 240,
     note: 'En la Pi 5 el RPi.GPIO clásico ya no va (los pines cuelgan del chip RP1): se usa gpiozero, que numera por BCM (GPIO18 = pin físico 12). También vale «import RPi.GPIO» como si tuvieras rpi-lgpio.',
     about: 'La Pi más rápida. Se programa con gpiozero, que llama a los pines por su número BCM.' },
-  rdkx3: { family: 'linux', name: 'RDK X3', chip: 'Sunrise X3 (BPU 5 TOPS)', tag: 'board-rdk-x3', engine: 'shim', flavor: 'linux', lib: 'Hobot.GPIO', lang: 'python', vcc: 3.3, labels: RPI_LABEL, pwmPins: ['32', '33'],
+  rdkx3: { i2c: { 1: ['5', '3'] }, family: 'linux', name: 'RDK X3', chip: 'Sunrise X3 (BPU 5 TOPS)', tag: 'board-rdk-x3', engine: 'shim', flavor: 'linux', lib: 'Hobot.GPIO', lang: 'python', vcc: 3.3, labels: RPI_LABEL, pwmPins: ['32', '33'],
     drawn: sbc({ label: 'RDK X3', chip: 'X3 · BPU', color: '#202a36' }), io: H40(), power: h40pow(), model: 'RDK_X3',
     roles: { led: '32', out2: '16', out3: '18', btn: '22', trig: '16', echo: '18', lcd: ['26', '24', '22', '18', '16', '12'], gnd: '14', vcc: '1', v5: '2' }, place: [0, 0], px: 0, py: 240,
     note: 'Hobot.GPIO es como RPi.GPIO, con una diferencia que el simulador respeta: el PWM solo existe en los pines 32 y 33 (no hay PWM por software). La tensión máxima de los pines es 3,3 V.',
     about: 'Placa de robótica de D-Robotics con acelerador de IA. Python con Hobot.GPIO; PWM solo en los pines 32 y 33.' },
-  rdkx5: { family: 'linux', name: 'RDK X5', chip: 'Sunrise X5 (BPU 10 TOPS)', tag: 'board-rdk-x5', engine: 'shim', flavor: 'linux', lib: 'Hobot.GPIO', lang: 'python', vcc: 3.3, labels: RPI_LABEL, pwmPins: ['32', '33'],
+  rdkx5: { i2c: { 1: ['5', '3'] }, family: 'linux', name: 'RDK X5', chip: 'Sunrise X5 (BPU 10 TOPS)', tag: 'board-rdk-x5', engine: 'shim', flavor: 'linux', lib: 'Hobot.GPIO', lang: 'python', vcc: 3.3, labels: RPI_LABEL, pwmPins: ['32', '33'],
     drawn: sbc({ label: 'RDK X5', chip: 'X5 · BPU', color: '#22262e', w: 378, h: 280, ports: 'x5' }), io: H40(), power: h40pow(), model: 'RDK_X5',
     roles: { led: '32', out2: '16', out3: '18', btn: '22', trig: '16', echo: '18', lcd: ['26', '24', '22', '18', '16', '12'], gnd: '14', vcc: '1', v5: '2' }, place: [0, 0], px: 0, py: 300,
     note: 'Como en la X3, el PWM de Hobot.GPIO va por hardware; aquí se ofrece en los pines 32 y 33 (en la placa real se pueden activar más grupos con srpi-config).',
     about: 'La sucesora de la X3: más IA (10 TOPS), mismo Hobot.GPIO y cabecera de 40 pines.' },
-  jetson: { family: 'linux', name: 'Jetson Orin Nano', chip: 'NVIDIA Orin', tag: 'board-jetson-orin-nano', engine: 'shim', flavor: 'linux', lib: 'Jetson.GPIO', lang: 'python', vcc: 3.3, labels: RPI_LABEL, pwmPins: ['15', '32', '33'],
+  jetson: { i2c: { 1: ['5', '3'] }, family: 'linux', name: 'Jetson Orin Nano', chip: 'NVIDIA Orin', tag: 'board-jetson-orin-nano', engine: 'shim', flavor: 'linux', lib: 'Jetson.GPIO', lang: 'python', vcc: 3.3, labels: RPI_LABEL, pwmPins: ['15', '32', '33'],
     drawn: sbc({ label: 'Jetson Orin Nano', chip: 'ORIN', color: '#1e2a1c', w: 378, h: 299, ports: 'x5' }), io: H40(), power: h40pow(), model: 'JETSON_ORIN_NANO',
     roles: { led: '32', out2: '16', out3: '18', btn: '22', trig: '16', echo: '18', lcd: ['26', '24', '22', '18', '16', '12'], gnd: '14', vcc: '1', v5: '2' }, place: [0, 0], px: 0, py: 320,
     note: 'Jetson.GPIO copia la API de RPi.GPIO. PWM por hardware en los pines 15, 32 y 33 (en la real hay que activarlos con jetson-io).',
     about: 'La placa de NVIDIA para robots con visión. Python con Jetson.GPIO (igual que RPi.GPIO).' },
-  kickpi: { family: 'linux', name: 'KickPi K1', chip: 'Rockchip RK3568', tag: 'board-kickpi-k1', engine: 'shim', flavor: 'linux', lib: 'wiringpi', lang: 'python', vcc: 3.3,
+  kickpi: { i2c: { 1: ['5', '3'] }, family: 'linux', name: 'KickPi K1', chip: 'Rockchip RK3568', tag: 'board-kickpi-k1', engine: 'shim', flavor: 'linux', lib: 'wiringpi', lang: 'python', vcc: 3.3,
     drawn: sbc({ label: 'KickPi K1', chip: 'RK3568', color: '#173a5e', w: 360, h: 240, ports: 'x5' }), io: H40(), power: h40pow(), model: 'KICKPI_K1',
     roles: { led: '12', out2: '16', out3: '18', btn: '22', trig: '16', echo: '18', lcd: ['26', '24', '22', '18', '16', '12'], gnd: '14', vcc: '1', v5: '2' }, place: [0, 0], px: 0, py: 260,
     note: 'KickPi trae su propio wiringPi (wiringKP, la orden gpio). Aquí los ejemplos usan la numeración física (wiringPiSetupPhys) para no depender de la tabla wPi de cada modelo: compruébala con «gpio readall». La disposición de alimentación (3V3, 5V, GND) es la habitual de 40 pines; mira la hoja de tu KickPi, porque algunos pines pueden ir a 1,8 V.',
@@ -380,6 +380,17 @@ def _plato():
         if not k.startswith('__'): setattr(mm, k, getattr(_m, k))
     mm.Pin = Pin; mm.ADC = ADC; mm.PWM = PWM; mm.Timer = Timer
     mm.time_pulse_us = lambda p, *a: _m.time_pulse_us(p._p if isinstance(p, Pin) else _m.Pin(gp(p)), *a)
+    # I2C: en el chip simulado va por software (SoftI2C) en las patas que digas; así se ve entero en el analizador
+    I2CDEF = ${pyDict(Object.fromEntries(Object.entries(b.i2c || {}).map(([k, v]) => [k, v.join(',')])))}
+    def raw(p): return p._p if isinstance(p, Pin) else _m.Pin(gp(p))
+    def SoftI2C(scl, sda, freq=400000, **kw): return _m.SoftI2C(scl=raw(scl), sda=raw(sda), freq=freq)
+    def I2C(id=0, scl=None, sda=None, freq=400000, **kw):
+        if scl is None or sda is None:
+            d = I2CDEF.get(str(id))
+            if not d: raise ValueError('La %s no tiene I2C(%s) por defecto: dile las patas, I2C(%s, scl=Pin(...), sda=Pin(...))' % (NAME, id, id))
+            scl, sda = d.split(',')
+        return SoftI2C(scl, sda, freq)
+    mm.I2C = I2C; mm.SoftI2C = SoftI2C
     sys.modules['machine'] = mm
 `;
   if (b.flavor === 'esp32') s += `    # ── Módulos propios del ESP32 ──
@@ -391,9 +402,15 @@ def _plato():
             try: return s._m[k]
             except KeyError: raise AttributeError(k)
     RGB = ${pyStr(b.rgb || '')}
+    try:
+        import neopixel as RN   # el de verdad (machine.bitstream): genera el tren de pulsos en la pata
+    except ImportError:
+        RN = None
     sys.modules['neopixel'] = Lazy('''
 class NeoPixel:
-    def __init__(s, pin, n, **kw): s.n = n; s.b = [(0, 0, 0)] * n; s._k = key(pin)
+    def __init__(s, pin, n, **kw):
+        s.n = n; s.b = [(0, 0, 0)] * n; s._k = key(pin)
+        s.real = RN.NeoPixel(_m.Pin(gp(pin)), n) if RN and s._k != RGB else None
     def __setitem__(s, i, v): s.b[i] = tuple(v[:3])
     def __getitem__(s, i): return s.b[i]
     def __len__(s): return s.n
@@ -401,7 +418,10 @@ class NeoPixel:
         for i in range(s.n): s.b[i] = tuple(v[:3])
     def write(s):
         if s._k == RGB: AV[36], AV[37], AV[38] = s.b[0]; AV[39] = AV[39] + 1
-''', {'key': key, 'RGB': RGB, 'AV': AV})
+        elif s.real:
+            for i in range(s.n): s.real[i] = s.b[i]
+            s.real.write()
+''', {'key': key, 'RGB': RGB, 'AV': AV, 'RN': RN, '_m': _m, 'gp': gp})
     sys.modules['network'] = Lazy('''
 STA_IF = 0
 AP_IF = 1
@@ -724,6 +744,21 @@ class TonalBuzzer:
 Buzzer = LED
 MotionSensor = Button
 ''', {'Pin': Pin, '_m': _m, '_t': _t, 'hz': hz, 'BCMP': BCMP, 'WPI': WPI, 'HwPWM': HwPWM, 'SoftPWM': SoftPWM, 'mkpwm': mkpwm, 'LIB': LIB})
+    sys.modules['smbus2'] = sys.modules['smbus'] = Lazy('''
+class SMBus:
+    def __init__(s, bus=1, **kw): s.i2c = _m.SoftI2C(scl=_m.Pin(gp('5')), sda=_m.Pin(gp('3')), freq=100000)
+    def read_byte_data(s, a, r): return s.i2c.readfrom_mem(a, r, 1)[0]
+    def write_byte_data(s, a, r, v): s.i2c.writeto_mem(a, r, bytes([v & 255]))
+    def read_word_data(s, a, r): d = s.i2c.readfrom_mem(a, r, 2); return d[0] | d[1] << 8
+    def write_word_data(s, a, r, v): s.i2c.writeto_mem(a, r, bytes([v & 255, (v >> 8) & 255]))
+    def read_i2c_block_data(s, a, r, n): return list(s.i2c.readfrom_mem(a, r, n))
+    def write_i2c_block_data(s, a, r, d): s.i2c.writeto_mem(a, r, bytes(d))
+    def read_byte(s, a): return s.i2c.readfrom(a, 1)[0]
+    def write_byte(s, a, v): s.i2c.writeto(a, bytes([v & 255]))
+    def close(s): pass
+    def __enter__(s): return s
+    def __exit__(s, *a): pass
+''', {'_m': _m, 'gp': gp})
     sys.modules['wiringpi'] = Lazy('''
 # wiringpi (wiringOP / wiringKP)
 INPUT = 0; OUTPUT = 1; PWM_OUTPUT = 2; LOW = 0; HIGH = 1; PUD_OFF = 0; PUD_DOWN = 1; PUD_UP = 2
@@ -752,7 +787,110 @@ def softToneWrite(n, f):
 def softPwmStop(n): ws['soft'][n][0].stop()
 ''', {'Pin': Pin, '_m': _m, '_t': _t, 'hz': hz, 'BCMP': BCMP, 'WPI': WPI, 'HwPWM': HwPWM, 'SoftPWM': SoftPWM, 'mkpwm': mkpwm, 'LIB': LIB})
 `;
-  return s + `_plato()
+  return s + LIBS + `_plato()
 del _plato
 `;
 }
+// Librerías incluidas (se compilan solo si tu programa las importa): ssd1306, mpu6050, bmp280, lcd_i2c
+// Librerías incluidas (se compilan solo si tu programa las importa). LIB_SRC sirve también para copiarlas a la placa real.
+export const LIB_SRC = {
+  ssd1306: `import framebuf
+class SSD1306(framebuf.FrameBuffer):
+    def __init__(s, width, height, external_vcc=False):
+        s.width = width; s.height = height; s.pages = height // 8; s.buffer = bytearray(s.pages * width)
+        super().__init__(s.buffer, width, height, framebuf.MONO_VLSB)
+        for c in (0xAE, 0x20, 0x00, 0x40, 0xA1, 0xA8, height - 1, 0xC8, 0xD3, 0, 0xDA, 0x12 if height == 64 else 0x02, 0xD5, 0x80, 0xD9, 0xF1, 0xDB, 0x30, 0x81, 0xFF, 0xA4, 0xA6, 0x8D, 0x14, 0xAF):
+            s.write_cmd(c)
+        s.fill(0); s.show()
+    def poweroff(s): s.write_cmd(0xAE)
+    def poweron(s): s.write_cmd(0xAF)
+    def contrast(s, c): s.write_cmd(0x81); s.write_cmd(c)
+    def invert(s, i): s.write_cmd(0xA7 if i else 0xA6)
+    def rotate(s, r): s.write_cmd(0xC8 if r else 0xC0); s.write_cmd(0xA1 if r else 0xA0)
+    def show(s):
+        for c in (0x21, 0, s.width - 1, 0x22, 0, s.pages - 1): s.write_cmd(c)
+        s.write_data(s.buffer)
+class SSD1306_I2C(SSD1306):
+    def __init__(s, width, height, i2c, addr=0x3C, external_vcc=False):
+        s.i2c = i2c; s.addr = addr; s.cmdbuf = bytearray(2)
+        super().__init__(width, height, external_vcc)
+    def write_cmd(s, c): s.cmdbuf[0] = 0x80; s.cmdbuf[1] = c; s.i2c.writeto(s.addr, s.cmdbuf)
+    def write_data(s, buf): s.i2c.writevto(s.addr, (b'\\x40', buf))
+`,
+  mpu6050: `class MPU6050:
+    def __init__(s, i2c, addr=0x68): s.i2c = i2c; s.addr = addr; i2c.writeto_mem(addr, 0x6B, bytes([0]))
+    def _w(s, r):
+        d = s.i2c.readfrom_mem(s.addr, r, 2); v = d[0] << 8 | d[1]
+        return v - 65536 if v > 32767 else v
+    def acceleration(s): return tuple(s._w(0x3B + 2 * i) / 16384 for i in range(3))
+    def gyro(s): return tuple(s._w(0x43 + 2 * i) / 131 for i in range(3))
+    def temperature(s): return s._w(0x41) / 340 + 36.53
+    def get_values(s):
+        a = s.acceleration(); g = s.gyro()
+        return {'AcX': a[0], 'AcY': a[1], 'AcZ': a[2], 'GyX': g[0], 'GyY': g[1], 'GyZ': g[2], 'Tmp': s.temperature()}
+`,
+  bmp280: `import struct
+class BMP280:
+    def __init__(s, i2c, addr=0x76):
+        s.i2c = i2c; s.addr = addr
+        if i2c.readfrom_mem(addr, 0xD0, 1)[0] != 0x58: raise OSError('No encuentro un BMP280 en 0x%02x' % addr)
+        s.c = struct.unpack('<HhhHhhhhhhhh', i2c.readfrom_mem(addr, 0x88, 24)); i2c.writeto_mem(addr, 0xF4, bytes([0x27]))
+    def _raw(s):
+        d = s.i2c.readfrom_mem(s.addr, 0xF7, 6)
+        return (d[0] << 12) | (d[1] << 4) | (d[2] >> 4), (d[3] << 12) | (d[4] << 4) | (d[5] >> 4)
+    def _tf(s, t):
+        T1, T2, T3 = s.c[0], s.c[1], s.c[2]
+        return (t / 16384 - T1 / 1024) * T2 + ((t / 131072 - T1 / 8192) ** 2) * T3
+    @property
+    def temperature(s): return s._tf(s._raw()[1]) / 5120
+    @property
+    def pressure(s):
+        p, t = s._raw(); tf = s._tf(t); P1, P2, P3, P4, P5, P6, P7, P8, P9 = s.c[3:]
+        v1 = tf / 2 - 64000; v2 = v1 * v1 * P6 / 32768 + v1 * P5 * 2; v2 = v2 / 4 + P4 * 65536
+        v1 = (P3 * v1 * v1 / 524288 + P2 * v1) / 524288; v1 = (1 + v1 / 32768) * P1
+        if not v1: return 0
+        q = (1048576 - p - v2 / 4096) * 6250 / v1; return q + (P9 * q * q / 2147483648 + q * P8 / 32768 + P7) / 16
+`,
+  lcd_i2c: `import time
+class I2cLcd:
+    def __init__(s, i2c, addr=0x27, rows=2, cols=16):
+        s.i2c = i2c; s.addr = addr; s.rows = rows; s.cols = cols; s.bl = 8; s.x = s.y = 0
+        time.sleep_ms(20)
+        for n in (3, 3, 3, 2): s._nib(n << 4, 0); time.sleep_ms(5)
+        for c in (0x28, 0x0C, 0x06, 0x01): s.cmd(c)
+        time.sleep_ms(2)
+    def _out(s, b): s.i2c.writeto(s.addr, bytes([b | s.bl]))
+    def _nib(s, n, rs): s._out(n | rs | 4); s._out(n | rs)
+    def _send(s, v, rs): s._nib(v & 0xF0, rs); s._nib((v << 4) & 0xF0, rs)
+    def cmd(s, c): s._send(c, 0)
+    def clear(s): s.cmd(0x01); s.x = s.y = 0; time.sleep_ms(2)
+    def move_to(s, x, y): s.x = x; s.y = y; s.cmd(0x80 | (x + (0x40 if y & 1 else 0) + (s.cols if y > 1 else 0)))
+    def putchar(s, ch):
+        if ch == chr(10): s.move_to(0, (s.y + 1) % s.rows); return
+        s._send(ord(ch), 1); s.x += 1
+    def putstr(s, t):
+        for ch in t: s.putchar(ch)
+    def backlight_on(s): s.bl = 8; s._out(0)
+    def backlight_off(s): s.bl = 0; s._out(0)
+    def hide_cursor(s): s.cmd(0x0C)
+    def show_cursor(s): s.cmd(0x0E)
+`,
+};
+const LIBS = `    # ── Librerías de piezas incluidas: ${Object.keys(LIB_SRC).join(', ')} ──
+    try:
+        Lazy
+    except NameError:
+        class Lazy:
+            def __init__(s, src, env): s._src = src; s._env = env; s._m = None
+            def __getattr__(s, k):
+                if s._m is None:
+                    d = dict(s._env); exec(s._src, d); s._m = d
+                try: return s._m[k]
+                except KeyError: raise AttributeError(k)
+` + Object.entries(LIB_SRC).map(([k, src]) => `    sys.modules['${k}'] = Lazy('''\n${src}''', {})\n`).join('');
+// Para las placas de chip emulado (Pico…): solo las librerías, sin capa de pines
+export function libsCode() { return `def _plato():
+    import sys
+${LIBS}_plato()
+del _plato
+`; }
