@@ -46,8 +46,11 @@ function draw() {
   if (!R) return; const root = R.root; root.innerHTML = '';
   const b = BOARDS[T.board];
   // Barra superior
+  if (R.pv) { R.pv.dispose(); R.pv = null; } if (R.dv) { R.dv.dispose(); R.dv = null; }
+  const seg = el('div', { class: 'tl-seg' }, btn('🔌 Circuito', () => setMode('circuit'), 'b' + (!T.mode || T.mode === 'circuit' ? ' on' : '')), btn('🏭 Planta', () => setMode('plant'), 'b' + (T.mode === 'plant' ? ' on' : '')), btn('🚁 Dron', () => setMode('drone'), 'b' + (T.mode === 'drone' ? ' on' : '')));
+  if (T.mode === 'drone') { R.droneHost = el('div', { class: 'tl-dronehost' }, el('div', { class: 'empty' }, 'Montando el mundo del dron…')); root.append(el('div', { class: 'tl-bar' }, seg), R.droneHost); mountDrone(R.droneHost); return; }
   const bar = el('div', { class: 'tl-bar' },
-    el('div', { class: 'tl-seg' }, btn('🔌 Circuito', () => setMode('circuit'), 'b' + (T.mode !== 'plant' ? ' on' : '')), btn('🏭 Planta', () => setMode('plant'), 'b' + (T.mode === 'plant' ? ' on' : ''))),
+    seg,
     btn(el('span', { class: 'tl-bname' }, el('b', {}, (FAMILIES.find(f => f[0] === b.family) || ['', '🔲'])[1].split(' ')[0] + ' ' + b.name), el('small', {}, `${b.chip} · ${b.lang === 'cpp' ? 'C++' : b.flavor === 'linux' ? 'Python' : 'MicroPython'} ▾`)), boardPicker, 'b tl-bpick'),
     btn('🔩 Por dentro', inside, 'b'),
     R.runBtn = btn(T.runner ? '■ Parar' : '▶ Simular', () => T.runner ? stop() : start(), 'b on tl-run'), R.pauseBtn = btn(T.paused ? '▶' : '⏸', togglePause, 'b tl-pause'),
@@ -67,7 +70,7 @@ function draw() {
   const inp = el('input', { class: 'txt', placeholder: 'Escribe y pulsa Intro para mandarlo por el puerto serie', on: { keydown: e => { if (e.key === 'Enter' && T.runner) { T.runner.write(e.target.value + '\n'); e.target.value = ''; } } } });
   R.tabs = el('div', { class: 'tl-seg tl-tabs', hidden: true });
   const side = el('div', { class: 'tl-side' }, R.tabs, el('div', { class: 'tl-h' }, el('b', {}, b.lang === 'cpp' ? '⚙️ Arduino C++' : b.flavor === 'linux' ? `🐍 Python · ${b.lib}` : b.flavor === 'stm32' ? '🐍 MicroPython · STM32' : '🐍 MicroPython'), el('small', {}, (EXAMPLES.find(e => e.id === T.ex) || {}).title || 'Tu circuito')), R.code, el('div', { class: 'tl-h' }, el('b', {}, '🖥 Monitor')), R.mon, inp);
-  const plantMode = T.mode === 'plant'; if (R.pv) { R.pv.dispose(); R.pv = null; } R.plantHost = plantMode ? el('div', { class: 'tl-planthost' }, el('div', { class: 'empty' }, 'Montando la planta 3D…')) : null;
+  const plantMode = T.mode === 'plant'; R.plantHost = plantMode ? el('div', { class: 'tl-planthost' }, el('div', { class: 'empty' }, 'Montando la planta 3D…')) : null;
   root.append(bar, R.warn, el('div', { class: 'tl-main' }, el('div', { class: 'tl-left' + (plantMode ? ' plant' : '') }, R.tools, el('div', { class: 'tl-stagewrap' }, R.stage, R.probeEl), R.plantHost || '', T.showIns ? insPanel().el : '', R.status), side));
   if (plantMode) { mountPlant(R.plantHost); if (getPlant().ctls.length) mountEditor(); }
   tools(); requestAnimationFrame(() => requestAnimationFrame(() => { measure(); if (T.fit !== false) fit(); paintWires(); }));
@@ -450,8 +453,8 @@ function stop(keepMsg) {
   for (const w of R.world.querySelectorAll('.tl-part')) { const x = w.firstChild; w.classList.remove('burn'); if ('value' in x && x.tagName === 'WOKWI-LED') { x.value = false; } if (x.tagName === 'WOKWI-RGB-LED') { x.ledRed = x.ledGreen = x.ledBlue = 0; } if (x.tagName === 'WOKWI-BUZZER') x.hasSignal = false; if ('led13' in x) { x.led13 = false; x.ledPower = false; } if ('led25' in x) x.led25 = false; if ('ledBuiltIn' in x) { x.ledBuiltIn = false; x.ledPower = false; } if ('leds' in x) x.leds = {}; if (x.tagName === 'WOKWI-7SEGMENT') x.values = [0, 0, 0, 0, 0, 0, 0, 0]; }
   tools();
 }
-export function leaveTaller() { stop(); if (R && R.pv) { R.pv.dispose(); R.pv = null; } if (T.util) T.util.safe().catch(() => {}); }
-export const _t = { T, draw: () => draw(), useExample, start, stop, tapPin, addPart, measure: () => measure(), paint: () => paintWires(), importDiagram, loadDesign, getPlant: () => getPlant(), loadPlant: id => loadExamplePlant(id), autoAssign: () => autoAssign(), writeProgram: () => writeProgram(), setMode: m => setMode(m) };
+export function leaveTaller() { stop(); if (R && R.pv) { R.pv.dispose(); R.pv = null; } if (R && R.dv) { R.dv.dispose(); R.dv = null; } if (T.util) T.util.safe().catch(() => {}); }
+export const _t = { T, draw: () => draw(), useExample, start, stop, tapPin, addPart, measure: () => measure(), paint: () => paintWires(), importDiagram, loadDesign, getPlant: () => getPlant(), loadPlant: id => loadExamplePlant(id), autoAssign: () => autoAssign(), writeProgram: () => writeProgram(), setMode: m => setMode(m), dv: () => R && R.dv };
 
 /* ---------- El profe: monta el circuito por ti o te lo explica ---------- */
 function catalogText() {
@@ -572,7 +575,10 @@ function realUsb(b) {
 }
 
 /* ---------- 🏭 Planta: una línea de producción en 3D que tu placa (simulada o de verdad, con el útil) controla ---------- */
-function setMode(m) { T.mode = m; save(); draw(); }
+function setMode(m) { if (T.mode !== m && T.runner) stop(); T.mode = m; save(); draw(); }
+async function mountDrone(host) {
+  try { const { droneView } = await import('./taller/drone3d.js'); const dv = await droneView({}); if (!host.isConnected) { dv.dispose(); return; } host.innerHTML = ''; host.append(dv.el); R.dv = dv; }
+  catch (e) { host.innerHTML = ''; host.append(el('div', { class: 'empty' }, 'No se pudo abrir el mundo del dron: ' + e.message)); } }
 function getPlant() {
   if (T.plantObj) return T.plantObj; let d = null; try { d = JSON.parse(localStorage.getItem(PKEY) || 'null'); } catch (e) {}
   const P = T.plantObj = new Plant(d || undefined); if (!d) { const ex = PLANTS[0]; ex.build(P); P.exId = ex.id; P.title = ex.title; autoAssign(true, 'sim'); autoAssign(true, 'util'); } return P; }

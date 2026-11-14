@@ -104,16 +104,28 @@ Monta un circuito, prográmalo y simúlalo antes de tocar un cable; luego lléva
 - **A la mesa**: lista de la compra, montaje paso a paso y grabación por USB en tu placa.
 - Abre y guarda proyectos de Wokwi y Velxio (`diagram.json`).
 
+### 🚁 Dron con visión: tu RDK X5 pilota un dron simulado
+
+Pestaña **🚁 Dron** del Taller: un mundo en 3D (bosque, casas, una parcela, un pájaro que vuela) y un multirrotor con la cámara doble de la RDK X5 (dos cámaras a 6 cm, 80° de campo, cardán).
+
+- **Órdenes en castellano**: «despega», «haz un rodeo», «mapea esta zona» (marcas la zona tocando dos esquinas en el suelo), «sigue ese pájaro», «vuelve a casa», «aterriza».
+- **🧠 Piloto de Plató**: hace de cabeza del dron con la misma lógica que la placa (mira la imagen, busca al pájaro por color y vuela). Sirve para probar sin hardware.
+- **🔌 Tu placa por red**: Plató renderiza las dos cámaras y se las manda en JPEG por WebSocket, con la telemetría (ENU, como ROS). La placa decide con su procesador y devuelve órdenes de vuelo, lo que ha detectado (se pinta sobre la imagen de a bordo) y una vista previa del mapa que va montando. Si la placa deja de mandar órdenes durante 1 s, el dron se queda quieto en el aire.
+- **En la placa** (`drone/rdk/`): `plato_bridge.py` (WebSocket con la biblioteca estándar; `--tls` para Plató en https, `--ros2` para cámaras, odometría y `/cmd_vel` en ROS 2) y `mision.py` (visión con OpenCV, rodeo, barrido con mosaico georreferenciado que guarda `mapa.jpg`, seguimiento del pájaro con freno por distancia estéreo). Ver [`drone/rdk/README.md`](drone/rdk/README.md).
+
 ### 🏭 Planta: una línea de producción que controla tu placa
 
 Pestaña **🏭 Planta** del Taller: una planta industrial en 3D sin límite de módulos, controlada por la placa del Taller (simulada) o por **tu placa de verdad** a través del útil HIL.
 
+- **Física de cuerpo rígido** (propia, sin dependencias): cajas, cilindros y bolas que caen, vuelcan, giran y ruedan; las cintas arrastran por rozamiento, los cilindros y topes empujan y paran. Queda una física sencilla, más ligera, para plantas enormes.
+- **Varias placas**: PLC1 es la del Taller y puedes añadir PLC2, PLC3… cada una con su placa y su programa (pestañas sobre el editor), cada una en su hilo. Se hablan con cables entre pines o con mensajes por serie: `print('@PLC2 PIEZA')` le llega a PLC2 como una línea.
 - **Módulos**: cintas (motor, sentido, velocidad por PWM, encoder), emisor de piezas (colores, peso, metálicas, al azar o a petición), contenedores con contador, fotocélulas de barrera, sensores inductivos y de color, básculas (salida analógica), cilindros de simple y doble efecto con finales de carrera, topes, balizas y botonera (marcha NA, paro y seta NC, selector). Cada uno con sus medidas y parámetros.
 - **Física**: las piezas viajan sobre las cintas, pasan de una a otra (también en L o a distinta altura), caen, se empujan y se paran contra topes y cilindros; los sensores ven lo que tienen delante de verdad.
 - **Editor 3D**: añade, arrastra con imán a 5 cm, gira, duplica y borra; cambia medidas en el panel. Guarda y abre plantas (`.planta.json`).
 - **Señales**: cada sensor y actuador se conecta a un pin de la placa o a un canal del útil («⚡ Conectar señales solas» busca pines libres y respeta los que solo son entrada). Valor en vivo de cada señal y **fallos inyectables** (sensor siempre activo, muerto, intermitente; cilindro atascado; forzar cualquier señal).
-- **Tiempo honrado**: con la placa simulada, la planta va al ritmo del reloj del chip emulado; si el emulador va lento, el mundo también.
-- **Ejemplos con su programa**: clasificadora por color (cola FIFO de piezas), pesaje con tope y rechazo, dos cintas con acumulación. «📝 Escribir el programa» lo genera para la placa elegida y los pines tal como estén conectados (MicroPython, Python de placa Linux o Arduino C++), con máquina de estados, paro, seta y rearme.
+- **Tiempo honrado**: con la placa simulada, la planta va al ritmo del reloj del chip emulado (con varias, al de la más lenta); si el emulador va lento, el mundo también.
+- **Emulador en un hilo aparte**: el RP2040 corre en un Web Worker y no frena la vista (unas 2,5 veces más rápido en nuestras pruebas). Si el circuito tiene piezas que contestan al chip en microsegundos (I2C por software, DHT22, ultrasonidos), vuelve al hilo principal.
+- **Ejemplos con su programa**: clasificadora por color (cola FIFO de piezas), pesaje con tope y rechazo, dos cintas con acumulación y dos cintas con dos placas que se avisan. «📝 Escribir el programa» lo genera para la placa elegida y los pines tal como estén conectados (MicroPython, Python de placa Linux o Arduino C++), con máquina de estados, paro, seta y rearme.
 - **Con una placa real**: el útil HIL (`util/`, una Pico con `util/firmware/main.py`) pone en sus salidas lo que «ven» los sensores y lee lo que manda tu STM32, ESP32, Arduino o PLC. Se conecta por Web Serial; «⬇ Instalar firmware» lo graba desde el navegador. Vigilancia: si Plató se calla 1,5 s, todo a reposo.
 
 Está hecho sobre [avr8js](https://github.com/wokwi/avr8js), [rp2040js](https://github.com/wokwi/rp2040js) y [@wokwi/elements](https://github.com/wokwi/wokwi-elements) (MIT) y toma piezas de [Velxio](https://github.com/davidmonterocrespo24/velxio) (AGPL-3.0). Detalles en [`taller/LICENCIAS.md`](taller/LICENCIAS.md).
@@ -244,10 +256,11 @@ js/local.js         servicios del aparato (FFmpeg, voces, proxy)
 js/learn.js         Aprender: documentos, clases, preguntas en directo
 js/localai.js       Ajustes → IA local: packs, modelos de Ollama, agentes
 js/taller.js        Taller de electrónica (vista)
-js/taller/          placas y su capa de soporte, circuito y red eléctrica, motores, ejemplos, planta 3D (plant*.js) y enlace con el útil (util.js)
+js/taller/          placas y su capa de soporte, circuito y red eléctrica, motores, ejemplos, planta 3D (plant*.js, rigid.js), dron (drone*.js, rdklink.js), emulador en un hilo (simworker.js) y enlace con el útil (util.js)
 mcp/taller.mjs      compilar con arduino-cli y grabar la placa por USB
 taller/             firmware MicroPython, arte de placas y protoboards, licencias
 util/firmware/      firmware del útil HIL (Pico + MicroPython)
+drone/rdk/          puente y misiones para la placa que pilota el dron (RDK X5, Jetson, Raspberry Pi…)
 js/recast.js        Recast local: máscara, generación y pegado
 mcp/localai.mjs     equipo, descargas, Python con uv, Ollama, ComfyUI, opencode, Hermes
 mcp/recast.mjs      SAM 3.1 + Wan Animate / VACE en ComfyUI, recorte y pegado con FFmpeg, audio
