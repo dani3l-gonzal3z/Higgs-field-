@@ -274,6 +274,8 @@ export function defineBoards() {
         const img = a.svg ? `<img src="${new URL('../../' + a.svg, import.meta.url)}" width="${a.w}" height="${a.h}" draggable="false" alt="${b.name}">` : drawSvg(a);
         const leds = Object.entries(a.leds || {}).map(([id, l]) => `<i data-l="${id}" style="left:${l.x - l.size / 2}px;top:${l.y - l.size / 2}px;width:${l.size}px;height:${l.size}px;--c:${l.color || '#fff'}"></i>`).join('');
         this.shadowRoot.innerHTML = `<style>:host{display:inline-block;line-height:0;position:relative}img,svg{display:block;width:${a.w}px;height:${a.h}px}i{position:absolute;border-radius:50%;background:var(--c);box-shadow:0 0 6px 3px var(--c);opacity:0;transition:opacity .05s;pointer-events:none}</style>${img}${leds}`; this._paint();
+        // Si el dibujo no está (hay alojamientos que no sirven los SVG de terceros), lo dibujo yo con las mismas patas
+        const im = this.shadowRoot.querySelector('img'); if (im) im.onerror = () => { const t = document.createElement('template'); t.innerHTML = drawSvg({ ...a, draw: { kind: 'cols', label: b.name.replace(/^(Seeed|Wemos|Arduino|STM32|Raspberry Pi) /, ''), color: { esp32: '#1b1b1b', stm32: '#1d3f7a', rp2040: '#1f6b3a' }[b.family] || '#1b1b1b', chip: b.chip.split(' ')[0] } }); im.replaceWith(t.content.firstChild); };
       }
       get pinInfo() { return a.pins; }
       set leds(v) { this._l = v || {}; this._paint(); } get leds() { return this._l; }
