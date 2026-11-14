@@ -17,7 +17,7 @@ import { SSD1306, MPU6050, BMP280, DS1307, LcdI2C, WS2812 } from './taller/devic
 import { RealBoard, webSerialOk } from './taller/webserial.js';
 import { Plant, PLANTS } from './taller/plant.js';
 import { PLANT_SIGNALS, plantProgram, hasProgram } from './taller/plantcode.js';
-import { UtilLink, UTIL_CH, FIRMWARE_URL } from './taller/util.js';
+import { UtilLink, UTIL_CH, fetchFirmware } from './taller/util.js';
 
 const KEY = 'plato.taller.v1', PKEY = 'plato.taller.plant.v1';
 const WIRE_COLORS = ['green', 'blue', 'orange', 'purple', 'yellow', 'white', 'cyan'];
@@ -646,7 +646,7 @@ function controllerBar() {
     if (!webSerialOk()) box.append(el('p', { class: 'warn' }, 'Este navegador no tiene Web Serial: usa Chrome o Edge en el ordenador.'));
     else box.append(el('div', { class: 'pl-row' },
       on ? act('⏏ Desconectar', async () => { await U.close(); }) : act('🔌 Conectar el útil', async () => { T.util = new UtilLink(); T.util.log = sayMon; await T.util.connect(); sayMon('Útil conectado.\n'); }, 'mini-b on'),
-      act('⬇ Instalar firmware', async () => { if (T.util && T.util.connected) await T.util.close(); const code = await (await fetch(FIRMWARE_URL)).text(); const rb = new RealBoard(sayMon); sayMon('Grabando el firmware del útil (main.py)…\n'); await rb.connect(); await rb.save(code, 'main.py'); await rb.close(); sayMon('✅ Firmware grabado. Ya puedes «Conectar el útil».\n'); }),
+      act('⬇ Instalar firmware', async () => { if (T.util && T.util.connected) await T.util.close(); const code = await fetchFirmware(); const rb = new RealBoard(sayMon); sayMon('Grabando el firmware del útil (main.py)…\n'); await rb.connect(); await rb.save(code, 'main.py'); await rb.close(); sayMon('✅ Firmware grabado. Ya puedes «Conectar el útil».\n'); }),
       on ? act('🛑 Todo a reposo', async () => { await U.safe(); }) : '')); }
   box.append(el('div', { class: 'pl-row' }, btn('⚡ Conectar señales solas', () => autoAssign(), 'mini-b'), P.ctl === 'sim' && hasProgram(P.exId) ? btn('📝 Escribir el programa', writeProgram, 'mini-b') : '',
     btn('💾', () => download(new Blob([JSON.stringify(P.toJSON(), null, 1)], { type: 'application/json' }), (P.title || 'planta').replace(/\W+/g, '-').toLowerCase() + '.planta.json'), 'mini-b'),

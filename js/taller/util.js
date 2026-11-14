@@ -7,6 +7,8 @@ export const UTIL_CH = {
   fromDut: { d: ['DI0', 'DI1', 'DI2', 'DI3', 'DI4', 'DI5', 'DI6', 'DI7'], pwm: ['PW0', 'PW1', 'PW2', 'PW3', 'PW4', 'PW5', 'PW6', 'PW7', 'AI0', 'AI1', 'AI2'] },
 };
 export const FIRMWARE_URL = new URL('../../util/firmware/main.py', import.meta.url).href;
+// El firmware como texto (algunos alojamientos no sirven .py: entonces se busca main.py.txt)
+export async function fetchFirmware() { for (const u of [FIRMWARE_URL, FIRMWARE_URL + '.txt']) { try { const r = await fetch(u); if (r.ok) { const t = await r.text(); if (/platohil/.test(t)) return t; } } catch (e) {} } throw new Error('No encuentro el firmware del útil (util/firmware/main.py)'); }
 
 export class UtilLink {
   constructor() { this.port = null; this.di = Array(8).fill(0); this.pw = {}; this.ai = [0, 0, 0]; this.log = () => {}; this.last = {}; this.id = ''; this.hb = 0; this.vref = 3.3; this.onEdge = null; this.offset = null; }
