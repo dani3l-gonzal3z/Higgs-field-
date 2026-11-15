@@ -112,7 +112,7 @@ export class PicoRunner extends Base {
   }
   // Escucha el estado crudo del pin (sale a 0 o lo suelta): buses de drenador abierto
   onRaw(pin, cb) { const g = this._gp(pin); if (g < 0) return; (this.raw[g] = this.raw[g] || []).push(cb); }
-  _gp(pin) { if (this.map) { const g = this.map[pin]; return g == null ? -1 : g; } return /^GP\d+$/.test(pin) ? +pin.slice(2) : -1; }
+  _gp(pin) { if (this.map) { const g = this.map[pin]; return g == null ? -1 : g; } const m = /^#?GP(\d+)$/.exec(pin); return m ? +m[1] : -1; } // «#GP25»: el GPIO tal cual (LED de la placa)
   // La capa de soporte dice dónde guarda los valores analógicos: «ESC ] PLATO dirección BEL». No se enseña.
   _out(s) {
     this._mk = (this._mk || '') + s; let out = '';

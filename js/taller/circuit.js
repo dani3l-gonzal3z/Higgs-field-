@@ -1,6 +1,7 @@
 // Taller: catálogo de piezas, red eléctrica (nets) y evaluación "de verdad suficiente" para aprender.
-// El formato del circuito es el diagram.json de Wokwi/Velxio, así que se importa y exporta tal cual.
-import { BOARDS, boardByType, powerOf, analogPins, PICO_PINS_ART } from './boards.js';
+// El formato del circuito es el diagram.json de Wokwi, así que se importa y exporta tal cual.
+import { BOARDS, boardByType, powerOf, analogPins } from './boards.js';
+import { stripOf, kindOfTag } from './protoboard.js';
 import { Netlist, LED_VF, LED_RS, fmtA, fmtV } from './solver.js';
 export { BOARDS };
 // kind: cómo se comporta. label/hint: lo que ve la gente.
@@ -17,34 +18,24 @@ export const PARTS = {
   'wokwi-7segment': { name: '7 segmentos', icon: '🔢', kind: 'seg7', attrs: { color: 'red' }, pins: { A: 'segmento A', B: 'B', C: 'C', D: 'D', E: 'E', F: 'F', G: 'G', DP: 'punto', 'COM.1': 'común (−)', 'COM.2': 'común (−)' }, real: 'Display de 7 segmentos (cátodo común)' },
   'wokwi-lcd1602': { name: 'Pantalla LCD', icon: '📟', kind: 'lcd', attrs: { pins: 'full' }, pins: {}, real: 'LCD 16×2 HD44780' },
   'wokwi-hc-sr04': { name: 'Sensor de distancia', icon: '📏', kind: 'sonar', attrs: {}, pins: { VCC: 'VCC (+5 V)', TRIG: 'TRIG (disparo)', ECHO: 'ECHO (eco)', GND: 'GND (−)' }, real: 'Sensor ultrasónico HC-SR04' },
-  'velxio-breadboard-mini': { name: 'Protoboard mini', icon: '🟫', kind: 'bb', attrs: {}, pins: {}, real: 'Protoboard de 170 puntos' },
-  'velxio-breadboard': { name: 'Protoboard', icon: '🟫', kind: 'bb', attrs: {}, pins: {}, real: 'Protoboard de 830 puntos' },
+  'plato-breadboard-mini': { name: 'Protoboard mini', icon: '🟫', kind: 'bb', attrs: {}, pins: {}, real: 'Protoboard de 170 puntos' },
+  'plato-breadboard-half': { name: 'Protoboard mediana', icon: '🟫', kind: 'bb', attrs: {}, pins: {}, real: 'Protoboard de 400 puntos' },
+  'plato-breadboard': { name: 'Protoboard', icon: '🟫', kind: 'bb', attrs: { rails: 'whole' }, opts: { rails: ['whole', 'split'] }, pins: {}, real: 'Protoboard de 830 puntos' },
 };
-export const TYPE_ALIAS = { 'wokwi-breadboard': 'velxio-breadboard', 'wokwi-breadboard-half': 'velxio-breadboard', 'wokwi-breadboard-mini': 'velxio-breadboard-mini' };
+// Nombres de otros editores (y los que usaba Plató antes) → los de aquí
+export const TYPE_ALIAS = { 'wokwi-breadboard': 'plato-breadboard', 'wokwi-breadboard-half': 'plato-breadboard-half', 'wokwi-breadboard-mini': 'plato-breadboard-mini', 'velxio-breadboard': 'plato-breadboard', 'velxio-breadboard-mini': 'plato-breadboard-mini' };
 export const RES_OHMS = v => { const m = /^([\d.]+)\s*([kKmM]?)/.exec(String(v || '')); if (!m) return 1000; return +m[1] * (m[2].toLowerCase() === 'k' ? 1e3 : m[2].toLowerCase() === 'm' ? 1e6 : 1); };
-
-/* ---------- Placa Raspberry Pi Pico (arte de Velxio/Fritzing; patillaje a paso de 0,1" como el resto) ---------- */
-export function definePico() {
-  if (typeof customElements === 'undefined' || customElements.get('wokwi-pi-pico')) return;
-  customElements.define('wokwi-pi-pico', class extends HTMLElement {
-    constructor() { super(); this.attachShadow({ mode: 'open' }); this._led = false; }
-    connectedCallback() { this.shadowRoot.innerHTML = `<style>:host{display:inline-block;line-height:0;position:relative}img{display:block;width:79px;height:200px}i{position:absolute;left:28px;top:8px;width:7px;height:5px;border-radius:2px;background:#3f3;box-shadow:0 0 8px 3px #3f3;opacity:0;transition:opacity .05s}</style><img src="${new URL('../../taller/art/pi-pico.svg', import.meta.url)}" draggable="false" alt="Raspberry Pi Pico"><i></i>`; }
-    get pinInfo() { return PICO_PINS_ART; }
-    set led25(v) { this._led = v; const i = this.shadowRoot && this.shadowRoot.querySelector('i'); if (i) i.style.opacity = v ? 1 : 0; }
-    get led25() { return this._led; }
-  });
-}
 
 /* ---------- Red eléctrica ---------- */
 class UF { constructor() { this.p = new Map(); } f(a) { if (!this.p.has(a)) this.p.set(a, a); let r = a; while (this.p.get(r) !== r) r = this.p.get(r); this.p.set(a, r); return r; } u(a, b) { this.p.set(this.f(a), this.f(b)); } clone() { const c = new UF(); c.p = new Map(this.p); return c; } }
-const BB_HOLE = /^(\d+)([tb])\.([a-j])$/, BB_RAIL = /^([tb][pn])\.(\d+)$/;
 // Uniones fijas: cables, columnas de la protoboard, patas que se clavan en la protoboard, GND internos, etc.
 export function staticNets(circuit, geo) {
   const uf = new UF(); const parts = circuit.parts;
   for (const c of circuit.connections) uf.u(c[0], c[1]);
   for (const p of parts) {
     const t = TYPE_ALIAS[p.type] || p.type; const pins = (geo.pins[p.id] || []);
-    if (PARTS[t] && PARTS[t].kind === 'bb') { const groups = {}; for (const pin of pins) { const h = BB_HOLE.exec(pin.name), r = BB_RAIL.exec(pin.name); const g = h ? 'c' + h[1] + h[2] : r ? 'r' + r[1] : null; if (g) (groups[g] = groups[g] || []).push(pin.name); } for (const g of Object.values(groups)) for (let i = 1; i < g.length; i++) uf.u(p.id + ':' + g[0], p.id + ':' + g[i]); }
+    // Protoboard: cada agujero se une con los de su tira (qué tira es lo decide protoboard.js, según el modelo y sus raíles)
+    if (PARTS[t] && PARTS[t].kind === 'bb') { const head = {}; for (const pin of pins) { const k = stripOf(pin.name, kindOfTag(t), p.attrs); if (!k) continue; if (head[k]) uf.u(p.id + ':' + head[k], p.id + ':' + pin.name); else head[k] = pin.name; } }
     if (t === 'wokwi-pushbutton') { uf.u(p.id + ':1.l', p.id + ':1.r'); uf.u(p.id + ':2.l', p.id + ':2.r'); }
     if (t === 'wokwi-7segment') uf.u(p.id + ':COM.1', p.id + ':COM.2');
     if (t === 'wokwi-arduino-uno') { uf.u(p.id + ':A4', p.id + ':A4.2'); uf.u(p.id + ':A5', p.id + ':A5.2'); }
@@ -177,7 +168,7 @@ export function bom(circuit) {
   const wires = circuit.connections.length; if (wires) m.set('Cables dupont macho-macho', wires);
   return [...m.entries()].map(([k, n]) => ({ item: k.trim(), n }));
 }
-export const COLOR_ES = { red: 'rojo', green: 'verde', blue: 'azul', yellow: 'amarillo', white: 'blanco', orange: 'naranja', black: 'negro' };
+export const COLOR_ES = { red: 'rojo', green: 'verde', blue: 'azul', yellow: 'amarillo', white: 'blanco', orange: 'naranja', black: 'negro', whole: 'raíles enteros', split: 'raíles partidos por la mitad' };
 export const fmtOhms = v => { const o = RES_OHMS(v); return o >= 1e6 ? o / 1e6 + ' MΩ' : o >= 1e3 ? o / 1e3 + ' kΩ' : o + ' Ω'; };
 export function describePin(circuit, ref) {
   const [id, pin] = ref.split(':'); const p = circuit.parts.find(x => x.id === id); if (!p) return ref; const t = TYPE_ALIAS[p.type] || p.type;

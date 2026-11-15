@@ -98,11 +98,12 @@ Monta un circuito, prográmalo y simúlalo antes de tocar un cable; luego lléva
 - **Edición profesional**: deshacer/rehacer, selección por recuadro, copiar/pegar/duplicar, atajos de teclado, cables con codos, notas; editor con colores, autocompletado de la API de cada placa y la línea del error marcada.
 - **Tu placa real por USB desde el navegador** (Web Serial, Chrome/Edge): ejecutar o grabar `main.py` (con las librerías que use) en una Pico, ESP32 o STM32 con MicroPython.
 - Todo lo que es Python corre en el navegador (también dentro de Claude y en el móvil).
-- Piezas: LEDs, LED RGB, resistencias, botones, interruptor, potenciómetro, sensor de luz, zumbador, servo, 7 segmentos, LCD 16×2, sensor ultrasónico y protoboards (las patas se clavan solas en los agujeros).
+- Piezas: LEDs, LED RGB, resistencias, botones, interruptor, potenciómetro, sensor de luz, zumbador, servo, 7 segmentos, LCD 16×2, sensor ultrasónico y protoboards de 830, 400 y 170 puntos (las patas se clavan solas en los agujeros; al pasar por un agujero se ilumina la tira con la que está unido, y la grande puede llevar los raíles partidos por la mitad, como muchas de verdad).
+- **Placas dibujadas por código**: ESP32, STM32 y Pico salen de una descripción en datos (`js/taller/boardart.js`), con las patas a su separación real en la rejilla de 0,1": se pinchan en la protoboard a caballo del canal, y la serigrafía va coloreada según lo que es cada pata (GND, 5 V, 3,3 V, analógica, solo entrada). Añadir una placa nueva son unas líneas.
 - Avisos de la vida real: LED sin resistencia, cortocircuitos, 5 V en placas de 3,3 V.
 - **El profe**: «quiero un semáforo con botón para peatones» → circuito + código + pasos. Y te explica el circuito que hayas montado.
 - **A la mesa**: lista de la compra, montaje paso a paso y grabación por USB en tu placa.
-- Abre y guarda proyectos de Wokwi y Velxio (`diagram.json`).
+- Abre y guarda proyectos de Wokwi (`diagram.json`).
 
 ### 🚁 Dron con visión: tu RDK X5 pilota un dron simulado
 
@@ -128,7 +129,7 @@ Pestaña **🏭 Planta** del Taller: una planta industrial en 3D sin límite de 
 - **Ejemplos con su programa**: clasificadora por color (cola FIFO de piezas), pesaje con tope y rechazo, dos cintas con acumulación y dos cintas con dos placas que se avisan. «📝 Escribir el programa» lo genera para la placa elegida y los pines tal como estén conectados (MicroPython, Python de placa Linux o Arduino C++), con máquina de estados, paro, seta y rearme.
 - **Con una placa real**: el útil HIL (`util/`, una Pico con `util/firmware/main.py`) pone en sus salidas lo que «ven» los sensores y lee lo que manda tu STM32, ESP32, Arduino o PLC. Se conecta por Web Serial; «⬇ Instalar firmware» lo graba desde el navegador. Vigilancia: si Plató se calla 1,5 s, todo a reposo.
 
-Está hecho sobre [avr8js](https://github.com/wokwi/avr8js), [rp2040js](https://github.com/wokwi/rp2040js) y [@wokwi/elements](https://github.com/wokwi/wokwi-elements) (MIT) y toma piezas de [Velxio](https://github.com/davidmonterocrespo24/velxio) (AGPL-3.0). Detalles en [`taller/LICENCIAS.md`](taller/LICENCIAS.md).
+Está hecho sobre [avr8js](https://github.com/wokwi/avr8js), [rp2040js](https://github.com/wokwi/rp2040js) y [@wokwi/elements](https://github.com/wokwi/wokwi-elements) (MIT). Las protoboards, los dibujos de las placas y el resto del Taller son de Plató. Detalles en [`taller/LICENCIAS.md`](taller/LICENCIAS.md).
 
 ## 🧠 IA local (sin claves) y 🎭 Recast local
 
@@ -258,7 +259,7 @@ js/localai.js       Ajustes → IA local: packs, modelos de Ollama, agentes
 js/taller.js        Taller de electrónica (vista)
 js/taller/          placas y su capa de soporte, circuito y red eléctrica, motores, ejemplos, planta 3D (plant*.js, rigid.js), dron (drone*.js, rdklink.js), emulador en un hilo (simworker.js) y enlace con el útil (util.js)
 mcp/taller.mjs      compilar con arduino-cli y grabar la placa por USB
-taller/             firmware MicroPython, arte de placas y protoboards, licencias
+taller/             firmware MicroPython, parpadeo del Uno ya ensamblado y licencias
 util/firmware/      firmware del útil HIL (Pico + MicroPython)
 drone/rdk/          puente y misiones para la placa que pilota el dron (RDK X5, Jetson, Raspberry Pi…)
 js/recast.js        Recast local: máscara, generación y pegado

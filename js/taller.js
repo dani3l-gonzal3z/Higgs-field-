@@ -1,17 +1,19 @@
 // 🔌 Taller de electrónica: monta el circuito, prográmalo y simúlalo; luego llévalo a la mesa.
 // Motores: avr8js (Arduino) y rp2040js + MicroPython (Pico y, con una capa de soporte, ESP32, STM32 y placas Linux), de Wokwi;
-// piezas de @wokwi/elements; protoboards, dibujos de placas y firmware de Velxio.
+// piezas de @wokwi/elements; protoboards y dibujos de placas propios (protoboard.js, boardart.js).
 import { el, btn, toast, modal, confirmBox, download } from './core.js';
 import { localBase } from './local.js';
 import { llmReady, llmJSON, llmText } from './llm.js';
-import { BOARDS, PARTS, TYPE_ALIAS, staticNets, evaluate, definePico, HD44780, bom, describePin, fmtOhms, COLOR_ES, chipOf } from './taller/circuit.js';
-import { FAMILIES, defineBoards, boardByType, BOARD_ALIAS, supportCode, libsCode, LIB_SRC, gpMap, mcuPins, analogPins, pinLabel as boardPinLabel, powerOf, fileName, keyOf } from './taller/boards.js';
+import { BOARDS, PARTS, TYPE_ALIAS, staticNets, evaluate, HD44780, bom, describePin, fmtOhms, COLOR_ES, chipOf } from './taller/circuit.js';
+import { FAMILIES, defineBoards, boardByType, BOARD_ALIAS, supportCode, libsCode, LIB_SRC, gpMap, mcuPins, analogPins, pinLabel as boardPinLabel, powerOf, fileName, keyOf, pinClass } from './taller/boards.js';
 import { EXAMPLES, exampleCircuit, exampleCode, supports, insideCode, norm, PREBUILT } from './taller/examples.js';
 import { AvrRunner, PicoRunner, WorkerRunner, UNO_PINS } from './taller/sim.js';
 import { codeEditor, completionsFor } from './taller/editor.js';
 import { fmtA, fmtV } from './taller/solver.js';
 import { Recorder, instrumentsPanel } from './taller/instruments.js';
 import { defineParts } from './taller/parts.js';
+import { defineProtoboards } from './taller/protoboard.js';
+import { PIN_COLORS, PIN_LEGEND } from './taller/boardart.js';
 import { I2CBus, PinSlave, attachRP2040, attachAVR } from './taller/i2c.js';
 import { SSD1306, MPU6050, BMP280, DS1307, LcdI2C, WS2812 } from './taller/devices.js';
 import { RealBoard, webSerialOk } from './taller/webserial.js';
@@ -23,7 +25,7 @@ const KEY = 'plato.taller.v1', PKEY = 'plato.taller.plant.v1';
 const WIRE_COLORS = ['green', 'blue', 'orange', 'purple', 'yellow', 'white', 'cyan'];
 const T = { board: 'pico', circuit: null, code: '', sel: null, wireFrom: null, runner: null, ui: {}, geo: { pins: {} }, zoom: 1, serial: '', ex: 'blink', dirty: false, inside: {} };
 let ready = null;
-const loadLibs = () => ready || (ready = (async () => { await import('./vendor/wokwi-elements.js'); await import('./vendor/velxio-breadboards.js'); definePico(); defineBoards(); defineParts(); })());
+const loadLibs = () => ready || (ready = (async () => { await import('./vendor/wokwi-elements.js'); defineProtoboards(); defineBoards(); defineParts(); })());
 
 function save() { try { localStorage.setItem(KEY, JSON.stringify({ board: T.board, circuit: T.circuit, code: T.code, ex: T.ex, inside: T.inside, mode: T.mode })); } catch (e) {} }
 function load() { try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && s.circuit) Object.assign(T, s); } catch (e) {} if (!BOARDS[T.board]) T.circuit = null; if (!T.circuit) useExample('blink', 'pico', false); T.inside = T.inside || {}; }
@@ -190,7 +192,7 @@ function measure(only) {
 }
 // Al soltar una pieza sobre la protoboard, sus patas caen justo en los agujeros.
 function snap(p) {
-  const type = TYPE_ALIAS[p.type] || p.type; const bb = boardByType(type); if ((PARTS[type] || {}).kind === 'bb' || (bb && (bb.key === 'uno' || bb.family === 'linux' || bb.drawn))) return;
+  const type = TYPE_ALIAS[p.type] || p.type; const bb = boardByType(type); if ((PARTS[type] || {}).kind === 'bb' || (bb && (bb.key === 'uno' || bb.family === 'linux' || (bb.drawn && !bb.drawn.grid)))) return;
   const holes = T.circuit.parts.filter(q => (PARTS[TYPE_ALIAS[q.type] || q.type] || {}).kind === 'bb').flatMap(q => T.geo.pins[q.id] || []); if (!holes.length) return;
   const mine = T.geo.pins[p.id] || []; let best = null, bd = 100;
   for (const pin of mine) for (const h of holes) { const d = (h.ax - pin.ax) ** 2 + (h.ay - pin.ay) ** 2; if (d < bd) { bd = d; best = [h.ax - pin.ax, h.ay - pin.ay]; } }
@@ -237,6 +239,8 @@ function paintWires() {
     for (const q of T.geo.pins[p.id] || []) { const ref = p.id + ':' + q.name; const on = T.wireFrom === ref;
       const c = document.createElementNS(SVGNS, 'circle'); c.setAttribute('cx', q.ax); c.setAttribute('cy', q.ay); c.setAttribute('r', isBB ? 3.2 : 4.2); c.setAttribute('class', 'tl-pin' + (on ? ' on' : '') + (isBB ? ' bb' : ''));
       const tt = document.createElementNS(SVGNS, 'title'); tt.textContent = pinLabel(p, q.name); c.append(tt);
+      if (isBB) { const bbEl = () => { const w = R.world.querySelector(`.tl-part[data-id="${p.id}"]`); return w && w.firstChild; };
+        c.addEventListener('pointerenter', () => { const x = bbEl(); if (x && x.highlight) x.highlight(q.name); }); c.addEventListener('pointerleave', () => { const x = bbEl(); if (x && x.highlight) x.highlight(null); }); }
       c.addEventListener('pointerdown', e => { e.stopPropagation(); if (T.tool === 'probe') return probeNet(ref, e); tapPin(ref); }); svg.append(c); } }
   if (T.probe) paintProbe();
 }
@@ -296,7 +300,7 @@ function palette() {
   close = modal('Añadir pieza', el('div', {}, q, body, el('p', { class: 'note' }, 'Consejo: pon primero la protoboard y suelta encima las piezas; o une las patas directamente con cables, como prefieras.')));
 }
 function addPart(type) {
-  const info = PARTS[type]; const base = type.replace(/^(wokwi|velxio)-/, '').replace(/-.*/, ''); let n = 1; while (T.circuit.parts.some(p => p.id === base + n)) n++;
+  const info = PARTS[type]; const base = type.replace(/^(wokwi|velxio|plato)-/, '').replace(/-.*/, ''); let n = 1; while (T.circuit.parts.some(p => p.id === base + n)) n++;
   const sc = R.stage.getBoundingClientRect(); const left = Math.round((R.stage.scrollLeft + sc.width * 0.45) / T.zoom), top = Math.round((R.stage.scrollTop + sc.height * 0.3) / T.zoom);
   hist(); const p = { type, id: base + n, left, top, rotate: 0, attrs: { ...(info.attrs || {}) } }; T.circuit.parts.push(p); T.sel = { parts: [p.id] }; save(); R.world.querySelectorAll('.tl-part.sel').forEach(x => x.classList.remove('sel'));
   R.world.insertBefore(partNode(p), R.svg); requestAnimationFrame(() => requestAnimationFrame(() => { measure(p.id); paintWires(); tools(); }));
@@ -333,8 +337,9 @@ function inside() {
     : `Tu programa corre en MicroPython sobre un RP2040 emulado. La capa de abajo traduce los pines de la ${b.name} (${b.chip}) y sus módulos (${b.flavor === 'stm32' ? 'machine y pyb' : 'machine, neopixel, network'}) al chip simulado.`;
   const rows = []; const g = gpMap(b); const an = new Set(analogPins(b));
   const art = (customElements.get(b.tag) && document.createElement(b.tag).pinInfo) || [];
-  for (const p of art) rows.push(el('tr', {}, el('td', {}, p.name), el('td', {}, boardPinLabel(b, p.name).replace(/^[^·]*·?\s*/, '') || (an.has(p.name) ? 'analógica' : '—'))));
-  const pinTable = el('details', {}, el('summary', {}, `📌 Patillaje (${art.length} patas)`), el('table', { class: 'tl-pins' }, el('tr', {}, el('th', {}, 'Pata'), el('th', {}, 'Qué es')), ...rows));
+  const dot = c => PIN_COLORS[c] ? el('i', { class: 'tl-pc', style: `background:${PIN_COLORS[c]}` }) : null;
+  for (const p of art) rows.push(el('tr', {}, el('td', {}, dot(pinClass(b, p.name)), p.name), el('td', {}, boardPinLabel(b, p.name).replace(/^[^·]*·?\s*/, '') || (an.has(p.name) ? 'analógica' : '—'))));
+  const pinTable = el('details', {}, el('summary', {}, `📌 Patillaje (${art.length} patas)`), el('p', { class: 'note tl-legend' }, 'Colores de la serigrafía: ', ...PIN_LEGEND.map(([c, t]) => el('span', {}, dot(c), t))), el('table', { class: 'tl-pins' }, el('tr', {}, el('th', {}, 'Pata'), el('th', {}, 'Qué es')), ...rows));
   const parts = [el('p', {}, el('b', {}, `${b.name} · ${b.chip}`), ' ', el('em', { class: 'tl-kind ' + (b.engine === 'shim' ? 'sim' : 'emu') }, SIM_KIND(b))), el('p', { class: 'note' }, how)];
   if (b.note) parts.push(el('p', { class: 'note' }, 'ℹ️ ' + b.note));
   parts.push(pinTable);
@@ -353,10 +358,10 @@ function more() {
   let close; const file = el('input', { type: 'file', accept: '.json,application/json', style: 'display:none', on: { change: async e => { const f = e.target.files[0]; if (!f) return; try { importDiagram(JSON.parse(await f.text())); close(); } catch (er) { toast('No es un diagram.json válido'); } } } });
   close = modal('Más', el('div', { class: 'tl-more' },
     btn('🆕 Circuito vacío', async () => { if (!(await confirmBox('Empezar de cero', 'Se borra el circuito actual.', 'Vaciar'))) return; stop(); T.circuit = { version: 1, author: 'Plató', editor: 'plato-taller', parts: [exampleCircuit(EXAMPLES[0], T.board).parts[0]], connections: [] }; T.code = insideCode(T.board); T.ex = null; save(); close(); draw(); }, 'b'),
-    btn('📥 Abrir diagram.json (Wokwi / Velxio)', () => file.click(), 'b'), file,
+    btn('📥 Abrir diagram.json (Wokwi)', () => file.click(), 'b'), file,
     btn('📤 Guardar (diagram.json + código)', () => download(new Blob([JSON.stringify({ ...T.circuit, plato: { board: T.board, code: T.code } }, null, 2)], { type: 'application/json' }), 'diagram.json'), 'b'),
     btn('💾 Descargar el código', () => download(new Blob([T.code], { type: 'text/plain' }), fileName(BOARDS[T.board])), 'b'),
-    el('p', { class: 'note' }, 'El formato es el de Wokwi y Velxio: puedes abrir aquí sus proyectos y llevarte los tuyos allí.')));
+    el('p', { class: 'note' }, 'El formato es el diagram.json de Wokwi: puedes abrir aquí sus proyectos y llevarte los tuyos allí.')));
 }
 function importDiagram(d) {
   if (!d || !Array.isArray(d.parts)) throw new Error('formato');

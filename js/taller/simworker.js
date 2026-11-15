@@ -1,12 +1,14 @@
 // Hilo del emulador: un PicoRunner que manda a la página, cada ~15 ms, los flancos de sus pines, su hora y lo que imprime.
 import { PicoRunner } from './sim.js';
-let r = null, edges = [], ser = '', timer = 0; const lv = {};
+let r = null, edges = [], ser = '', timer = 0, watch = []; const lv = {};
 const flush = () => { if (!r) return; const d = {}; let any = false;
-  for (const p of r.pins) { const l = r.level(p); const k = (l.out === true ? 1 : l.out === false ? 0 : 2) | (l.pullup ? 4 : 0) | (l.pulldown ? 8 : 0); if (lv[p] !== k) { lv[p] = k; d[p] = k; any = true; } }
+  for (const p of watch) { const l = r.level(p); const k = (l.out === true ? 1 : l.out === false ? 0 : 2) | (l.pullup ? 4 : 0) | (l.pulldown ? 8 : 0); if (lv[p] !== k) { lv[p] = k; d[p] = k; any = true; } }
   postMessage({ t: 'tick', time: r.timeUs(), e: edges, s: ser, lv: any ? d : null, rgb: r.rgb }); edges = []; ser = ''; };
 self.onmessage = async ({ data: m }) => {
   try {
-    if (m.t === 'init') { r = await PicoRunner.create(m.code, m.opts); for (const p of r.pins) r.onEdge(p, (v, t) => { edges.push(p, v ? 1 : 0, t); });
+    if (m.t === 'init') { r = await PicoRunner.create(m.code, m.opts);
+      // además de las patas, los GPIO internos («#…»: el LED de la placa, el flash…), que la página pide por su nombre
+      watch = [...r.pins, ...(m.opts.map ? Object.keys(m.opts.map).filter(k => k[0] === '#') : Array.from({ length: 30 }, (_, i) => '#GP' + i))]; for (const p of r.pins) r.onEdge(p, (v, t) => { edges.push(p, v ? 1 : 0, t); });
       r.serial = s => { ser += s; }; r.onError = e => { flush(); postMessage({ t: 'error', msg: e.message }); }; r.onDone = () => { flush(); postMessage({ t: 'done' }); }; postMessage({ t: 'ready', pins: r.pins }); }
     else if (m.t === 'start') { r.start(); timer = setInterval(flush, 15); }
     else if (m.t === 'in') r.setInput(m.pin, m.v);

@@ -1,38 +1,31 @@
 # Taller de electrónica · procedencia y licencias
 
-El Taller se apoya en proyectos abiertos. Gracias a todos ellos.
+El Taller se apoya en tres proyectos abiertos, todos con licencia MIT o BSD. Gracias a ellos.
 
 | Pieza | De dónde sale | Licencia |
 |---|---|---|
 | Emulador de Arduino (ATmega328P) | [avr8js](https://github.com/wokwi/avr8js), de Wokwi — `js/vendor/avr8js.js` | MIT |
 | Emulador de Raspberry Pi Pico (RP2040) | [rp2040js](https://github.com/wokwi/rp2040js), de Wokwi — `js/vendor/rp2040js.js` (incluye el bootrom B1 de Raspberry Pi, BSD-3) | MIT |
-| Dibujo y comportamiento visual de las piezas | [@wokwi/elements](https://github.com/wokwi/wokwi-elements) + [lit](https://github.com/lit/lit) — `js/vendor/wokwi-elements.js` | MIT · BSD-3-Clause |
-| Protoboards (`<velxio-breadboard>`, `<velxio-breadboard-mini>`) | [Velxio](https://github.com/davidmonterocrespo24/velxio) — `js/vendor/velxio-breadboards.js` | AGPL-3.0 |
-| Arte de las protoboards y de la Pico | Fritzing vía Velxio — `taller/art/` (ver `ATTRIBUTION.md`) | CC-BY-SA 3.0 |
-| Dibujos y patillaje de las placas ESP32, STM32 y Pico W | [Velxio](https://github.com/davidmonterocrespo24/velxio) (`frontend/public/boards`, `Esp32Element.ts`, `Stm32BluePillElement.ts`) — `taller/art/boards/`, `js/taller/boards-art.js` | AGPL-3.0 |
-| Firmware de MicroPython para la Pico | [MicroPython](https://micropython.org) (copia de Velxio) — `taller/micropython-rp2040.bin` | MIT |
-| Programa de ejemplo ya compilado (Parpadeo) | Fixture de pruebas de Velxio — `taller/hex/blink.hex.txt` | AGPL-3.0 |
+| Dibujo de las piezas (LED, resistencia, botón, Uno, Nano…) | [@wokwi/elements](https://github.com/wokwi/wokwi-elements) + [lit](https://github.com/lit/lit) — `js/vendor/wokwi-elements.js` | MIT · BSD-3-Clause |
+| Firmware de MicroPython para la Pico | [MicroPython](https://micropython.org/download/RPI_PICO/), el UF2 oficial — `taller/micropython-rp2040.bin` | MIT |
 
-El código propio del Taller (`js/taller.js`, `js/taller/*`, `mcp/taller.mjs`) incorpora ideas y piezas de Velxio
-(reglas de la protoboard, convención de nombres de agujeros, patillaje de la Pico, avisos de LED quemado),
-así que esa parte se distribuye bajo **AGPL-3.0** como Velxio.
+Las licencias MIT y BSD solo piden conservar el aviso de copyright (va en la cabecera de cada archivo de `js/vendor/`).
+No obligan a publicar el código de Plató ni condicionan su licencia.
 
-## Qué hemos mejorado respecto a Velxio
+## Hecho aquí (sin código ni arte de terceros)
 
-- Todo en el navegador y sin compilar con la Pico: MicroPython corre dentro del emulador y el programa se manda por el REPL «raw», con control de flujo (el FIFO USB de 512 bytes ya no pierde programas largos) y los errores de Python aparecen con su traza en el monitor.
-- Reloj a tiempo real en la Pico: `time.sleep()` dura lo que tiene que durar (el simulador de rp2040js va tan rápido como puede).
-- Avisos pensados para quien aprende: LED sin resistencia (y el LED «se quema» en pantalla), cortocircuitos, 5 V en un pin de la Pico.
-- PWM real en los LEDs (brillo), servo por ancho de pulso, zumbador con sonido, LCD 16×2 en 4 bits y sensor ultrasónico con temporización al microsegundo.
-- El profe de Plató diseña el circuito y el código a partir de una frase y explica el circuito que tengas.
-- «A la mesa»: lista de la compra, montaje paso a paso cable a cable y grabación en la placa real por USB.
-- Compatible con el `diagram.json` de Wokwi y Velxio en los dos sentidos.
-- 26 placas con un solo motor: las que no se emulan a nivel de chip (ESP32, STM32, Raspberry Pi, RDK, Jetson, KickPi) corren su MicroPython/Python sobre el RP2040 emulado gracias a una capa de soporte que imita `machine`, `pyb`, `neopixel`, `network`, `RPi.GPIO`, `Hobot.GPIO`, `Jetson.GPIO`, `gpiozero` y `wiringpi`. La capa se ve y se edita desde la app (🔩 Por dentro) y respeta detalles de cada placa (pines solo-entrada, PWM solo por hardware, numeración BOARD/BCM/wPi).
-- El ADC de esas placas va por memoria compartida con el simulador, así que cualquier pin analógico de la placa real funciona (no solo los cuatro del RP2040).
-- En el RP2040 emulado, leer un pin de salida devuelve lo que la salida pone (como en el chip real), así que `led.value(not led.value())` parpadea.
+- **Protoboards** (`js/taller/protoboard.js`): los tres tamaños, sus agujeros, qué tiras están unidas por dentro y el dibujo, todo generado por código.
+- **Placas ESP32, STM32 y Pico** (`js/taller/boardart.js` y las descripciones de `boards.js`): el dibujo sale de una descripción en datos; el patillaje es el de la hoja de datos de cada placa.
+- **Parpadeo del Uno ya listo** (`taller/hex/blink.hex.txt`): 36 bytes ensamblados a mano; el fuente y la comprobación están en `scripts/build-blink-hex.mjs`.
+- El motor eléctrico (`solver.js`), el bus I2C y su esclavo a nivel de pin (`i2c.js`), los modelos de OLED, MPU6050, BMP280, DS1307, LCD I2C, WS2812 y DHT22 (`devices.js`, `taller.js`), los dibujos de transistores, MOSFET, diodo, motor, relé y módulos (`parts.js`), el editor de código (`editor.js`), los instrumentos (`instruments.js`), Web Serial (`webserial.js`), la capa de soporte de cada placa y las librerías de MicroPython incluidas (`ssd1306`, `mpu6050`, `bmp280`, `lcd_i2c`, en `boards.js`). La calibración del BMP280 y sus fórmulas son las de la hoja de datos de Bosch.
 
-## Hecho aquí (sin código de terceros)
+Lo único que el Taller comparte con otros editores es un **formato**: el `diagram.json` de Wokwi (nombres de piezas, de patas y de agujeros como `12t.c` o `tp.7`), para poder abrir y guardar sus proyectos.
 
-El motor eléctrico (`js/taller/solver.js`), el bus I2C y su esclavo a nivel de pin (`i2c.js`), los modelos de OLED, MPU6050, BMP280, DS1307, LCD I2C, WS2812 y DHT22 (`devices.js`, `taller.js`), los dibujos de transistores, MOSFET, diodo, motor, relé y módulos (`parts.js`), el editor de código (`editor.js`), los instrumentos (`instruments.js`), Web Serial (`webserial.js`) y las librerías de MicroPython incluidas (`ssd1306`, `mpu6050`, `bmp280`, `lcd_i2c`, en `boards.js`) están escritos para Plató. La calibración del BMP280 y sus fórmulas son las de la hoja de datos de Bosch.
+## Historia
+
+Hasta noviembre de 2026 las protoboards, los dibujos de las placas ESP32/STM32/Pico y el parpadeo compilado venían de
+[Velxio](https://github.com/davidmonterocrespo24/velxio) (AGPL-3.0), con arte de Fritzing (CC-BY-SA 3.0). Esos archivos se han quitado
+y se han sustituido por los de arriba. Las versiones anteriores del repositorio que los contienen siguen bajo aquellas licencias.
 
 ## Reconstruir las librerías
 
@@ -41,7 +34,6 @@ git clone https://github.com/wokwi/avr8js ref/avr8js
 git clone https://github.com/wokwi/rp2040js ref/rp2040js
 git clone https://github.com/wokwi/wokwi-elements ref/wokwi-elements
 git clone https://github.com/lit/lit ref/lit
-git clone https://github.com/davidmonterocrespo24/velxio ref/velxio
 node scripts/build-taller-vendor.mjs ref        # necesita esbuild
-node scripts/build-taller-boards.mjs ref        # dibujos y patillaje de las placas (de Velxio)
+node scripts/build-blink-hex.mjs                # el parpadeo del Uno (se comprueba solo en el emulador)
 ```
